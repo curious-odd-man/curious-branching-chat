@@ -1,0 +1,137 @@
+/* ---- Ikonli FontIcon ---- */
+.icon,
+FontIcon {
+    -fx-icon-color: #666666;
+}
+
+.icon-success {
+    -fx-icon-color: #2e7d32;
+}
+
+.icon-danger {
+    -fx-icon-color: #c62828;
+}
+
+.icon-warning {
+    -fx-icon-color: #e1b400;
+}
+
+.icon-info {
+    -fx-icon-color: #2f7dd1;
+}
+
+.icon-muted {
+    -fx-icon-color: #666666;
+}
+
+.error-notification-icon {
+    -fx-icon-color: #e84242;
+    -fx-icon-size: 18;
+}
+
+.warning-notification-icon {
+    -fx-icon-color: #e1b400;
+    -fx-icon-size: 18;
+}
+
+.notification-text {
+    -fx-text-fill: black;
+}
+
+.notification-panel {
+    -fx-background-color: white;
+    -fx-background-radius: 6px;
+    -fx-border-color: #cccccc;
+    -fx-border-radius: 6px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.25), 10, 0.15, 0, 2);
+}
+
+.progress-label-shadow {
+    -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);
+}
+
+.text-field.error {
+    -fx-border-color: #e05252;
+    -fx-border-width: 1.5px;
+    -fx-border-radius: 5px;
+    -fx-background-radius: 5px;
+    -fx-background-color: #fff8f8;
+}
+
+.text-field.error:focused {
+    -fx-border-color: #d9363e;
+    -fx-border-width: 2px;
+}
+
+.error-label {
+    -fx-text-fill: #d9363e;
+    -fx-font-size: 12px;
+}
+
+.details-column-header {
+    -fx-font-size: 0.9em;
+    -fx-opacity: 0.7;
+    -fx-alignment: CENTER_RIGHT;
+}
+
+/* ---- Recent projects menu ---- */
+.recent-project-row {
+    -fx-padding: 2px 4px 2px 4px;
+}
+
+.recent-project-favorite {
+    -fx-background-color: #fff8c5;
+}
+
+.recent-project-row .label {
+    -fx-text-fill: #222222;
+}
+
+.recent-project-favorite .label {
+    -fx-font-weight: bold;
+}
+
+.recent-project-missing .label {
+    -fx-text-fill: #888888;
+}
+
+/* Menu item highlight (blue) needs light text; favorites keep their yellow background. */
+.menu-item:focused .recent-project-row .label {
+    -fx-text-fill: white;
+}
+
+.menu-item:focused .recent-project-missing .label {
+    -fx-text-fill: #dddddd;
+}
+
+.menu-item:focused .recent-project-favorite .label {
+    -fx-text-fill: #222222;
+}
+
+.recent-project-star-button {
+    -fx-background-color: transparent;
+    -fx-padding: 2px 4px 2px 4px;
+    -fx-cursor: hand;
+}
+
+.recent-project-star-button FontIcon {
+    -fx-icon-color: #f5b301;
+    -fx-icon-size: 16;
+}
+
+.recent-project-delete-button {
+    -fx-background-color: #d9363e;
+    -fx-background-radius: 4px;
+    -fx-padding: 3px 6px 3px 6px;
+    -fx-cursor: hand;
+}
+
+.recent-project-delete-button:hover {
+    -fx-background-color: #b02a31;
+}
+
+.recent-project-delete-button FontIcon {
+    -fx-icon-color: white;
+    -fx-icon-size: 14;
+}

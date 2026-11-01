@@ -1,0 +1,15 @@
+spring:
+  main:
+    web-application-type: none
+  application:
+    name: curious-chat
+  title: cChat
+
+app:
+  env: ${ENV}
+
+logging.level:
+  com:
+    github:
+      curiousoddman:
+        curious_chat: info
