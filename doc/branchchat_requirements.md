@@ -1,508 +1,514 @@
-# Требования к приложению для ветвящихся чатов
+# BranchChat — Product Requirements
 
-**Рабочее название:** BranchChat\
-**Статус:** Черновик требований / MVP\
-**Целевая платформа:** Windows 10/11\
-**Текущий стек:** JavaFX + Spring Boot + Gradle\
-**Язык интерфейса:** русский\
-**Формат обмена:** один переносимый файл на обсуждение\
-**Источник обновлений:** GitHub Releases
+**Status:** MVP requirements  
+**Target platform:** Windows 10 and Windows 11  
+**Current project stack:** JavaFX + Spring Boot + Gradle (subject to architecture decision)  
+**UI language:** Russian  
+**Discussion exchange format:** One portable file per discussion  
+**Application distribution:** Preferably a single self-contained Windows `.exe`  
+**Windows file association:** Associate the discussion file type with BranchChat  
+**Application update source:** GitHub Releases; stable releases only
 
-------------------------------------------------------------------------
+---
 
-## 1. Цель и концепция
+## 1. Product purpose
 
-Создать локальное настольное приложение, которое выглядит и ощущается
-как обычный мессенджер, но позволяет ответвлять обсуждение от любого
-фрагмента сообщения.
+BranchChat is an offline-first Windows desktop application that looks and behaves like a familiar chat application,
+while allowing users to branch a discussion from any selected passage in a message.
 
-Пользователь ведёт основной разговор, выделяет фрагмент текста и
-выбирает **«Ответить на это»**. Приложение создаёт отдельную ветку
-обсуждения, сохраняя связь с исходным сообщением и точным выделенным
-фрагментом. Ветка может сама порождать новые ветки на любом уровне
-вложенности.
+A participant selects text in a message and chooses **"Reply to this"**. The application creates a separate discussion
+branch linked to the source message and the exact selected passage. A branch can itself contain messages from which
+further branches can be created, with no artificial nesting limit.
 
-Каждое обсуждение хранится локально и может быть передано другому
-человеку одним файлом, например через WhatsApp. Получатель открывает
-файл в приложении, продолжает разговор под своим именем и отправляет
-обновлённый файл обратно.
+Each discussion is stored in one portable file. Users can exchange this file through WhatsApp or another file-sharing
+method. The recipient opens the file, continues the discussion, saves it, and sends the updated file back.
 
-**Ключевой принцип:** приложение не требует сервера, аккаунта или
-подключения к интернету для создания, чтения и редактирования
-обсуждений. Интернет требуется только для проверки и загрузки обновлений
-приложения.
+The application must work without a server, account, or internet connection. Internet access is required only for
+checking and downloading application updates.
 
-## 2. Цели
+## 2. Product goals
 
-1.  Сделать длинные и разветвлённые обсуждения удобными для чтения и
-    ведения.
-2.  Сохранить привычный интерфейс чата: сообщения, авторы, время, поле
-    ввода.
-3.  Дать возможность создавать ветку ответа от конкретного фрагмента
-    текста, а не только от целого сообщения.
-4.  Хранить все ветки, сообщения и форматирование в одном переносимом
-    файле.
-5.  Обеспечить офлайн-работу на Windows.
-6.  Поддерживать русский язык, кириллицу и корректную работу с Unicode.
-7.  Не требовать от участников технических знаний для обмена файлами.
-8.  Обеспечить автоматическую проверку новых версий приложения через
-    GitHub Releases и простой процесс обновления.
+1. Provide a familiar chat-like interface.
+2. Allow users to create branches from selected message text.
+3. Preserve the context that led to each branch.
+4. Support nested branches.
+5. Store an entire discussion in one portable file.
+6. Support rich-text formatting, links, and embedded images.
+7. Work offline on Windows.
+8. Support Russian, Cyrillic, and Unicode correctly.
+9. Make file exchange straightforward for non-technical participants.
+10. Check GitHub Releases for stable application updates.
+11. Provide a simple Windows application deliverable, preferably a single executable.
+12. Allow discussion files to be opened by double-clicking them in Windows Explorer.
 
-## 3. Не входит в первую версию
+## 3. Out of scope for the MVP
 
--   Синхронизация в реальном времени.
--   Серверная инфраструктура и учётные записи.
--   Одновременное редактирование одного файла несколькими людьми.
--   Автоматическая отправка сообщений через WhatsApp.
--   Облачное хранение обсуждений.
--   Мобильная версия.
--   Звонки, аудио- и видеосообщения.
--   Сквозное шифрование как отдельная система обмена ключами.
+- Real-time synchronization.
+- Server infrastructure and online user accounts.
+- Concurrent editing of the same document.
+- Automatic merging of independently edited copies.
+- Automatic sending of messages through WhatsApp.
+- Cloud storage of discussions.
+- Support for operating systems other than Windows.
+- Voice and video calls or audio messages.
+- Cryptographic identity verification.
+- Editing or deleting sent messages.
 
-Архитектура не должна закрывать возможность добавить Android-клиент
-позднее.
+The MVP and foreseeable product scope are Windows desktop only. Do not add cross-platform or mobile requirements unless
+the product scope changes.
 
-------------------------------------------------------------------------
+## 4. Main user scenarios
 
-## 4. Основные пользовательские сценарии
+### 4.1. Create a discussion
 
-### 4.1. Создание обсуждения
+1. The user launches BranchChat.
+2. The user creates a new discussion.
+3. BranchChat uses the participant name previously saved on that computer.
+4. If no participant name has been saved, the application asks the user to enter one.
+5. The user writes and sends the first message.
+6. The application saves the discussion to the selected document file.
+7. Subsequent changes are saved automatically.
 
-1.  Пользователь запускает приложение.
-2.  Создаёт новое обсуждение.
-3.  Указывает своё отображаемое имя.
-4.  Приложение открывает пустой чат.
-5.  Пользователь пишет и отправляет первое сообщение.
-6.  Приложение сохраняет обсуждение в локальный файл.
+### 4.2. Continue a discussion
 
-### 4.2. Ответ в основной переписке
+1. The user opens an existing discussion file.
+2. The application displays the discussion in a chat-like interface.
+3. Messages are shown chronologically.
+4. Each message displays its author and timestamp.
+5. The user writes a message in the composer at the bottom of the chat.
+6. The application saves the new message.
 
-1.  Пользователь вводит текст в поле сообщения.
-2.  При необходимости форматирует его.
-3.  Отправляет сообщение.
-4.  Сообщение появляется в чате с именем автора и временем отправки.
+### 4.3. Format a message
 
-### 4.3. Создание ветки по выделенному фрагменту
+The user can format text using:
 
-1.  Пользователь выделяет часть текста в любом сообщении.
-2.  Рядом с выделением или в контекстном меню появляется действие
-    **«Ответить на это»**.
-3.  Пользователь нажимает действие.
-4.  Приложение создаёт новую ветку, связанную с исходным сообщением и
-    выделенным диапазоном текста.
-5.  Открывается отдельное окно ветки.
-6.  Ветка показывает контекст исходной переписки до места выделения.
-    Выбранный фрагмент визуально выделен.
-7.  Пользователь вводит ответ в этой ветке.
-8.  Ответ сохраняется как сообщение новой ветки.
-9.  В исходном чате появляется понятный индикатор или ссылка на ветку.
-10. Пользователь может указать название для ветки
+- Heading level 1.
+- Heading level 2.
+- Heading level 3.
+- Bulleted lists.
+- Numbered lists.
+- Nested lists.
+- Bold.
+- Italic.
+- Underline.
+- Text color.
+- Text background color.
+- Hyperlinks.
 
-**Предлагаемое поведение контекста для MVP:** в новой ветке отображается
-исходное сообщение целиком с выделенным фрагментом, а также
-предшествующие сообщения основного чата, необходимые для понимания
-контекста. Контекст показывается как цитируемая история и не копируется
-в ветку как новые сообщения.
+Formatting must be preserved when the document is saved and reopened.
 
-### 4.4. Вложенное ветвление
+### 4.4. Create a branch from selected text
 
-1.  Пользователь открывает существующую ветку.
-2.  Выделяет текст в сообщении этой ветки.
-3.  Выбирает **«Ответить на это»**.
-4.  Приложение создаёт дочернюю ветку, связанную с сообщением и
-    выделенным текстом внутри родительской ветки.
-5.  Пользователь может продолжать создавать ветки без ограничения по
-    уровню вложенности.
+1. The user selects a continuous passage of text in a message.
+2. A **"Reply to this"** action becomes available.
+3. The user activates the action.
+4. BranchChat creates a new branch linked to the original message and selected passage.
+5. The branch opens in the main chat area.
+6. A side panel displays the branch hierarchy.
+7. The new branch displays the relevant conversation history leading to the selected passage.
+8. The selected passage is visually highlighted.
+9. The user can write a reply in the new branch.
+10. The branch can optionally have a user-defined title.
 
-Каждая ветка должна иметь навигационную цепочку, например:\
-**Основной чат → Архитектура → Вариант Б → Вопрос по
-производительности.**
+The branch must preserve the relationship to the original message and the selected passage.
 
-### 4.5. Обмен файлом
+### 4.5. Display context in a branch
 
-1.  Пользователь сохраняет обсуждение в один файл.
-2.  Отправляет файл другому участнику через WhatsApp или другой канал.
-3.  Получатель открывает файл в приложении.
-4.  Приложение предлагает указать или подтвердить имя участника.
-5.  Получатель добавляет сообщения и ветки.
-6.  Получатель сохраняет изменённый файл и отправляет его обратно.
+When a branch is opened, the application displays the complete relevant conversation history leading up to the selected
+passage.
 
-Приложение должно явно показывать, какой файл открыт, и не
-перезаписывать исходный файл незаметно.
+For a branch created inside another branch, the application displays the relevant conversation path, including the
+context inherited from the parent branch.
 
-### 4.6. Обновление приложения
+Sibling branches are not automatically included in the context.
 
-1.  При запуске приложение проверяет наличие новой версии на GitHub
-    Releases, если включена автоматическая проверка и доступен интернет.
-2.  Если новая версия найдена, пользователь видит номер текущей и новой
-    версии, краткое описание изменений и ссылку на release notes.
-3.  Пользователь может скачать и установить обновление сразу либо
-    отложить его.
-4.  Проверка и загрузка обновлений не должны мешать работе с локальными
-    документами.
-5.  При отсутствии интернета приложение запускается и работает штатно;
-    проверка обновлений переносится на следующий запуск или выполняется
-    вручную.
+Inherited context is read-only. It must not be duplicated as newly authored messages in the branch.
 
-------------------------------------------------------------------------
+The selected passage must remain identifiable even if the original message contains formatting.
 
-## 5. Функциональные требования
+### 4.6. Create nested branches
 
-### 5.1. Локальные документы и формат файла
+A user can select text inside a branch message and create another branch from it.
 
--   **FR-001.** Каждое обсуждение хранится в одном самостоятельном
-    файле.
--   **FR-002.** Файл содержит сообщения, ветки, авторов, временные
-    метки, форматирование и связи между ветками.
--   **FR-003.** Файл можно передать через WhatsApp как обычное вложение.
--   **FR-004.** Файл можно открыть, изменить и сохранить на другом
-    компьютере с установленным приложением.
--   **FR-005.** Приложение автоматически сохраняет в файл отправленое сообщение.
--   **FR-007.** При повреждённом или неподдерживаемом файле приложение
-    показывает понятную ошибку и не удаляет исходный файл.
--   **FR-008.** Формат документа должен иметь версию схемы для будущих
-    изменений и миграций.
--   **FR-009.** Предпочтителен открытый формат на основе JSON с
-    упакованными ресурсами либо другой документированный формат.
-    Расширение файла выбрать отдельно.
--   **FR-010.** Сохранение должно быть атомарным: сначала записывать
-    временный файл, затем заменять целевой после успешной записи.
+The new branch is linked to the message and branch from which it originated.
 
-### 5.2. Пользователи и авторство
+There is no artificial nesting-depth limit.
 
--   **FR-011.** У каждого сообщения есть автор.
--   **FR-012.** При первом редактировании документа участник указывает
-    отображаемое имя.
--   **FR-013.** Участник получает локальный стабильный идентификатор, не
-    зависящий только от отображаемого имени.
--   **FR-014.** Имя и идентификатор автора сохраняются в документе
-    вместе с его сообщениями.
--   **FR-015.** Два участника могут иметь одинаковые отображаемые имена,
-    но разные идентификаторы.
--   **FR-016.** Пользователь может изменить своё отображаемое имя для
-    будущих сообщений. Старые сообщения сохраняют историческое
-    авторство.
--   **FR-017.** Авторство является информационной меткой, а не
-    криптографически подтверждённой личностью. Приложение не должно
-    обещать защиту от подделки автора при ручном редактировании файла.
+### 4.7. Close and reopen a branch
 
-### 5.3. Интерфейс чата
+1. The user can mark a branch as closed.
+2. Closed branches remain stored in the document.
+3. The side panel separates active and closed branches.
+4. The user can reopen a closed branch.
+5. Closing a parent branch should not automatically close its child branches.
+6. Branch status is maintained independently.
 
--   **FR-018.** Основной экран визуально напоминает современный
-    мессенджер.
--   **FR-019.** Сообщения отображаются последовательно, с именем автора
-    и временем отправки.
--   **FR-020.** Поле ввода расположено в нижней части окна.
--   **FR-021.** Ветка открывается в отдельном окне или отдельной панели.
-    Предпочтительный вариант интерфейса можно уточнить на этапе
-    прототипа.
--   **FR-022.** Пользователь может переходить из сообщения к связанной
-    ветке и обратно.
--   **FR-023.** В интерфейсе видны родительская ветка и путь текущей
-    ветки.
--   **FR-024.** Длинные обсуждения должны оставаться удобными для
-    прокрутки и навигации.
+Closing a branch does not delete its content.
 
-### 5.4. Форматирование сообщений
+### 4.8. Exchange a discussion file
 
-Каждое сообщение поддерживает базовое форматирование текста:
+1. The user saves the discussion.
+2. The user sends the document file through WhatsApp or another file-sharing method.
+3. The recipient opens the file in BranchChat.
+4. The recipient continues the discussion.
+5. The recipient saves the updated file and returns it.
 
--   **FR-025.** Заголовки уровней 1, 2 и 3.
--   **FR-026.** Маркированные списки.
--   **FR-027.** Нумерованные списки.
--   **FR-028.** Многоуровневые маркированные и нумерованные списки.
--   **FR-029.** Полужирный текст.
--   **FR-030.** Курсив.
--   **FR-031.** Подчёркнутый текст.
--   **FR-032.** Цвет текста.
--   **FR-033.** Цвет фона или подсветка фрагмента текста.
--   **FR-034.** Форматирование сохраняется при сохранении, закрытии и
-    повторном открытии документа.
--   **FR-035.** Форматирование корректно отображается на другом
-    компьютере с тем же приложением.
--   **FR-036.** Пользователь может редактировать сообщение до отправки.
-    Возможность редактирования уже отправленных сообщений должна быть
-    определена отдельно; для MVP рекомендуется разрешить редактирование
-    с сохранением признака «изменено».
+The application must not silently overwrite the original document when the user chooses Save As or receives an
+independently edited copy.
 
-### 5.5. Выделение и создание веток
+Automatic merging of independently edited copies is not required.
 
--   **FR-037.** Пользователь может выделить произвольный непрерывный
-    фрагмент текста сообщения.
--   **FR-038.** После выделения доступно действие **«Ответить на это»**.
--   **FR-039.** Новая ветка хранит ссылку на исходное сообщение,
-    идентификатор родительской ветки и точный выделенный фрагмент.
--   **FR-040.** Ветка показывает исходный контекст, а выделенный текст
-    визуально подчёркнут или подсвечен.
--   **FR-041.** Выделенный фрагмент должен сохраняться независимо от
-    дальнейшего изменения исходного сообщения. Если исходный текст
-    изменён, приложение должно уметь показать сохранённую цитату и
-    предупредить, что оригинал изменился.
--   **FR-042.** Ветка может быть создана из сообщения любой ветки.
--   **FR-043.** Вложенность веток не должна иметь искусственного
-    ограничения на уровне модели данных.
--   **FR-044.** У исходного сообщения отображается число связанных веток
-    или другой понятный индикатор.
--   **FR-045.** Пользователь может открыть ветку из исходного сообщения.
--   **FR-046.** У ветки отображается её исходный фрагмент и путь к
-    родительской ветке.
+### 4.9. Open a discussion file from Windows Explorer
 
-### 5.6. Русский язык и локализация
+1. The user double-clicks a BranchChat discussion file in Windows Explorer.
+2. Windows launches BranchChat.
+3. BranchChat opens the selected discussion file.
+4. If BranchChat is already running, the application should pass the new file to the existing instance where practical.
 
--   **FR-047.** Весь интерфейс первой версии --- на русском языке.
--   **FR-048.** Все поля текста, поиск, выделение, форматирование и
-    сохранение поддерживают кириллицу.
--   **FR-049.** Используется Unicode; кодировка документа должна быть
-    UTF-8 или другая явно заданная Unicode-кодировка.
--   **FR-050.** Корректно обрабатываются русские буквы, включая «ё/Ё»,
-    кавычки, тире, эмодзи и смешанный русский/английский текст.
--   **FR-051.** Дата и время отображаются в локальном формате Windows,
-    но в документе хранятся в однозначном машинном формате,
-    предпочтительно UTC с часовым поясом/смещением при отображении.
+The application should provide a clear way to register and unregister the file association.
 
-### 5.7. Автоматическое обновление через GitHub Releases
+### 4.10. Update the application
 
--   **FR-052.** Приложение проверяет GitHub Releases заданного
-    репозитория на наличие более новой стабильной версии.
--   **FR-053.** URL репозитория и правила выбора release должны
-    задаваться в конфигурации сборки, а не быть разбросаны по коду.
--   **FR-054.** Проверка обновлений выполняется при запуске с
-    настраиваемой задержкой или в фоновом режиме, чтобы не блокировать
-    открытие приложения.
--   **FR-055.** Пользователь может вручную запустить проверку обновлений
-    через меню **«Справка → Проверить обновления»**.
--   **FR-056.** Пользователь может отключить автоматическую проверку
-    обновлений в настройках.
--   **FR-057.** При обнаружении обновления показываются текущая версия,
-    доступная версия, дата релиза и краткое описание изменений.
--   **FR-058.** Пользователь может открыть страницу GitHub Release в
-    браузере.
--   **FR-059.** Пользователь может скачать подходящий установщик или
-    пакет обновления для Windows.
--   **FR-060.** Приложение должно проверять целостность загруженного
-    файла по опубликованной контрольной сумме, если она доступна.
-    Предпочтительно публиковать SHA-256 для каждого установщика.
--   **FR-061.** Для установщика должны быть предусмотрены проверка
-    цифровой подписи и/или проверяемый checksum. Нельзя запускать
-    непроверенный загруженный файл автоматически.
--   **FR-062.** Установка обновления выполняется после явного
-    подтверждения пользователя. Если для замены файлов требуется закрыть
-    приложение, оно предлагает перезапуск.
--   **FR-063.** Если загрузка или установка не удалась, текущая версия
-    приложения остаётся работоспособной.
--   **FR-064.** Если GitHub недоступен, API ограничил запросы или
-    соединение отсутствует, приложение не должно зависать или показывать
-    критическую ошибку. Пользователь получает ненавязчивое уведомление
-    либо проверка молча откладывается.
--   **FR-065.** По умолчанию проверяются только опубликованные
-    стабильные релизы; prerelease и draft игнорируются, если
-    пользователь явно не включил предварительные версии.
--   **FR-066.** Обновление приложения не должно изменять или удалять
-    пользовательские файлы обсуждений.
--   **FR-067.** В release должны публиковаться версия, release notes и
-    подходящий для Windows артефакт установки.
--   **FR-068.** Если приложение распространяется как установщик,
-    обновление должно использовать совместимый установочный пакет. Если
-    приложение распространяется как portable-пакет, должен быть
-    предусмотрен безопасный сценарий замены файлов с резервной копией.
+1. BranchChat checks GitHub Releases for a newer stable version.
+2. The check can happen in the background.
+3. The user can also select **Help > Check for updates**.
+4. The application displays the available version, release date, release notes, and download size.
+5. The user can choose to download the update.
+6. The application verifies the downloaded package using SHA-256 when a checksum is provided.
+7. The update is applied using a safe replacement process.
+8. Existing discussion files and user settings are preserved.
 
-------------------------------------------------------------------------
+If the computer is offline or the update check fails, BranchChat must continue to work normally.
 
-## 6. Нефункциональные требования
+## 5. Functional requirements
 
--   **NFR-001.** Приложение работает без подключения к интернету, кроме
-    функций проверки и загрузки обновлений.
--   **NFR-002.** Основная целевая ОС --- Windows 10 и Windows 11.
--   **NFR-003.** Интерфейс должен корректно масштабироваться при разных
-    разрешениях и DPI.
--   **NFR-004.** Приложение должно поддерживать типичные документы с
-    тысячами сообщений и несколькими уровнями ветвления без заметных
-    задержек при обычной работе.
--   **NFR-005.** Сохранение документа не должно приводить к потере
-    данных при штатном закрытии приложения или сбое записи.
--   **NFR-006.** Документ должен быть переносимым между компьютерами
-    Windows с установленным приложением.
--   **NFR-007.** Не должно быть обязательной телеметрии или отправки
-    содержимого обсуждений разработчику.
--   **NFR-008.** Проверка обновлений может обращаться к GitHub, но не
-    передаёт содержимое документов, имена участников или текст
-    сообщений.
--   **NFR-009.** Приложение должно корректно обрабатывать неизвестные
-    будущие поля документа и несовместимые версии схемы: не повреждать
-    файл и объяснять пользователю ограничение.
--   **NFR-010.** Кодовая база должна позволять в будущем реализовать
-    Android-клиент, повторно используя модель документа и бизнес-логику,
-    где это возможно.
+### 5.1. Discussion document
 
-------------------------------------------------------------------------
+- **FR-001.** Each discussion must be stored in one self-contained file.
+- **FR-002.** The file must contain messages, threads, participants, timestamps, formatting, branch relationships,
+  links, and embedded images.
+- **FR-003.** The application must support creating a new discussion.
+- **FR-004.** The application must support opening an existing discussion.
+- **FR-005.** The application must support saving a discussion.
+- **FR-006.** The application must support Save As.
+- **FR-007.** Sent messages must be saved automatically.
+- **FR-008.** The application must warn the user if there are unsaved document changes when closing.
+- **FR-009.** The application must show a useful error if a document is damaged or cannot be opened.
+- **FR-010.** The document format must include a schema version.
+- **FR-011.** The application must support document schema migrations where required.
+- **FR-012.** The application must avoid corrupting documents created by newer unsupported versions.
+- **FR-013.** Saving should use a safe atomic-write strategy where practical.
+- **FR-014.** The document should use a ZIP container with a manifest, discussion data, and embedded assets.
+- **FR-015.** Unknown optional fields should be preserved where practical.
 
-## 7. Предлагаемая модель данных
+Proposed internal structure:
 
-Ниже --- концептуальная модель; это не окончательная схема реализации.
+    discussion.branchchat
+      manifest.json
+      discussion.json
+      assets/
+        images/
+        attachments/
+
+### 5.2. Participants and authorship
+
+- **FR-016.** Every message must have an author.
+- **FR-017.** The application must remember the participant name locally on each computer.
+- **FR-018.** The application must not ask for the participant name every time a discussion is opened.
+- **FR-019.** If no participant name is configured, the application must ask for one before the first message is sent.
+- **FR-020.** Each participant must have a stable participant ID.
+- **FR-021.** A participant ID must not be derived solely from the display name.
+- **FR-022.** Participant ID and display name must be stored in the discussion document.
+- **FR-023.** Different participants may have the same display name but must have different IDs.
+- **FR-024.** Changing the local participant name must affect new messages only.
+- **FR-025.** Participant identity is descriptive and is not intended to provide cryptographic authentication.
+
+### 5.3. Chat interface
+
+- **FR-026.** Messages must be displayed chronologically within a thread.
+- **FR-027.** Each message must show its author.
+- **FR-028.** Each message must show its timestamp.
+- **FR-029.** The message composer must be located at the bottom of the active chat.
+- **FR-030.** The interface must include a side panel for branch navigation.
+- **FR-031.** The side panel must group active and closed branches.
+- **FR-032.** The user must be able to navigate from a branch to its source message.
+- **FR-033.** The user must be able to see the branch hierarchy.
+- **FR-034.** The interface must remain usable for long discussions.
+- **FR-035.** The interface should indicate when a message has branches and how many.
+
+### 5.4. Message formatting
+
+- **FR-036.** The editor must support heading levels 1–3.
+- **FR-037.** The editor must support bulleted lists.
+- **FR-038.** The editor must support numbered lists.
+- **FR-039.** The editor must support nested lists.
+- **FR-040.** The editor must support bold text.
+- **FR-041.** The editor must support italic text.
+- **FR-042.** The editor must support underlined text.
+- **FR-043.** The editor must support text color.
+- **FR-044.** The editor must support text background color.
+- **FR-045.** The editor must support hyperlinks.
+- **FR-046.** Formatting must be preserved when a discussion is saved and reopened.
+- **FR-047.** Sent messages must not be editable.
+- **FR-048.** Draft messages may be edited before sending.
+
+### 5.5. Branching
+
+- **FR-049.** The user must be able to select any continuous text passage in a message.
+- **FR-050.** A "Reply to this" action must be available when a non-empty text selection exists.
+- **FR-051.** A new branch must store a reference to the source message.
+- **FR-052.** A new branch must store the selected passage as a quote.
+- **FR-053.** The branch must display the complete relevant source-thread history leading up to the selected passage.
+- **FR-054.** The selected passage must be highlighted in the displayed context.
+- **FR-055.** The branch must retain a durable reference to the source message and selected quote.
+- **FR-056.** A branch may be created from a message in any existing thread.
+- **FR-057.** Branch nesting must not have an arbitrary application-imposed depth limit.
+- **FR-058.** A branch title must be optional and user-defined.
+- **FR-059.** A branch must have an Open or Closed status.
+- **FR-060.** Closing a branch must not delete its content.
+- **FR-061.** The application must display the branch path and hierarchy.
+- **FR-062.** Inherited context must be read-only and must not be duplicated as authored messages.
+- **FR-063.** Sibling branches must not automatically appear in the context of another branch.
+- **FR-064.** Child branch status must be independent of parent branch status.
+
+### 5.6. Images and links
+
+- **FR-065.** The user must be able to paste an image from the clipboard into a message draft.
+- **FR-066.** Pasted images must be embedded in the discussion document.
+- **FR-067.** The user must be able to add an image from a local file.
+- **FR-068.** Images must be displayed inline in messages.
+- **FR-069.** The user should be able to view an image at a larger size.
+- **FR-070.** Image references must be stored in the discussion data and resolved from embedded assets.
+- **FR-071.** The editor must support hyperlinks with a label and URL.
+- **FR-072.** Plain URLs should be recognized as links where practical.
+- **FR-073.** Links must be opened only after an explicit user action.
+- **FR-074.** The application must not automatically fetch remote link content.
+- **FR-075.** If an embedded asset is missing, the application must display a placeholder rather than fail to open the
+  entire discussion.
+
+### 5.7. Language and text handling
+
+- **FR-076.** The application interface must be in Russian.
+- **FR-077.** The application must correctly support Cyrillic characters.
+- **FR-078.** The application must correctly support the letters ё and Ё.
+- **FR-079.** The application must support emoji and mixed-language text.
+- **FR-080.** Text must be stored using UTF-8.
+- **FR-081.** Timestamps must be stored in UTC and displayed in the local time zone.
+
+### 5.8. Windows application delivery and file association
+
+- **FR-082.** The preferred deliverable is one executable file, `BranchChat.exe`.
+- **FR-083.** The executable should bundle the runtime dependencies required on a supported Windows system.
+- **FR-084.** Users should not need to install Java, configure environment variables, or start a local server.
+- **FR-085.** If a single executable is not practical, the application should use the simplest self-contained Windows
+  package and document the reason.
+- **FR-086.** The proposed discussion file extension is `.branchchat`.
+- **FR-087.** Windows file association must allow double-clicking a `.branchchat` file in Explorer to launch BranchChat
+  and open that discussion.
+- **FR-088.** If BranchChat is already running, opening another discussion file should pass the file to the existing
+  instance where practical.
+- **FR-089.** The application must provide a clear way to register and unregister the file association.
+- **FR-090.** The application must not silently take over an existing file association.
+- **FR-091.** The application must continue to support opening a discussion through File > Open.
+- **FR-092.** Drag-and-drop opening should be supported where practical.
+
+### 5.9. Application updates
+
+- **FR-093.** The application must check GitHub Releases for new stable versions.
+- **FR-094.** Draft and prerelease versions must be ignored.
+- **FR-095.** Update checks must run asynchronously and must not block normal application use.
+- **FR-096.** The user must be able to initiate a manual check through Help > Check for updates.
+- **FR-097.** Automatic update checks must be configurable.
+- **FR-098.** The update dialog must show the available version, release date, release notes, and download size where
+  available.
+- **FR-099.** The user must be able to open the GitHub release page.
+- **FR-100.** The application must download the correct Windows release artifact.
+- **FR-101.** The application must verify SHA-256 when a checksum is published.
+- **FR-102.** The application must not execute or install an update that fails verification.
+- **FR-103.** The update process must preserve user settings.
+- **FR-104.** The update process must not modify discussion documents.
+- **FR-105.** Update failures must be reported without preventing normal offline use.
+- **FR-106.** The update process must account for the fact that a running Windows executable cannot reliably replace
+  itself.
+- **FR-107.** A release should publish the Windows application artifact and checksum.
+
+## 6. Non-functional requirements
+
+- **NFR-001.** The application must work offline for all discussion operations.
+- **NFR-002.** The application must support Windows 10 and Windows 11.
+- **NFR-003.** The interface must work at common Windows display scaling and DPI settings.
+- **NFR-004.** The application should remain responsive with discussions containing thousands of messages.
+- **NFR-005.** Saving must minimize the risk of document corruption.
+- **NFR-006.** The discussion file must be portable between computers.
+- **NFR-007.** The application must not require a remote service for normal use.
+- **NFR-008.** Update checks may contact GitHub but must never transmit document content, participant names, or message
+  text.
+- **NFR-009.** Unknown optional document fields and unsupported schema versions must be handled without corrupting the
+  file.
+- **NFR-010.** Prefer a single self-contained Windows `.exe` that runs without requiring users to install a runtime or
+  manage dependencies.
+- **NFR-011.** Associate the discussion extension (proposed: `.branchchat`) with BranchChat. Double-clicking a document
+  in Explorer must launch BranchChat and open that document. Provide a clear, consent-based way to register and
+  unregister the association.
+- **NFR-012.** If a single executable is impractical, use the simplest self-contained Windows package and explain the
+  trade-off.
+- **NFR-013.** The application must not depend on a running remote service for local document operations.
+
+## 7. Proposed data model
+
+This is a conceptual model, not a final implementation schema.
 
 ### Discussion
 
--   `documentId` --- уникальный идентификатор документа.
--   `title` --- название обсуждения.
--   `schemaVersion` --- версия формата документа.
--   `createdAt` --- дата создания.
--   `updatedAt` --- дата последнего изменения.
--   `participants` --- список участников.
--   `messages` --- сообщения.
--   `threads` --- ветки обсуждения.
+- `documentId` — unique document identifier.
+- `title` — discussion title.
+- `schemaVersion` — document schema version.
+- `createdAt` — creation timestamp.
+- `updatedAt` — last modification timestamp.
+- `participants` — participants known to this discussion.
+- `threads` — main thread and branches.
+- `assets` — embedded images and other resources.
 
 ### Participant
 
--   `participantId` --- стабильный уникальный ID.
--   `displayName` --- отображаемое имя.
--   `createdAt` --- дата первого участия.
+- `participantId` — stable participant identifier.
+- `displayName` — participant name.
 
 ### Message
 
--   `messageId` --- уникальный ID сообщения.
--   `threadId` --- ID ветки, в которой находится сообщение.
--   `authorId` --- ID автора.
--   `createdAt` --- дата и время создания.
--   `updatedAt` --- дата и время последнего редактирования, если
-    применимо.
--   `content` --- структурированное содержимое с текстом и
-    форматированием.
--   `isEdited` --- признак редактирования.
+- `messageId` — unique message identifier.
+- `threadId` — thread containing the message.
+- `authorId` — participant who authored the message.
+- `createdAt` — timestamp.
+- `content` — rich-text content.
+- `assetReferences` — references to embedded assets.
 
-### Thread
+Sent messages are immutable.
 
--   `threadId` --- уникальный ID ветки.
--   `parentThreadId` --- ID родительской ветки; для основного чата ---
-    null.
--   `sourceMessageId` --- сообщение, из которого создана ветка.
--   `quoteText` --- неизменяемая копия выделенного фрагмента на момент
-    создания ветки.
--   `selectionStart` и `selectionEnd` --- диапазон выделения, если
-    применимо.
--   `createdAt` --- дата создания.
--   `createdBy` --- ID участника, создавшего ветку.
+### Thread / Branch
 
-**Важно:** для надёжности связь с исходным сообщением не должна зависеть
-только от сохранённых позиций символов. Позиции могут измениться при
-редактировании текста. Неизменяемая цитата и идентификатор исходного
-сообщения должны оставаться основой отображения контекста.
+- `threadId` — unique thread identifier.
+- `parentThreadId` — parent thread, if this is a branch.
+- `sourceMessageId` — message from which the branch originated.
+- `quoteText` — selected source passage.
+- `selectionStart` and `selectionEnd` — optional selection offsets.
+- `title` — optional branch title.
+- `status` — Open or Closed.
+- `createdAt` — creation timestamp.
+- `createdBy` — participant who created the branch.
 
-------------------------------------------------------------------------
+Selection offsets are secondary metadata. The source message ID and stored quote are the durable reference.
 
-## 8. Предлагаемая архитектура
+## 8. Architecture principles
 
-Текущий стек JavaFX + Spring Boot + Gradle подходит для
-Windows-приложения, но приложение следует проектировать как локальное
-desktop-приложение, а не как клиент-серверную систему.
+The architecture must separate:
 
-Рекомендуемое разделение:
+1. Presentation layer.
+2. Domain model and branching logic.
+3. Document persistence and ZIP handling.
+4. Embedded asset management.
+5. Windows integration.
+6. Application update mechanism.
 
-1.  **UI layer (JavaFX):** окна, чат, редактор форматирования, выделение
-    текста, навигация по веткам.
-2.  **Domain layer:** сущности Discussion, Thread, Message, Participant
-    и правила ветвления.
-3.  **Document layer:** чтение, запись, валидация, миграция и экспорт
-    переносимого файла.
-4.  **Update layer:** проверка GitHub Releases, загрузка артефакта,
-    проверка контрольной суммы и запуск безопасного процесса обновления.
-5.  **Application services:** создание сообщений и веток, управление
-    участниками, сохранение и открытие документов.
+The UI technology is not yet fixed.
 
-Spring Boot можно использовать для внедрения зависимостей и организации
-сервисов, но запуск отдельного локального HTTP-сервера не должен быть
-обязательным без конкретной необходимости.
+The domain model and document format should not depend directly on JavaFX or Spring Boot.
 
-Для Android в будущем важно не связывать модель документа и
-бизнес-логику напрямую с JavaFX. UI должен быть заменяемым.
+Avoid introducing a local HTTP server unless it provides a clear benefit.
 
-------------------------------------------------------------------------
+## 9. Acceptance criteria
 
-## 9. Критерии приёмки MVP
+The MVP is acceptable when:
 
-MVP считается готовым, если выполнены следующие проверки:
+1. A user can create a discussion.
+2. A user can save and reopen a discussion file.
+3. A discussion file can be sent to another user.
+4. The recipient can open and continue the discussion.
+5. Every message displays its author and timestamp.
+6. The local participant name is remembered.
+7. The required formatting is supported.
+8. Images can be pasted from the clipboard.
+9. Images remain available after the document is moved to another computer.
+10. Links can be opened by an explicit user action.
+11. Selecting text exposes the "Reply to this" action.
+12. A branch preserves its source message and selected quote.
+13. A branch displays the relevant preceding conversation history.
+14. Nested branches work.
+15. The branch side panel distinguishes active and closed branches.
+16. Closed branches can be reopened.
+17. The application works without internet access.
+18. The application can check for stable GitHub Releases.
+19. The update process does not modify discussion documents.
+20. The application can be launched through a `.branchchat` file association.
+21. The application can be distributed as a single self-contained EXE or the simplest practical self-contained Windows
+    package.
 
-1.  Можно создать новое обсуждение и сохранить его в один файл.
-2.  Можно закрыть приложение, открыть файл повторно и увидеть все
-    сообщения.
-3.  Можно задать имя участника; каждое новое сообщение содержит
-    корректного автора.
-4.  Можно отправлять сообщения с заголовками, списками, жирным,
-    курсивом, подчёркиванием, цветом текста и фона.
-5.  Можно выделить фрагмент сообщения и создать ветку через действие
-    **«Ответить на это»**.
-6.  Новая ветка показывает исходный контекст и подсвеченный фрагмент.
-7.  Можно создать ветку внутри другой ветки.
-8.  Можно перейти от исходного сообщения к ветке и обратно.
-9.  Можно передать файл другому пользователю; он может открыть его,
-    добавить сообщения, сохранить и вернуть файл.
-10. Русский текст, «ё», эмодзи и смешанный русский/английский текст
-    сохраняются и отображаются корректно.
-11. Приложение работает без интернета.
-12. При доступном интернете приложение находит новый стабильный GitHub
-    Release и показывает предложение обновиться.
-13. При недоступном GitHub приложение продолжает работать без зависания.
-14. Обновление не удаляет и не изменяет пользовательские документы.
+## 10. Confirmed product decisions
 
-------------------------------------------------------------------------
+| Topic                                | Decision                                                              |
+|--------------------------------------|-----------------------------------------------------------------------|
+| Target platform                      | Windows 10 and Windows 11                                             |
+| UI language                          | Russian                                                               |
+| Discussion format                    | One portable file per discussion                                      |
+| Discussion file container            | ZIP                                                                   |
+| Main interface                       | Chat-like                                                             |
+| Branch navigation                    | Side panel                                                            |
+| Branch groups                        | Active and Closed                                                     |
+| Branch closing                       | Branches can be closed and reopened                                   |
+| Branch context                       | Full relevant conversation history leading up to the selected passage |
+| Nested branches                      | Supported                                                             |
+| Sent message editing                 | Not allowed                                                           |
+| Message deletion                     | Not allowed                                                           |
+| Branch deletion                      | Not allowed                                                           |
+| Merge of independently edited copies | Not required for MVP                                                  |
+| Images                               | Supported, including clipboard paste; embedded in document            |
+| Links                                | Supported                                                             |
+| Participant name                     | Remembered locally on each computer                                   |
+| Participant identity                 | Stable local ID; display name is not an identity guarantee            |
+| Application distribution             | Preferably a single self-contained EXE                                |
+| File association                     | Double-clicking `.branchchat` opens BranchChat                        |
+| Updates                              | GitHub Releases, stable releases only                                 |
+| Other platforms                      | Out of scope                                                          |
 
-## 10. Вопросы, которые нужно решить до реализации
+## 11. Priorities
 
-1.  **Вид ветки:** отдельное окно, вкладка или боковая панель внутри
-    основного окна?
-> Боковая панель со всеми существующими ветками. Кстати, надо чтоб ветки можно было отметить как "закрытые" - закрытые ветки должны отображаться отдельной группой. 
-2.  **Объём контекста:** показывать всю переписку до выделения или
-    только исходное сообщение и несколько предыдущих сообщений?
-> Всю переписку 
-3.  **Редактирование:** разрешать ли менять уже отправленные сообщения?
-    Как показывать факт изменения?
-> нет
-4.  **Удаление:** можно ли удалять сообщения и ветки, или вместо
-    удаления использовать пометку «удалено»?
-> нет
-5.  **Слияние копий:** если два человека получили одну исходную версию и
-    независимо добавили сообщения, нужно ли приложению автоматически
-    объединять их документы? Для MVP можно ограничиться ручным выбором
-    файла и не поддерживать merge.
-> для МВП не надо
-6.  **Формат файла:** один читаемый JSON-файл или упакованный формат
-    (например, ZIP-контейнер с JSON и вложениями)? Для MVP без вложений
-    JSON проще; ZIP удобнее для будущих файлов и изображений.
-> ZIP. Кстати добавь поддержку вставления изображений из буфера обмена
-7.  **Вложения:** нужны ли изображения и файлы в сообщениях в первой
-    версии?
-> изображения и ссылки.
-8.  **Обновления:** приложение распространяется как установщик Windows
-    или как portable ZIP? Это влияет на способ автоматической установки.
-> архив
-9.  **Предварительные версии:** проверять только стабильные релизы или
-    дать настройку для beta/prerelease?
-> стабильные
-10. **Имя участника:** спрашивать при каждом открытии документа или
-    запоминать имя на конкретном компьютере?
-> запомнить на компьютере
+### MVP
 
-------------------------------------------------------------------------
+- Windows desktop application.
+- Create, open, save, and exchange discussion files.
+- Chat-like message interface.
+- Participant names and authorship.
+- Rich-text formatting.
+- Branch creation from selected text.
+- Relevant inherited context.
+- Nested branches.
+- Branch side panel and status.
+- Embedded images.
+- Hyperlinks.
+- Offline operation.
+- Simple Windows distribution.
+- `.branchchat` file association.
+- GitHub stable-release update checks.
 
-## 11. Приоритеты реализации
+### Later, if required
 
-### MVP --- обязательное
+- Additional export formats.
+- More advanced search.
+- Improved branch filtering.
+- Additional document recovery tools.
+- Further usability improvements.
 
--   Локальный документ в одном файле.
--   Создание и отображение чатов и вложенных веток.
--   Автор и временная метка каждого сообщения.
--   Выделение текста и создание ветки от выделения.
--   Базовое форматирование.
--   Русский интерфейс и Unicode.
--   Открытие, сохранение и обмен документом.
--   Проверка GitHub Releases и предложение скачать обновление.
+No mobile or non-Windows client is currently planned.
 
-------------------------------------------------------------------------
+## 12. Summary
 
-## 12. Краткое описание продукта
+BranchChat is a Windows-only, offline-first discussion application. Its defining feature is the ability to branch a
+conversation from an exact selected passage while preserving the relevant preceding context.
 
-**BranchChat --- офлайн-мессенджер с ветвящимися обсуждениями.** Он
-позволяет выделить любой фрагмент сообщения, ответить именно на него в
-отдельной ветке и продолжать ветвить разговор на любом уровне. Всё
-обсуждение хранится в одном переносимом файле, которым участники
-обмениваются через привычные каналы, например WhatsApp. Приложение
-работает локально на Windows и обновляется через GitHub Releases.
+Each discussion is a portable file that can be exchanged through ordinary file-sharing tools.
+
+The application should be as simple to distribute and launch as possible, preferably as a single self-contained EXE.
+Windows file association should allow users to open discussion files by double-clicking them in Explorer.
+
+The UI framework and packaging technology remain architecture decisions to be validated through a working proof of
+concept.
