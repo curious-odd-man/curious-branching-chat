@@ -1,3 +1,7 @@
+# TODO
+
+- add requirement about unread messages clearly visible and button to mark as read
+
 # BranchChat — Product Requirements
 
 **Status:** MVP requirements  
