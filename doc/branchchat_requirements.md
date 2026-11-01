@@ -6,7 +6,7 @@
 
 **Status:** MVP requirements  
 **Target platform:** Windows 10 and Windows 11  
-**Current project stack:** JavaFX + Spring Boot + Gradle (subject to architecture decision)  
+**Current project stack:** See ADR
 **UI language:** Russian  
 **Discussion exchange format:** One portable file per discussion  
 **Application distribution:** Preferably a single self-contained Windows `.exe`  
@@ -81,6 +81,8 @@ the product scope changes.
 4. Each message displays its author and timestamp.
 5. The user writes a message in the composer at the bottom of the chat.
 6. The application saves the new message.
+7. Unread messages are highlighted
+8. User clicks a button to mark message as readed
 
 ### 4.3. Format a message
 
@@ -151,7 +153,7 @@ Closing a branch does not delete its content.
 
 ### 4.8. Exchange a discussion file
 
-1. The user saves the discussion.
+1. Discussion is saved automatically whenever user submits new message.
 2. The user sends the document file through WhatsApp or another file-sharing method.
 3. The recipient opens the file in BranchChat.
 4. The recipient continues the discussion.
@@ -277,7 +279,7 @@ Proposed internal structure:
 
 ### 5.6. Images and links
 
-- **FR-065.** The user must be able to paste an image from the clipboard into a message draft.
+- **FR-065.** The user must be able to paste an image from the clipboard or drag and drop it into a message draft.
 - **FR-066.** Pasted images must be embedded in the discussion document.
 - **FR-067.** The user must be able to add an image from a local file.
 - **FR-068.** Images must be displayed inline in messages.
