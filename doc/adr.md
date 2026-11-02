@@ -1,42 +1,40 @@
 # ADR-001: Desktop technology for BranchChat
 
-**Status:** Proposed. Option D (Electron + TypeScript) is the leading candidate. Final confirmation depends on the
-focused spikes in section 11.  
+**Status:** Accepted — Option D (Electron + TypeScript)  
 **Decision scope:** Windows 10 and Windows 11 desktop application  
-**Previous project:** JavaFX + Spring Boot + Gradle (see section 13 for its disposition)  
+**Previous project:** JavaFX + Spring Boot + Gradle (archived; see section 12)  
 **Product constraints:** Offline-first, one portable discussion file, file exchange through WhatsApp, rich-text chat
-UI, clipboard images, GitHub Releases updates, simple Windows delivery and file association, local read/unread state.
+UI, clipboard images, GitHub Releases updates, simple Windows delivery and file association, read state stored in the
+file.
 
 ---
 
-## 1. Summary
+## 1. Decision
 
-BranchChat is a Windows-only desktop application. Other platforms are outside the product scope and do not influence
-this decision.
-
-**Proposed decision:** build BranchChat with **Electron + TypeScript**, a **React** UI, and **TipTap (ProseMirror)** as
-the rich-text editor. Application logic runs in the Electron main process; there is no separate Node.js service and no
-local HTTP server. Package with **electron-builder** as a **per-user NSIS installer** (`BranchChat-Setup.exe`), and
-update through **electron-updater** against GitHub Releases.
+BranchChat is built with **Electron + TypeScript**, a **React** UI, and **TipTap (ProseMirror)** as the rich-text
+editor. Application logic runs in the Electron main process; there is no separate Node.js service and no local HTTP
+server. The application is packaged with **electron-builder** as a **per-user NSIS installer**
+(`BranchChat-Setup.exe`), and updates through **electron-updater** against GitHub Releases. Spring Boot and JavaFX are
+removed.
 
 Why:
 
 - The riskiest feature is selecting text across formatting boundaries and anchoring a stable quote for "Reply to this".
   ProseMirror/TipTap have a mature selection and position model for this; a custom JavaFX editor would need much more
   custom work.
-- TypeScript can be used for the UI and for application logic, without introducing Rust (Tauri) or a local server
+- TypeScript is used for the UI and for application logic, without introducing Rust (Tauri) or a local server
   (Spring Boot).
 - Windows integration (file dialogs, clipboard, drag-and-drop, single-instance handling, opening files passed by
   Windows) is well supported.
 - The larger download size and memory use of Electron are acceptable for a chat-style application.
 
-The main trade-off concerns **delivery**. A true portable single `BranchChat.exe` is possible with Electron, but it
-works poorly with file association and updates (section 4). One installer `.exe` that the user downloads and runs
-satisfies the intent of the "single self-contained EXE" goal more reliably, so the requirements are adjusted to that.
+**Delivery trade-off.** A portable single `BranchChat.exe` is possible with Electron, but it works poorly with file
+association and updates (section 4). One installer `.exe` that the user downloads and runs satisfies the intent of the
+"single self-contained EXE" goal more reliably, so the requirements specify that.
 
 ## 2. Decision drivers
 
-| Driver                            | Importance | What to verify                                                                    |
+| Driver                            | Importance | Question                                                                          |
 |-----------------------------------|------------|-----------------------------------------------------------------------------------|
 | Simple Windows delivery           | Critical   | Can the user get one file and run it without installing any runtime?              |
 | Windows file association          | Critical   | Can `.branchchat` be registered, removed, and passed to the app reliably?         |
@@ -50,47 +48,40 @@ satisfies the intent of the "single self-contained EXE" goal more reliably, so t
 | Maintenance burden                | High       | How many languages, runtimes, packaging systems, and update mechanisms?           |
 | TypeScript development            | Medium     | Can most application logic be written in TypeScript?                              |
 | Application footprint             | Medium     | Installer size, startup time, memory use                                          |
-| Reuse of existing Java code       | Low        | See section 13                                                                    |
+| Reuse of existing Java code       | Low        | See section 12                                                                    |
 
 ## 3. Options considered
 
 ### Option A — JavaFX desktop application
 
-Keep JavaFX as the UI and Java for the application and domain layers.
-
 - **Strengths:** reuses the existing project and knowledge; native desktop lifecycle; jpackage can create Windows
-  application images and installers; domain and ZIP code can stay independent of the UI.
+  application images and installers.
 - **Weaknesses:** rich-text editing needs the most custom work; jpackage normally produces an application image or
-  installer, not a single portable EXE; file association needs an installer or first-run registration; hosting a web
-  editor in JavaFX WebView would create a hybrid UI with integration complexity.
-- **Verdict:** lowest risk for packaging and Windows integration, highest risk for the central feature (rich-text
-  selection and quoting).
+  installer, not a single portable EXE; hosting a web editor in JavaFX WebView would create a hybrid UI.
+- **Verdict:** lowest packaging risk, highest risk for the central feature. Not selected.
 
 ### Option B — Web frontend with a local Java/Spring Boot host
 
-React or Vue served by a local Spring Boot process.
-
 - **Strengths:** mature browser editors; Java domain code reusable.
 - **Weaknesses:** a localhost server brings port selection, process lifecycle, local API protection, and a
-  browser-tab experience that feels less like a Windows application; packaging a JRE, server, and frontend into
-  one deliverable is complicated; passing a file path from Windows to the running instance needs explicit work.
+  browser-tab experience that feels less like a Windows application; packaging a JRE, server, and frontend together
+  is complicated.
 - **Verdict:** rejected. It combines the packaging complexity of Java with the security surface of a local server.
 
 ### Option C — TypeScript frontend in a Tauri shell
 
-- **Strengths:** small runtime (uses the system WebView); modern web editor ecosystem; produces compact packages.
-- **Weaknesses:** requires Rust for the host and native integrations; single-instance, file association, and
-  updater behavior depend on plugins that must be validated; two languages to maintain.
-- **Verdict:** a credible alternative if footprint becomes important and Rust is acceptable. Not selected because it
-  adds a language without addressing a problem this product has.
+- **Strengths:** small runtime (uses the system WebView); modern web editor ecosystem.
+- **Weaknesses:** requires Rust for the host and native integrations; single-instance, file association, and updater
+  behavior depend on plugins; two languages to maintain.
+- **Verdict:** credible, but adds a language without addressing a problem this product has. Not selected.
 
-### Option D — Electron + Node.js + TypeScript (leading candidate)
+### Option D — Electron + Node.js + TypeScript (selected)
 
 Electron provides Chromium for rendering and Node.js for the main process, connected through controlled IPC.
 
 - **Strengths:**
     - Nearly everything is written in TypeScript; no Rust, no Java.
-    - Mature web editor ecosystem (TipTap/ProseMirror, Lexical).
+    - Mature web editor ecosystem (TipTap/ProseMirror).
     - Main-process access to the filesystem for ZIP handling and atomic saves, without Spring Boot.
     - `app.requestSingleInstanceLock()` and the `second-instance` event provide a standard way to pass an opened file to
       the running instance.
@@ -113,8 +104,7 @@ Electron provides Chromium for rendering and Node.js for the main process, conne
 | Footprint                       | Medium          | Medium               | Small             | Large                       |
 | Reuse of existing project       | High            | High                 | Low               | Low                         |
 
-These are judgments for this project, not benchmark results. The scored matrix in the previous version of this
-document was removed because its scales were inconsistent and several rows double-counted the same factor.
+These are judgments for this project, not benchmark results.
 
 ## 4. Windows delivery
 
@@ -122,22 +112,21 @@ document was removed because its scales were inconsistent and several rows doubl
 
 | Format                             | Single file | File association | Updates                | Notes                                                                                                             |
 |------------------------------------|-------------|------------------|------------------------|-------------------------------------------------------------------------------------------------------------------|
-| **NSIS installer, per-user**       | Yes (setup) | Yes (installer)  | electron-updater       | **Recommended.** No administrator rights; installs under the user profile                                         |
+| **NSIS installer, per-user**       | Yes (setup) | Yes (installer)  | electron-updater       | **Selected.** No administrator rights; installs under the user profile                                            |
 | Portable `.exe` (electron-builder) | Yes         | No               | Poor / manual          | Self-extracts to a temporary folder on every launch, so startup is slower and antivirus tools are more suspicious |
-| Portable folder in a ZIP           | No          | Via app setting  | Manual replacement     | Fallback if installers are unacceptable                                                                           |
+| Portable folder in a ZIP           | No          | Via app setting  | Manual replacement     | Fallback if installers prove unacceptable                                                                         |
 | Squirrel.Windows (Forge)           | Yes (setup) | Limited          | Built-in `autoUpdater` | Less flexible installer; not preferred                                                                            |
-| MSIX                               | Yes         | Via manifest     | Store / App Installer  | Signing and sideloading friction; dropped from consideration                                                      |
+| MSIX                               | Yes         | Via manifest     | Store / App Installer  | Signing and sideloading friction; dropped                                                                         |
 
 ### 4.2 Decision
 
 1. Primary deliverable: **`BranchChat-Setup.exe`**, a per-user NSIS installer built with electron-builder
    (`perMachine: false`). The user downloads one file from the GitHub Release and runs it; no Java, Node.js, or
    browser installation is needed.
-2. Optional secondary deliverable: a portable ZIP, for users who cannot run installers.
-3. A portable single `BranchChat.exe` is **not** a goal. It remains a spike measurement (S2) so that the decision is
-   based on data, not assumption.
+2. A portable single `BranchChat.exe` is not a goal.
+3. A portable ZIP may be added later as an optional extra if users ask for it.
 
-### 4.3 Preferred user experience
+### 4.3 User experience
 
 1. The user downloads `BranchChat-Setup.exe` from the official GitHub Release.
 2. The user runs it. The installer offers to associate `.branchchat` files with BranchChat (consent required).
@@ -145,21 +134,20 @@ document was removed because its scales were inconsistent and several rows doubl
 4. If BranchChat is already running, the new file is passed to the existing instance.
 5. The association can be removed through application settings or by uninstalling.
 
-`.branchchat` is a new extension, so there is no existing association to take over. The consent requirement
-(FR-090) therefore means the installer must ask, not register silently. electron-builder registers `fileAssociations`
-automatically, so showing a choice may need a small custom NSIS script; spike S2 verifies this.
+`.branchchat` is a new extension, so there is no existing association to take over. The consent requirement (FR-090)
+therefore means the installer must ask, not register silently. electron-builder registers `fileAssociations`
+automatically, so the choice is implemented with a small custom NSIS script (`nsis.include`). If that proves
+impractical, the fallback is to register from the application on first run with a consent dialog, writing under
+`HKCU\Software\Classes`. Either way, the application setting to register and unregister is required (FR-089).
 
 ### 4.4 Code signing and trust
 
-Neither the previous ADR nor the requirements addressed this. Unsigned installers trigger Windows SmartScreen
-warnings and are more likely to be flagged by antivirus tools, which is a serious problem for non-technical users who
-receive the application link through WhatsApp. Signed releases also give electron-updater a publisher identity to
-verify.
+Unsigned installers trigger Windows SmartScreen warnings and are more likely to be flagged by antivirus tools, which is
+a real problem for non-technical users who receive the application link through WhatsApp. Signed releases also give
+electron-updater a publisher identity to verify.
 
-- Decide whether a code-signing certificate (for example a standard certificate or a cloud signing service) is in
-  budget.
-- If releases remain unsigned, the release notes must explain the SmartScreen warning.
-- Spike S2 should compare unsigned and signed behavior on a clean machine.
+- Signed releases are the goal (NFR-016). The certificate budget is an open item in the requirements.
+- If releases are unsigned, the release notes must explain the SmartScreen warning.
 
 ## 5. Architecture
 
@@ -168,34 +156,34 @@ Keep the discussion model and persistence independent of the presentation layer 
 ### 5.1 Logical modules
 
 - **Presentation:** chat view, branch navigation, composer, formatting controls, unread indicators.
-- **Domain:** discussion, participant, message, thread, branching rules, context resolution, validation.
+- **Domain:** discussion, participant, message, thread, branching rules, context resolution, read-state rules.
 - **Document:** ZIP container, manifest, JSON serialization, schema validation, versioning, migrations, atomic save.
-- **Assets:** embedded images, type validation, deduplication, size limits.
-- **Local state:** participant settings, read state keyed by `documentId` + `messageId`, update preferences. Stored in
-  the user's application data folder, never in the discussion file.
+- **Assets:** embedded images, type validation, deduplication by content hash.
+- **Local state:** participant settings (name, ID) and update preferences, stored in the user's application data
+  folder.
 - **Windows integration:** open-file arguments, single-instance handling, file association, clipboard, drag-and-drop,
   external links.
 - **Updates:** GitHub Releases lookup, stable-channel filtering, verification, staging.
 
 The domain model must not depend on React, Electron, or any UI API.
 
-### 5.2 Suggested stack
+### 5.2 Stack
 
 - Electron + TypeScript (strict mode).
 - React for the renderer.
 - TipTap (ProseMirror) for rich text.
 - A schema-validation library (for example zod) for the document and for IPC messages.
-- A maintained ZIP library with streaming support and entry-level limits.
+- A maintained ZIP library with streaming support.
 - electron-builder (packaging) and electron-updater (updates).
 
-### 5.3 Suggested project structure
+### 5.3 Project structure
 
 ```
 src/
   main/
     application/      app lifecycle, windows, single-instance handling
     document/         ZIP read/write, atomic save, migrations
-    local-state/      settings, participant ID, read state
+    local-state/      participant settings, update preferences
     windows/          file association, open-file handling
     updates/          release lookup, verification, staging
     ipc/              validated IPC handlers
@@ -206,7 +194,7 @@ src/
       branches/
       editor/
   shared/
-    domain/           discussion, message, participant, branching, context
+    domain/           discussion, message, participant, branching, context, read state
     types/
     validation/       schemas used by main and renderer
 ```
@@ -221,6 +209,7 @@ One self-contained file per discussion, for example `discussion.branchchat`, a Z
 ```
 manifest.json
 discussion.json
+readstate.json
 assets/
   images/
   attachments/
@@ -229,10 +218,10 @@ assets/
 The document format is a product-level contract and must not depend on the UI framework or packaging technology.
 
 **Rich-text content format.** Messages store structured, versioned content, not HTML. The simplest option is the
-TipTap/ProseMirror JSON document. If that is used, it must be defined as a documented subset (the nodes and marks the
-product supports: headings 1–3, bullet and ordered lists, bold, italic, underline, text color, background color, link,
-image), and `schemaVersion` must change whenever that subset changes. Unknown nodes and marks in a received file are
-rejected or shown as plain text, never executed or rendered as HTML.
+TipTap/ProseMirror JSON document, defined as a documented subset (headings 1–3, bullet and ordered lists, bold,
+italic, underline, text color, background color, link, image). `schemaVersion` must change whenever that subset
+changes. Unknown nodes and marks in a received file are rejected or shown as plain text, never executed or rendered as
+HTML.
 
 **Branch anchors.** Messages are immutable, so the selection range stored in a branch (`selectionStart`,
 `selectionEnd`, expressed in the message content model) stays valid. The stored `quoteText` and `sourceMessageId`
@@ -241,10 +230,28 @@ remain the durable reference; the range is used for highlighting and may be igno
 **Message order.** Messages carry a `sequence` number within their thread. Display order follows the sequence, not
 timestamps, because computers' clocks can differ.
 
+**Read state.** `readstate.json` maps each participant ID to the list of message IDs that participant has read.
+
+- Messages are the immutable core of the document; read state is the only part that changes without a new message,
+  so it lives in its own ZIP entry.
+- The application writes only the local participant's entry and preserves all other entries unchanged.
+- A message becomes read for the local participant by an explicit action, when the participant sends a message in the
+  same thread (all earlier messages in that thread), or when the participant creates a branch from it.
+- Own messages are implicitly read and are not listed.
+- Marking read therefore modifies the file and goes through the same autosave path as every other change.
+- Consequence: other participants' copies of the application can see what a participant has read. The MVP does not
+  display it, but the data is there.
+
+**Saving.** Every change is saved immediately (autosave). Writes go to a temporary file in the same folder and then
+replace the original (atomic replace, with retries because Windows antivirus or sync tools can briefly lock files).
+The application does not keep the discussion file open between writes, so Explorer and WhatsApp can copy it at any
+time. Unchanged ZIP entries (especially large images) are copied through without recompression so that frequent
+saves stay cheap even for large files.
+
 ### 5.5 Conceptual service interfaces
 
 - `DiscussionDocumentRepository`
-- `ReadStateStore`
+- `ReadStateService` (domain rules over `readstate.json`)
 - `ClipboardImageProvider`
 - `ExternalLinkOpener`
 - `DocumentOpenService`
@@ -252,9 +259,10 @@ timestamps, because computers' clocks can differ.
 - `ParticipantSettings`
 - `UpdateService`
 
-## 6. Rich-text, context, and unread behavior to verify
+## 6. Behavior to implement and test
 
-The rich-text editor is one of the highest-risk parts of the product (spike S1). The spike must verify:
+The rich-text editor is the highest-risk part of the product, so these behaviors are implemented and tested early (see
+the implementation plan):
 
 - Heading levels 1–3.
 - Bold, italic, underline, text color, and background color.
@@ -266,11 +274,11 @@ The rich-text editor is one of the highest-risk parts of the product (spike S1).
 - Inherited context: parent-thread messages up to and including the source message, recursively; later parent messages
   and sibling branches excluded.
 - Persistence and restoration after closing and reopening.
-- Clipboard image paste and embedding, including size limits and type validation.
-- Unread highlighting that works in both the thread and the inherited context.
-- A discussion with 5,000 messages stays responsive (virtualized message list).
+- Clipboard image paste and embedding.
+- Unread highlighting in both the thread and the inherited context, with read-on-reply rules.
+- Thousands of messages stay responsive (virtualized message list).
 
-Do not choose an editor based only on a demo. Test the exact branching interaction.
+There are no artificial limits on message count, message length, branch depth, image size, or file size (NFR-015).
 
 ## 7. Security
 
@@ -289,19 +297,21 @@ Do not choose an editor based only on a demo. Test the exact branching interacti
 
 A `.branchchat` file arrives through WhatsApp from outside the application, so it must be treated as untrusted input.
 
-- Validate `manifest.json` and `discussion.json` against the schema before use.
+- Validate `manifest.json`, `discussion.json`, and `readstate.json` against the schema before use.
 - Never render stored content as raw HTML or evaluate scripts from it; render from the validated structured content.
-- Guard the ZIP reader against path traversal (zip-slip), an excessive number of entries, and decompression bombs
-  (limit total and per-entry uncompressed size).
+- Guard the ZIP reader against path traversal (zip-slip). Read entries as streams and reject entries whose actual
+  size differs from the declared size. This protects against malformed archives without imposing a product limit on
+  file size.
 - Accept only supported image types (PNG, JPEG, GIF, WebP); do not render SVG in the MVP.
 - Open links only for `http`, `https`, and `mailto`, and only after an explicit user action.
 - Never automatically fetch remote content.
 
 ## 8. File association and multi-instance behavior
 
-For the packaged Windows application, the proof must show that BranchChat can:
+For the packaged Windows application:
 
-1. Register `.branchchat` for the current Windows user, with the user's consent.
+1. Register `.branchchat` for the current Windows user, with the user's consent (installer option; application
+   setting).
 2. Unregister the association (application setting and uninstall).
 3. Receive a file path when launched by double-clicking a `.branchchat` file (arrives in the process arguments).
 4. Validate the path and show a useful error for missing or invalid files (FR-118).
@@ -310,10 +320,8 @@ For the packaged Windows application, the proof must show that BranchChat can:
 6. Open the document without a network connection.
 7. Preserve the association and application settings during an update.
 
-Verify on a clean Windows 10 and Windows 11 environment, not only on the development machine.
-
-Local data (settings, participant ID, read state) lives in the per-user application data folder, so it survives
-updates and does not depend on where the executable is located.
+Local data (settings, participant ID) lives in the per-user application data folder, so it survives updates and does
+not depend on where the executable is located.
 
 ## 9. GitHub Releases update strategy
 
@@ -327,16 +335,13 @@ Required behavior:
 - Show version, release date, release notes, and download size.
 - Download only the expected Windows artifact.
 - Verify the checksum published in the release metadata, and the publisher signature if releases are signed.
-  electron-updater publishes SHA-512 checksums in `latest.yml`; requirement FR-101 was changed to "SHA-256 or
-  stronger" to match.
+  electron-updater publishes SHA-512 checksums in `latest.yml`; requirement FR-101 says "SHA-256 or stronger" to match.
 - Download in the background; apply when the application restarts, with the application closed during replacement.
-- Preserve user settings, read state, and the file association.
+- Preserve user settings and the file association.
 - Never touch discussion documents.
-- Provide a recovery path: a failed or interrupted update must leave the previous installed version working.
+- A failed or interrupted update must leave the previous installed version working.
 - Work normally when offline; update failure must not block local use.
 - The GitHub repository must be public for the updater to read releases without embedding a token in the application.
-
-Spike S3 must test the full cycle, including a deliberately corrupted download and an interrupted update.
 
 ## 10. Consequences
 
@@ -354,69 +359,32 @@ Spike S3 must test the full cycle, including a deliberately corrupted download a
 - Strict security configuration is required and must be reviewed.
 - Code signing adds cost and process.
 - Existing Java code is not reused.
+- Read state in the file means every "mark as read" rewrites the file, and participants' read activity is visible to
+  other participants' applications.
 
-## 11. Spikes and acceptance checklist
+## 11. Decision record
 
-The earlier plan of building the same prototype in JavaFX and TypeScript is replaced by four focused spikes on the
-leading candidate. A JavaFX prototype is built only if a spike fails and Option D has to be re-examined.
+| Decision                            | Choice                                                                                         |
+|-------------------------------------|------------------------------------------------------------------------------------------------|
+| Desktop runtime                     | Electron                                                                                       |
+| Main application language           | TypeScript                                                                                     |
+| UI framework                        | React                                                                                          |
+| Rich-text editor                    | TipTap (ProseMirror)                                                                           |
+| Node.js backend                     | Electron main process only; no separate service                                                |
+| Windows packaging tool              | electron-builder                                                                               |
+| Windows packaging format            | Per-user NSIS installer (`BranchChat-Setup.exe`)                                               |
+| Single-EXE feasibility              | Single installer: yes. Portable single EXE: not a goal                                         |
+| `.branchchat` association mechanism | Installer option with consent (custom NSIS script); application setting to register/unregister |
+| Multi-instance / open-file behavior | Single-instance lock; one window per document                                                  |
+| Rich-text storage format            | Versioned structured JSON (TipTap/ProseMirror subset)                                          |
+| Document schema and ZIP layout      | ZIP + JSON (`manifest.json`, `discussion.json`, `readstate.json`, `assets/`)                   |
+| Read state storage                  | In the file, `readstate.json`, per participant                                                 |
+| Saving                              | Automatic, atomic replace; no manual Save, no Save As                                          |
+| Update mechanism                    | electron-updater, GitHub Releases, stable only                                                 |
+| Code signing                        | Signed releases if budget allows; document SmartScreen otherwise                               |
+| Keep or remove Spring Boot / JavaFX | Remove                                                                                         |
 
-**S1 — Editor and branching (TipTap + React).** Everything in section 6.  
-**S2 — Packaging and association.** Build the NSIS per-user installer. Test on clean Windows 10 and 11 virtual
-machines: install without administrator rights, consent-based association, double-click, second-instance behavior,
-uninstall. Compare signed and unsigned behavior. Measure installer size, startup time, and memory. For comparison
-only, build the portable `.exe` and measure its startup.  
-**S3 — Updates.** electron-updater against a test GitHub repository: stable-only filtering, checksum verification,
-corrupted-download rejection, interrupted update recovery, settings and association preserved.  
-**S4 — Document format and safety.** ZIP read/write, atomic save (including power-loss simulation by killing the
-process mid-write), schema validation, malicious ZIP and malformed JSON test files, large images, a 5,000-message
-document.
-
-Acceptance checklist:
-
-- [ ] Installs and launches on a clean Windows 10/11 machine without installing any runtime or needing administrator
-  rights.
-- [ ] Single downloadable `.exe` installer produced.
-- [ ] `.branchchat` registered with consent and unregistered cleanly.
-- [ ] Double-clicking a `.branchchat` file opens the correct discussion.
-- [ ] A second file opened while the app runs opens in a new window; the same file opened twice focuses the existing
-  window.
-- [ ] Works fully offline for create, open, edit, and save.
-- [ ] Supports required formatting and nested lists.
-- [ ] Text selection across formatting spans is reliable.
-- [ ] "Reply to this" creates a branch with the correct quote and context, including from inherited context.
-- [ ] Clipboard images are embedded and survive reopening.
-- [ ] Unread highlighting, per-branch counts, and "mark as read" work without modifying the discussion file.
-- [ ] A 5,000-message discussion remains responsive.
-- [ ] Malformed and malicious test files are rejected or displayed safely.
-- [ ] Update flow verifies and applies the correct Windows release; a failed update leaves the previous version and
-  documents intact.
-- [ ] SmartScreen behavior documented for signed and unsigned installers.
-- [ ] Installer size, startup time, and memory use measured and judged acceptable.
-
-## 12. Decision record
-
-Fill in the "Confirmed" column after the spikes.
-
-| Decision                            | Proposed                                                         | Confirmed |
-|-------------------------------------|------------------------------------------------------------------|-----------|
-| Desktop runtime                     | Electron                                                         | TBD       |
-| Main application language           | TypeScript                                                       | TBD       |
-| UI framework                        | React                                                            | TBD       |
-| Rich-text editor                    | TipTap (ProseMirror)                                             | TBD       |
-| Node.js backend                     | Electron main process only; no separate service                  | TBD       |
-| Windows packaging tool              | electron-builder                                                 | TBD       |
-| Windows packaging format            | Per-user NSIS installer (`BranchChat-Setup.exe`)                 | TBD       |
-| Single-EXE feasibility              | Single installer: yes. Portable single EXE: not a goal           | TBD       |
-| `.branchchat` association mechanism | Installer registration with consent; app setting to remove       | TBD       |
-| Multi-instance / open-file behavior | Single instance lock; one window per document                    | TBD       |
-| Rich-text storage format            | Versioned structured JSON (TipTap/ProseMirror subset)            | TBD       |
-| Document schema and ZIP layout      | ZIP + JSON (`manifest.json`, `discussion.json`, `assets/`)       | TBD       |
-| Read state storage                  | Local application data, keyed by documentId + messageId          | TBD       |
-| Update mechanism                    | electron-updater, GitHub Releases, stable only                   | TBD       |
-| Code signing                        | Signed releases if budget allows; document SmartScreen otherwise | TBD       |
-| Keep or remove Spring Boot          | Remove                                                           | TBD       |
-
-## 13. Disposition of the existing JavaFX project
+## 12. Disposition of the existing JavaFX project
 
 Option D reuses no Java code. Do not keep Spring Boot "just because it exists".
 
@@ -426,17 +394,7 @@ Option D reuses no Java code. Do not keep Spring Boot "just because it exists".
 - If any real discussion files already exist in a Java-written format, define a migration or ensure the TypeScript
   reader accepts them.
 
-## 14. References
-
-JavaFX and Java packaging
-
-- JavaFX: https://openjfx.io/
-- Java jpackage: https://docs.oracle.com/en/java/javase/21/jpackage/
-
-Tauri
-
-- Tauri documentation: https://v2.tauri.app/
-- Tauri architecture: https://v2.tauri.app/concept/architecture/
+## 13. References
 
 Electron and Node.js
 
@@ -446,24 +404,24 @@ Electron and Node.js
 - Electron single instance lock: https://www.electronjs.org/docs/latest/api/app#apprequestsingleinstancelock
 - electron-builder: https://www.electron.build/
 - electron-updater (auto update): https://www.electron.build/auto-update
-- Electron autoUpdater (Squirrel-based): https://www.electronjs.org/docs/latest/api/auto-updater
+- Electron autoUpdater (Squirrel-based, not used): https://www.electronjs.org/docs/latest/api/auto-updater
 
 Rich-text editors
 
 - TipTap: https://tiptap.dev/
 - ProseMirror: https://prosemirror.net/
-- Lexical: https://lexical.dev/
 
-## Changes in this revision
+Alternatives considered
 
-- Status changed from open options analysis to a proposed decision for Option D, with spikes replacing the dual
-  JavaFX/TypeScript prototype plan.
-- Delivery changed from "portable single EXE preferred" to a per-user NSIS installer; the portable EXE and MSIX
-  options are evaluated and set aside.
-- Corrected the updater: electron-updater, not Electron's built-in Squirrel-based `autoUpdater`; noted the SHA-512
-  vs SHA-256 difference.
-- Added sections on code signing, untrusted documents, rich-text storage format, message ordering, and local read
-  state.
-- Replaced the numeric score table with a qualitative comparison.
-- Fixed the project structure and moved the shared domain code to `shared/`.
-- Filled the decision record with proposed values and added the disposition of the existing JavaFX project.
+- JavaFX: https://openjfx.io/
+- Java jpackage: https://docs.oracle.com/en/java/javase/21/jpackage/
+- Tauri: https://v2.tauri.app/
+
+## Changes in revision 3
+
+- Status changed to Accepted for Option D; the spike plan and the "Confirmed" column were removed. Verification now
+  happens during implementation (see the implementation plan).
+- Read state moved into the file (`readstate.json`) with the read-on-reply rules; local state now holds only settings.
+- Removed numeric limits; ZIP safety no longer relies on size limits.
+- Removed Save As; documented the autosave and atomic-replace strategy.
+- Decided the file-association consent mechanism (custom NSIS script, with an in-app fallback).

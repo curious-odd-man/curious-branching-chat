@@ -1,17 +1,16 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 2)  
+**Status:** MVP requirements (revision 3)  
+**Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
-**Technology:** See ADR-001 (leading candidate: Electron + TypeScript)  
 **UI language:** Russian  
 **Discussion exchange format:** One portable file per discussion  
-**Application distribution:** One downloadable Windows `.exe` (per-user installer, no administrator rights); see section
-5.8  
-**Windows file association:** Associate the discussion file type with BranchChat  
+**Application distribution:** One downloadable Windows `.exe` (per-user installer, no administrator rights)  
+**Windows file association:** `.branchchat` opens in BranchChat  
 **Application update source:** GitHub Releases; stable releases only
 
-> Requirement numbers (FR-xxx, NFR-xxx) are stable identifiers, not an ordering. Requirements added in this revision
-> continue the existing numbering and appear in the section where they belong.
+> Requirement numbers (FR-xxx, NFR-xxx) are stable identifiers, not an ordering. Requirements added after the first
+> revision continue the existing numbering and appear in the section where they belong.
 
 ---
 
@@ -25,7 +24,7 @@ branch linked to the source message and the exact selected passage. A branch can
 further branches can be created, with no artificial nesting limit.
 
 Each discussion is stored in one portable file. Users can exchange this file through WhatsApp or another file-sharing
-method. The recipient opens the file, continues the discussion, saves it, and sends the updated file back.
+method. The recipient opens the file, continues the discussion, and sends the updated file back.
 
 The application must work without a server, account, or internet connection. Internet access is required only for
 checking and downloading application updates.
@@ -36,7 +35,7 @@ checking and downloading application updates.
 2. Allow users to create branches from selected message text.
 3. Preserve the context that led to each branch.
 4. Support nested branches.
-5. Store an entire discussion in one portable file.
+5. Store an entire discussion, including who has read what, in one portable file.
 6. Support rich-text formatting, links, and embedded images.
 7. Work offline on Windows.
 8. Support Russian, Cyrillic, and Unicode correctly.
@@ -58,7 +57,8 @@ checking and downloading application updates.
 - Voice and video calls or audio messages.
 - Cryptographic identity verification.
 - Editing or deleting sent messages.
-- Syncing read/unread state between computers.
+- Save As / "save a copy" commands (users can copy the file in Explorer).
+- Displaying other participants' read state (it is stored in the file but not shown in the MVP).
 
 The MVP and foreseeable product scope are Windows desktop only. Do not add cross-platform or mobile requirements unless
 the product scope changes.
@@ -81,11 +81,13 @@ the product scope changes.
 2. The application displays the discussion in a chat-like interface.
 3. Messages are shown in the order in which they were added to the thread. Each message displays its author and
    timestamp.
-4. Messages written by other participants that the local user has not yet marked as read are clearly highlighted as
+4. Messages written by other participants that the local participant has not yet read are clearly highlighted as
    unread (see section 5.10).
 5. The user can mark a single message, a whole thread, or the whole discussion as read with an explicit button.
-6. The user writes a message in the composer at the bottom of the chat.
-7. The application saves the new message to the file.
+6. A message also becomes read when the user replies to it: by writing a message in the same thread, or by creating a
+   branch from it with "Reply to this".
+7. The user writes a message in the composer at the bottom of the chat.
+8. The application saves the new message, and the updated read state, to the file.
 
 ### 4.3. Format a message
 
@@ -112,7 +114,8 @@ Formatting must be preserved when the document is saved and reopened.
    in the read-only inherited context of a branch.
 2. A **"Reply to this"** action becomes available.
 3. The user activates the action.
-4. BranchChat creates a new branch linked to the original message and selected passage.
+4. BranchChat creates a new branch linked to the original message and selected passage. The source message becomes
+   read for the local participant.
 5. The branch opens in the main chat area.
 6. A side panel displays the branch hierarchy.
 7. The new branch displays the relevant conversation history leading to the selected passage (see 4.5).
@@ -155,14 +158,12 @@ Closing a branch does not delete its content.
 
 ### 4.8. Exchange a discussion file
 
-1. Every sent message, new branch, branch status change, and title change is written to the file immediately; there is
-   no separate "Save" step for these.
+1. Every sent message, new branch, branch status change, title change, and read-state change is written to the file
+   immediately; there is no separate "Save" step.
 2. The user sends the document file through WhatsApp or another file-sharing method.
 3. The recipient opens the file in BranchChat.
 4. The recipient continues the discussion.
 5. The recipient sends the updated file back.
-
-The application must not silently overwrite an existing file when the user chooses Save As.
 
 Detecting or merging independently edited copies is not required. The only safeguard is the warning in FR-117.
 
@@ -186,7 +187,7 @@ The application should provide a clear way to register and unregister the file a
 6. The application verifies the downloaded package using a cryptographic checksum (SHA-256 or stronger) when one is
    provided.
 7. The update is applied using a safe replacement process, normally when the application is restarted.
-8. Existing discussion files, user settings, and read state are preserved.
+8. Existing discussion files and user settings are preserved.
 
 If the computer is offline or the update check fails, BranchChat must continue to work normally.
 
@@ -196,14 +197,14 @@ If the computer is offline or the update check fails, BranchChat must continue t
 
 - **FR-001.** Each discussion must be stored in one self-contained file.
 - **FR-002.** The file must contain messages, threads, participants, timestamps, formatting, branch relationships,
-  links, and embedded images.
+  links, embedded images, and each participant's read state.
 - **FR-003.** The application must support creating a new discussion.
 - **FR-004.** The application must support opening an existing discussion.
-- **FR-005.** The application must support saving a discussion.
-- **FR-006.** The application must support Save As. Save As writes a copy to a new file, keeps the `documentId`, and
-  asks for confirmation before replacing an existing file.
-- **FR-007.** Every sent message, created branch, branch status change, and branch title change must be written to the
-  discussion file immediately (autosave).
+- **FR-005.** The application saves changes automatically; there is no manual save command.
+- **FR-006.** The application does not provide Save As. The discussion lives in the file chosen at creation or opened
+  by the user.
+- **FR-007.** Every sent message, created branch, branch status change, branch title change, and read-state change
+  must be written to the discussion file immediately (autosave).
 - **FR-008.** When the user closes a discussion window, the application must warn if there is an unsent non-empty
   draft or if the last write to the file failed. Unsent drafts are not saved to the document.
 - **FR-009.** The application must show a useful error if a document is damaged or cannot be opened.
@@ -211,7 +212,8 @@ If the computer is offline or the update check fails, BranchChat must continue t
 - **FR-011.** The application must support document schema migrations where required.
 - **FR-012.** The application must avoid corrupting documents created by newer unsupported versions.
 - **FR-013.** Saving must use a safe atomic-write strategy (write a temporary file, then replace the original).
-- **FR-014.** The document should use a ZIP container with a manifest, discussion data, and embedded assets.
+- **FR-014.** The document should use a ZIP container with a manifest, discussion data, read state, and embedded
+  assets.
 - **FR-015.** Unknown optional fields should be preserved where practical.
 - **FR-114.** The rich-text content of a message must be stored as structured, versioned data (not as raw HTML), so
   that it can be validated before display.
@@ -224,6 +226,7 @@ Proposed internal structure:
     discussion.branchchat
       manifest.json
       discussion.json
+      readstate.json
       assets/
         images/
         attachments/
@@ -238,7 +241,8 @@ Proposed internal structure:
   stored in local application settings. If those settings are lost, the same person will appear as a new
   participant; this is accepted for the MVP.
 - **FR-021.** A participant ID must not be derived solely from the display name.
-- **FR-022.** Participant ID and display name must be stored in the discussion document.
+- **FR-022.** Participant ID and display name must be stored in the discussion document. A participant is added to the
+  document the first time that participant writes to it (sends a message, creates a branch, or changes read state).
 - **FR-023.** Different participants may have the same display name but must have different IDs.
 - **FR-024.** Changing the local participant name must affect new messages only.
 - **FR-025.** Participant identity is descriptive and is not intended to provide cryptographic authentication.
@@ -359,7 +363,7 @@ Proposed internal structure:
 - **FR-100.** The application must download the correct Windows release artifact.
 - **FR-101.** The application must verify a cryptographic checksum (SHA-256 or stronger) when one is published.
 - **FR-102.** The application must not execute or install an update that fails verification.
-- **FR-103.** The update process must preserve user settings and read state.
+- **FR-103.** The update process must preserve user settings.
 - **FR-104.** The update process must not modify discussion documents.
 - **FR-105.** Update failures must be reported without preventing normal offline use.
 - **FR-106.** The update process must account for the fact that a running Windows executable cannot reliably replace
@@ -370,32 +374,39 @@ Proposed internal structure:
 
 ### 5.10. Unread messages
 
-Read state describes what the **local user** has seen. It is personal to each computer and is not shared through the
-discussion file.
+Read state describes what each participant has seen. It is stored **in the discussion file**, so it travels with the
+file when it is exchanged.
 
-- **FR-108.** A message is *unread* if it was authored by a participant other than the local participant and the local
-  user has not marked it as read. Messages authored by the local participant are always read.
-- **FR-109.** The first time a discussion is opened on a computer, all messages by other participants are unread.
+- **FR-108.** A message is *unread* for the local participant if it was authored by another participant and the local
+  participant has not read it. Messages authored by the local participant are always read.
+- **FR-109.** A message is *read* for a participant only if that participant's read state in the file says so. A
+  participant who has never written to the file therefore sees all messages by others as unread.
 - **FR-110.** Unread messages must be clearly and persistently highlighted in the chat view (for example with an
   accent bar and background), including in inherited context shown inside a branch.
 - **FR-111.** The user must be able to mark a message as read with an explicit control on the message. The user must
   also be able to mark all messages of the current thread, or the whole discussion, as read.
-- **FR-112.** Messages are never marked as read implicitly (for example by scrolling or opening a thread) in the MVP.
+- **FR-112.** A message also becomes read for the local participant in exactly these two cases, in addition to FR-111:
+    1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
+    2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
+
+  Scrolling, opening a thread, or viewing a message never marks it read.
 - **FR-113.** The side panel must show the number of unread messages for each branch, and must show an indicator on a
   branch whose descendant branches contain unread messages. The window title or discussion header should show the
   total unread count.
-- **FR-120.** Read state must be stored in local application data, keyed by `documentId` and `messageId`. Changing
-  read state must not modify the discussion file or mark the discussion as changed.
-- **FR-121.** Read state must survive application restarts and application updates.
+- **FR-120.** Read state must be stored in the discussion file as a set of message IDs per participant ID. The
+  application writes only the local participant's entry; entries of other participants must be preserved unchanged.
+- **FR-121.** Read-state changes are saved immediately like other changes (FR-007) and must not alter any sent
+  message.
+- **FR-122.** The application does not display other participants' read state in the MVP, but must preserve it in the
+  file.
 
 ## 6. Non-functional requirements
 
 - **NFR-001.** The application must work offline for all discussion operations.
 - **NFR-002.** The application must support Windows 10 and Windows 11.
 - **NFR-003.** The interface must work at common Windows display scaling and DPI settings.
-- **NFR-004.** The application must remain responsive with large discussions. Proposed targets to be validated in the
-  proof of concept: a thread of 5,000 messages opens in under 3 seconds on a typical office PC, and scrolling and
-  typing stay smooth (the message list must not render all messages at once).
+- **NFR-004.** The application must remain responsive with discussions containing thousands of messages and large
+  embedded images. Long message lists must be virtualized so that not all messages are rendered at once.
 - **NFR-005.** Saving must minimize the risk of document corruption.
 - **NFR-006.** The discussion file must be portable between computers.
 - **NFR-007.** The application must not require a remote service for normal use.
@@ -413,18 +424,17 @@ discussion file.
 - **NFR-013.** The application must not depend on a running remote service for local document operations.
 - **NFR-014.** *Untrusted input.* A received discussion file must be treated as untrusted. The application must:
   validate the document against its schema before displaying it; never render stored content as raw HTML or execute
-  scripts from it; reject ZIP entries with unsafe paths (path traversal), an excessive entry count, or an excessive
-  uncompressed size; validate that embedded images are of a supported type; and open links only if the protocol is
-  `http`, `https`, or `mailto`.
-- **NFR-015.** *Size limits.* Embedded images larger than a configured limit (proposed: 10 MB per image) must be
-  downscaled or rejected with a clear message. Identical images within one document should be stored once. The
-  application should warn the user when a discussion file grows beyond a configured size (proposed: 50 MB), because
-  file-sharing channels have size limits.
+  scripts from it; reject ZIP entries with unsafe paths (path traversal); read ZIP entries as streams and reject any
+  entry whose actual size does not match its declared size; validate that embedded images are of a supported type;
+  and open links only if the protocol is `http`, `https`, or `mailto`.
+- **NFR-015.** *No artificial limits.* The application must not impose fixed limits on the number of messages, message
+  length, number of branches, branch depth, image size, or file size. Practical limits come only from the computer's
+  resources.
 - **NFR-016.** *Code signing.* Release installers should be signed with a code-signing certificate so that Windows
   SmartScreen and antivirus tools do not present unsigned-software warnings to non-technical users. If releases are
   unsigned, the release notes must explain the SmartScreen warning and how to proceed.
-- **NFR-017.** *Local data.* Settings (participant name and ID, update preferences) and read state are stored per
-  Windows user in the user's application data folder, not next to the executable, and survive updates.
+- **NFR-017.** *Local data.* Settings (participant name and ID, update preferences) are stored per Windows user in the
+  user's application data folder, not next to the executable, and survive updates.
 
 ## 7. Proposed data model
 
@@ -432,7 +442,7 @@ This is a conceptual model, not a final implementation schema.
 
 ### Discussion
 
-- `documentId` — unique document identifier. Preserved by Save As.
+- `documentId` — unique document identifier.
 - `title` — discussion title.
 - `schemaVersion` — document schema version.
 - `createdAt` — creation timestamp.
@@ -440,6 +450,7 @@ This is a conceptual model, not a final implementation schema.
 - `participants` — participants known to this discussion.
 - `threads` — main thread and branches.
 - `assets` — embedded images and other resources.
+- `readState` — read message IDs per participant (stored as a separate entry in the ZIP).
 
 ### Participant
 
@@ -474,10 +485,15 @@ Because sent messages are immutable, the selection range stays valid for the lif
 and stored quote text remain the durable reference; the range is used to highlight the passage and may be ignored if it
 no longer matches the quote.
 
+### Read state
+
+- `readState[participantId]` — list of `messageId` values that participant has read.
+- Messages authored by a participant are implicitly read by that participant and are not listed.
+- Because it is part of the file, other participants' applications can see which messages a participant has read.
+
 ### Local state (not stored in the discussion file)
 
 - Participant name and participant ID.
-- Read state: set of read `messageId` values per `documentId`.
 - Application settings, including update preferences.
 
 ## 8. Architecture principles
@@ -488,12 +504,12 @@ The architecture must separate:
 2. Domain model and branching logic.
 3. Document persistence and ZIP handling.
 4. Embedded asset management.
-5. Local state (settings, read state).
+5. Local state (settings).
 6. Windows integration.
 7. Application update mechanism.
 
-The technology choice is recorded in ADR-001 (leading candidate: Electron + TypeScript). The domain model and document
-format must not depend on the UI framework, the desktop shell, or the packaging tool.
+The technology is recorded in ADR-001 (Electron + TypeScript). The domain model and document format must not depend on
+the UI framework, the desktop shell, or the packaging tool.
 
 Avoid introducing a local HTTP server unless it provides a clear benefit.
 
@@ -502,7 +518,7 @@ Avoid introducing a local HTTP server unless it provides a clear benefit.
 The MVP is acceptable when:
 
 1. A user can create a discussion.
-2. A user can save and reopen a discussion file.
+2. A discussion is saved automatically and can be reopened.
 3. A discussion file can be sent to another user.
 4. The recipient can open and continue the discussion.
 5. Every message displays its author and timestamp.
@@ -523,50 +539,54 @@ The MVP is acceptable when:
 20. The application can be launched through a `.branchchat` file association, including when it is already running.
 21. The application can be installed from a single `.exe` on a clean Windows 10/11 machine without installing any other
     runtime.
-22. Unread messages from other participants are clearly highlighted, can be marked as read individually or in bulk,
-    show per-branch counts in the side panel, and do not change the discussion file.
+22. Unread messages from other participants are clearly highlighted; they can be marked as read individually or in
+    bulk; replying in a thread or with "Reply to this" marks the relevant messages read; the side panel shows
+    per-branch unread counts; and the read state persists in the file when it is sent to another user and returned.
 23. A deliberately malformed or malicious discussion file is rejected or displayed safely without running code.
 24. The release installer is signed, or the release notes explain the SmartScreen warning.
 
 ## 10. Confirmed product decisions
 
-| Topic                                | Decision                                                                 |
-|--------------------------------------|--------------------------------------------------------------------------|
-| Target platform                      | Windows 10 and Windows 11                                                |
-| UI language                          | Russian                                                                  |
-| Discussion format                    | One portable file per discussion                                         |
-| Discussion file container            | ZIP                                                                      |
-| Main interface                       | Chat-like                                                                |
-| Branch navigation                    | Side panel                                                               |
-| Branch groups                        | Active and Closed                                                        |
-| Branch closing                       | Branches can be closed and reopened                                      |
-| Branch context                       | Parent-thread messages up to and including the source message, recursive |
-| Message order                        | Append order, not timestamp                                              |
-| Nested branches                      | Supported                                                                |
-| Sent message editing                 | Not allowed                                                              |
-| Message deletion                     | Not allowed                                                              |
-| Branch deletion                      | Not allowed                                                              |
-| Merge of independently edited copies | Not required for MVP                                                     |
-| Images                               | Supported, including clipboard paste; embedded in document               |
-| Links                                | Supported; http, https, mailto only                                      |
-| Participant name                     | Remembered locally on each computer                                      |
-| Participant identity                 | Stable local ID; display name is not an identity guarantee               |
-| Unread messages                      | Highlighted; explicit "mark as read"; stored locally, not in the file    |
-| Windows per document                 | One window per discussion; one application instance                      |
-| Application distribution             | Single per-user installer `.exe` *(proposed in ADR-001; confirm)*        |
-| File association                     | Double-clicking `.branchchat` opens BranchChat                           |
-| Updates                              | GitHub Releases, stable releases only                                    |
-| Other platforms                      | Out of scope                                                             |
+| Topic                                | Decision                                                                           |
+|--------------------------------------|------------------------------------------------------------------------------------|
+| Target platform                      | Windows 10 and Windows 11                                                          |
+| Technology                           | Electron + TypeScript                                                              |
+| UI language                          | Russian                                                                            |
+| Discussion format                    | One portable file per discussion                                                   |
+| Discussion file container            | ZIP                                                                                |
+| Main interface                       | Chat-like                                                                          |
+| Saving                               | Automatic; no manual Save and no Save As                                           |
+| Branch navigation                    | Side panel                                                                         |
+| Branch groups                        | Active and Closed                                                                  |
+| Branch closing                       | Branches can be closed and reopened                                                |
+| Branch context                       | Parent-thread messages up to and including the source message, recursive           |
+| Message order                        | Append order, not timestamp                                                        |
+| Nested branches                      | Supported                                                                          |
+| Sent message editing                 | Not allowed                                                                        |
+| Message deletion                     | Not allowed                                                                        |
+| Branch deletion                      | Not allowed                                                                        |
+| Merge of independently edited copies | Not required for MVP                                                               |
+| Images                               | Supported, including clipboard paste; embedded in document                         |
+| Links                                | Supported; http, https, mailto only                                                |
+| Participant name                     | Remembered locally on each computer                                                |
+| Participant identity                 | Stable local ID; display name is not an identity guarantee                         |
+| Unread messages                      | Highlighted; read state stored in the file; read by explicit action or by replying |
+| Limits                               | No artificial limits                                                               |
+| Windows per document                 | One window per discussion; one application instance                                |
+| Application distribution             | Single per-user installer `.exe`                                                   |
+| File association                     | Double-clicking `.branchchat` opens BranchChat                                     |
+| Updates                              | GitHub Releases, stable releases only                                              |
+| Other platforms                      | Out of scope                                                                       |
 
 ## 11. Priorities
 
 ### MVP
 
 - Windows desktop application.
-- Create, open, save, and exchange discussion files.
+- Create, open, and exchange discussion files with automatic saving.
 - Chat-like message interface.
 - Participant names and authorship.
-- Unread message highlighting and "mark as read".
+- Unread message highlighting, "mark as read", and read-on-reply.
 - Rich-text formatting.
 - Branch creation from selected text.
 - Relevant inherited context.
@@ -587,42 +607,35 @@ The MVP is acceptable when:
 - Improved branch filtering.
 - Additional document recovery tools.
 - Detection and merging of divergent copies.
-- Automatic "mark as read" behavior.
+- Display of other participants' read state.
 - Further usability improvements.
 
 No mobile or non-Windows client is currently planned.
 
-## 12. Open questions
+## 12. Open items
 
-1. Should the file association be offered as a checkbox in the installer, a first-run prompt, or both? (ADR-001 spike
-   S2 will show what is practical.)
-2. Are the proposed limits in NFR-004 and NFR-015 (5,000 messages / 3 s, 10 MB per image, 50 MB per file) acceptable?
-3. Is there budget for a code-signing certificate (NFR-016)?
-4. Should Save As keep the `documentId` (current proposal, FR-006) or create a new one when the user intends to fork a
-   discussion?
-5. Is explicit-only "mark as read" (FR-112) the desired behavior, or should opening a thread mark it read?
+1. **Code signing:** is there budget for a code-signing certificate (NFR-016)? If not, releases ship unsigned with a
+   SmartScreen explanation in the release notes.
 
 ## 13. Summary
 
 BranchChat is a Windows-only, offline-first discussion application. Its defining feature is the ability to branch a
 conversation from an exact selected passage while preserving the relevant preceding context.
 
-Each discussion is a portable file that can be exchanged through ordinary file-sharing tools. Each user sees which
-messages are new to them, and that state stays on their own computer.
+Each discussion is a portable file that can be exchanged through ordinary file-sharing tools. The file also records
+which messages each participant has read, so unread highlighting continues correctly after the file is exchanged.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
 
-## Changes in revision 2
+## Changes in revision 3
 
-- Added the unread-messages requirements (section 5.10) and removed the TODO block and the old 4.2 steps 7–8.
-- Clarified save behavior: files are created at "New discussion"; every sent message autosaves; closing warns only
-  about unsent drafts or failed writes (FR-007, FR-008, 4.1, 4.8).
-- Defined message ordering as append order (FR-026, `sequence` field).
-- Defined inherited context precisely (4.5, FR-053).
-- Added one-window-per-document behavior and the duplicate-copy warning (FR-115, FR-117).
-- Added security and size NFRs (NFR-014, NFR-015, FR-114, FR-116) and a code-signing NFR (NFR-016).
-- Made NFR-004 measurable and added local-data NFR (NFR-017).
-- Changed delivery from "preferably portable single EXE" to a single per-user installer `.exe`; made the checksum
-  requirement "SHA-256 or stronger".
-- Replaced JavaFX/Spring Boot references with a pointer to ADR-001.
+- Read state is now stored in the discussion file (per participant) instead of locally. Messages become read by an
+  explicit action, by sending a message in the same thread, or by creating a branch from them (FR-108 to FR-113,
+  FR-120 to FR-122, section 4.2, data model).
+- Removed Save As; saving is fully automatic (FR-005, FR-006, 4.8). Removed the Save As wording from other sections.
+- Removed fixed numeric limits. NFR-015 now states that the application imposes no artificial limits; NFR-004 is
+  qualitative; the ZIP safety rules in NFR-014 no longer include numeric limits.
+- Technology is fixed as Electron + TypeScript; spike references removed. File-association consent is decided: an
+  installer option plus an application setting.
+- Open questions reduced to the code-signing budget.
