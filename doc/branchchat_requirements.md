@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 3)  
+**Status:** MVP requirements (revision 4)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -40,7 +40,7 @@ checking and downloading application updates.
 7. Work offline on Windows.
 8. Support Russian, Cyrillic, and Unicode correctly.
 9. Make file exchange straightforward for non-technical participants.
-10. Make it easy to see which messages are new to the local user.
+10. Make it easy to see which messages are new to the local user, and who has read the messages in a discussion.
 11. Check GitHub Releases for stable application updates.
 12. Provide a simple Windows deliverable: one downloadable `.exe`.
 13. Allow discussion files to be opened by double-clicking them in Windows Explorer.
@@ -58,7 +58,7 @@ checking and downloading application updates.
 - Cryptographic identity verification.
 - Editing or deleting sent messages.
 - Save As / "save a copy" commands (users can copy the file in Explorer).
-- Displaying other participants' read state (it is stored in the file but not shown in the MVP).
+- Live read receipts (read information is only as current as the file the user has).
 
 The MVP and foreseeable product scope are Windows desktop only. Do not add cross-platform or mobile requirements unless
 the product scope changes.
@@ -84,10 +84,11 @@ the product scope changes.
 4. Messages written by other participants that the local participant has not yet read are clearly highlighted as
    unread (see section 5.10).
 5. The user can mark a single message, a whole thread, or the whole discussion as read with an explicit button.
-6. A message also becomes read when the user replies to it: by writing a message in the same thread, or by creating a
+6. Each message shows which other participants have read it (see FR-122).
+7. A message also becomes read when the user replies to it: by writing a message in the same thread, or by creating a
    branch from it with "Reply to this".
-7. The user writes a message in the composer at the bottom of the chat.
-8. The application saves the new message, and the updated read state, to the file.
+8. The user writes a message in the composer at the bottom of the chat.
+9. The application saves the new message, and the updated read state, to the file.
 
 ### 4.3. Format a message
 
@@ -369,8 +370,9 @@ Proposed internal structure:
 - **FR-106.** The update process must account for the fact that a running Windows executable cannot reliably replace
   itself.
 - **FR-107.** A release should publish the Windows installer artifact and its checksum metadata.
-- **FR-119.** Release artifacts should be code-signed (see NFR-016). Updates should be rejected if the publisher
-  signature is expected but does not match.
+- **FR-119.** Release artifacts are not code-signed in the MVP (see NFR-016). Update integrity relies on downloading
+  from the official GitHub Release over HTTPS and on checksum verification (FR-101). If signing is added later, the
+  application must also reject updates whose publisher signature does not match.
 
 ### 5.10. Unread messages
 
@@ -397,8 +399,17 @@ file when it is exchanged.
   application writes only the local participant's entry; entries of other participants must be preserved unchanged.
 - **FR-121.** Read-state changes are saved immediately like other changes (FR-007) and must not alter any sent
   message.
-- **FR-122.** The application does not display other participants' read state in the MVP, but must preserve it in the
-  file.
+- **FR-122.** Each message must show which other participants have read it, based on the read state in the file. The
+  message's author is not listed, because an author has implicitly read their own message. A compact indicator is
+  always visible on the message; the names are available on hover or click.
+- **FR-123.** The indicator must distinguish three states: read by all other known participants, read by some, and read
+  by none. "Known participants" are the participants listed in the document.
+- **FR-124.** A person who has never written to the file is not a known participant and is therefore not shown as
+  having read or not read anything. Read information reflects the file as last saved by each participant; it is not
+  live.
+- **FR-125.** Because read status is visible to the other participants, the application must tell the user this with a
+  one-time notice before the first write of a read-state change on that computer (for example when the first message
+  is marked as read or sent), and the user guide must explain it.
 
 ## 6. Non-functional requirements
 
@@ -430,9 +441,10 @@ file when it is exchanged.
 - **NFR-015.** *No artificial limits.* The application must not impose fixed limits on the number of messages, message
   length, number of branches, branch depth, image size, or file size. Practical limits come only from the computer's
   resources.
-- **NFR-016.** *Code signing.* Release installers should be signed with a code-signing certificate so that Windows
-  SmartScreen and antivirus tools do not present unsigned-software warnings to non-technical users. If releases are
-  unsigned, the release notes must explain the SmartScreen warning and how to proceed.
+- **NFR-016.** *Code signing.* Releases are not code-signed in the MVP. The release notes, the README, and the user
+  guide must explain the Windows SmartScreen warning ("More info", then "Run anyway"), say that the installer must be
+  downloaded only from the official GitHub Release, and publish the installer's SHA-256 checksum so it can be checked
+  manually. Code signing may be added in a later release without changing the product.
 - **NFR-017.** *Local data.* Settings (participant name and ID, update preferences) are stored per Windows user in the
   user's application data folder, not next to the executable, and survive updates.
 
@@ -489,7 +501,8 @@ no longer matches the quote.
 
 - `readState[participantId]` — list of `messageId` values that participant has read.
 - Messages authored by a participant are implicitly read by that participant and are not listed.
-- Because it is part of the file, other participants' applications can see which messages a participant has read.
+- Because it is part of the file, other participants' applications show which messages a participant has read
+  (FR-122). Participants are informed of this (FR-125).
 
 ### Local state (not stored in the discussion file)
 
@@ -541,9 +554,11 @@ The MVP is acceptable when:
     runtime.
 22. Unread messages from other participants are clearly highlighted; they can be marked as read individually or in
     bulk; replying in a thread or with "Reply to this" marks the relevant messages read; the side panel shows
-    per-branch unread counts; and the read state persists in the file when it is sent to another user and returned.
+    per-branch unread counts; the read state persists in the file when it is sent to another user and returned; each
+    message shows who has read it; and the user is told once that read status is visible to others.
 23. A deliberately malformed or malicious discussion file is rejected or displayed safely without running code.
-24. The release installer is signed, or the release notes explain the SmartScreen warning.
+24. The release notes and user guide explain the SmartScreen warning and how to proceed, and publish the installer's
+    checksum.
 
 ## 10. Confirmed product decisions
 
@@ -571,10 +586,12 @@ The MVP is acceptable when:
 | Participant name                     | Remembered locally on each computer                                                |
 | Participant identity                 | Stable local ID; display name is not an identity guarantee                         |
 | Unread messages                      | Highlighted; read state stored in the file; read by explicit action or by replying |
+| Read status of others                | Shown on every message; read-only; as current as the file                          |
 | Limits                               | No artificial limits                                                               |
 | Windows per document                 | One window per discussion; one application instance                                |
 | Application distribution             | Single per-user installer `.exe`                                                   |
 | File association                     | Double-clicking `.branchchat` opens BranchChat                                     |
+| Code signing                         | Not in the MVP; SmartScreen warning documented                                     |
 | Updates                              | GitHub Releases, stable releases only                                              |
 | Other platforms                      | Out of scope                                                                       |
 
@@ -587,6 +604,7 @@ The MVP is acceptable when:
 - Chat-like message interface.
 - Participant names and authorship.
 - Unread message highlighting, "mark as read", and read-on-reply.
+- Display of which participants have read each message.
 - Rich-text formatting.
 - Branch creation from selected text.
 - Relevant inherited context.
@@ -596,7 +614,7 @@ The MVP is acceptable when:
 - Hyperlinks.
 - Offline operation.
 - Safe handling of untrusted discussion files.
-- Simple Windows distribution (single installer `.exe`, code-signed if feasible).
+- Simple Windows distribution (single installer `.exe`, unsigned, with the SmartScreen warning documented).
 - `.branchchat` file association.
 - GitHub stable-release update checks.
 
@@ -607,15 +625,13 @@ The MVP is acceptable when:
 - Improved branch filtering.
 - Additional document recovery tools.
 - Detection and merging of divergent copies.
-- Display of other participants' read state.
 - Further usability improvements.
 
 No mobile or non-Windows client is currently planned.
 
 ## 12. Open items
 
-1. **Code signing:** is there budget for a code-signing certificate (NFR-016)? If not, releases ship unsigned with a
-   SmartScreen explanation in the release notes.
+None at present.
 
 ## 13. Summary
 
@@ -623,19 +639,15 @@ BranchChat is a Windows-only, offline-first discussion application. Its defining
 conversation from an exact selected passage while preserving the relevant preceding context.
 
 Each discussion is a portable file that can be exchanged through ordinary file-sharing tools. The file also records
-which messages each participant has read, so unread highlighting continues correctly after the file is exchanged.
+which messages each participant has read, so unread highlighting continues correctly after the file is exchanged and
+every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
 
-## Changes in revision 3
+## Changes in revision 4
 
-- Read state is now stored in the discussion file (per participant) instead of locally. Messages become read by an
-  explicit action, by sending a message in the same thread, or by creating a branch from them (FR-108 to FR-113,
-  FR-120 to FR-122, section 4.2, data model).
-- Removed Save As; saving is fully automatic (FR-005, FR-006, 4.8). Removed the Save As wording from other sections.
-- Removed fixed numeric limits. NFR-015 now states that the application imposes no artificial limits; NFR-004 is
-  qualitative; the ZIP safety rules in NFR-014 no longer include numeric limits.
-- Technology is fixed as Electron + TypeScript; spike references removed. File-association consent is decided: an
-  installer option plus an application setting.
-- Open questions reduced to the code-signing budget.
+- Other participants' read status is now part of the MVP: every message shows who has read it (FR-122 to FR-124), with
+  a one-time privacy notice (FR-125). Removed it from out-of-scope and "later" lists.
+- Code signing is decided: releases are unsigned in the MVP (NFR-016, FR-119, acceptance criterion 24). The open items
+  list is now empty.

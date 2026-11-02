@@ -142,12 +142,20 @@ impractical, the fallback is to register from the application on first run with 
 
 ### 4.4 Code signing and trust
 
-Unsigned installers trigger Windows SmartScreen warnings and are more likely to be flagged by antivirus tools, which is
-a real problem for non-technical users who receive the application link through WhatsApp. Signed releases also give
-electron-updater a publisher identity to verify.
+Unsigned installers show Windows SmartScreen warnings and are more likely to be flagged by antivirus tools. Signing
+shows a verified publisher name instead of "Unknown publisher" and gives electron-updater a publisher identity to
+verify. Since 2024, signing does not remove SmartScreen warnings for new files immediately, whatever certificate type
+is used; the warnings fade as downloads accumulate.
 
-- Signed releases are the goal (NFR-016). The certificate budget is an open item in the requirements.
-- If releases are unsigned, the release notes must explain the SmartScreen warning.
+- **Decision: releases are unsigned in the MVP.** The product works the same unsigned.
+- The release notes, README, and user guide must explain the SmartScreen warning ("More info", then "Run anyway"),
+  state that the installer comes only from the official GitHub Release, and publish its SHA-256 checksum.
+- Updates work unsigned: electron-updater verifies the checksum from the release metadata over HTTPS. That protects
+  against corrupted downloads, but both the installer and the checksum come from the same GitHub release, so the
+  GitHub account and repository are the trust anchor. Protect them: two-factor authentication, restricted write
+  access, and releases built only by the CI workflow.
+- Signing can be added in any later release by changing the build configuration only. Options and costs are in the
+  implementation plan.
 
 ## 5. Architecture
 
@@ -239,8 +247,10 @@ timestamps, because computers' clocks can differ.
   same thread (all earlier messages in that thread), or when the participant creates a branch from it.
 - Own messages are implicitly read and are not listed.
 - Marking read therefore modifies the file and goes through the same autosave path as every other change.
-- Consequence: other participants' copies of the application can see what a participant has read. The MVP does not
-  display it, but the data is there.
+- Consequence: other participants' copies of the application can see what a participant has read, and the MVP
+  displays it on every message (FR-122 to FR-124). Users are told once that their read status is visible (FR-125).
+- "Who has read message M" is a domain query over `readstate.json`: all known participants except the author whose
+  entry contains M. A person who has never written to the file has no entry and is not shown.
 
 **Saving.** Every change is saved immediately (autosave). Writes go to a temporary file in the same folder and then
 replace the original (atomic replace, with retries because Windows antivirus or sync tools can briefly lock files).
@@ -334,7 +344,7 @@ Required behavior:
 - Background update check and manual **Help > Check for updates**; automatic checks configurable.
 - Show version, release date, release notes, and download size.
 - Download only the expected Windows artifact.
-- Verify the checksum published in the release metadata, and the publisher signature if releases are signed.
+- Verify the checksum published in the release metadata (and the publisher signature if signing is added later).
   electron-updater publishes SHA-512 checksums in `latest.yml`; requirement FR-101 says "SHA-256 or stronger" to match.
 - Download in the background; apply when the application restarts, with the application closed during replacement.
 - Preserve user settings and the file association.
@@ -357,10 +367,12 @@ Required behavior:
 - Larger download (typically on the order of 80–100 MB) and higher memory use than a native or Tauri application.
 - The team must keep Electron and Chromium updated for security fixes, and ship updates accordingly.
 - Strict security configuration is required and must be reviewed.
-- Code signing adds cost and process.
+- Unsigned installers show a SmartScreen warning and may trigger antivirus false positives; this is documented for
+  users.
 - Existing Java code is not reused.
 - Read state in the file means every "mark as read" rewrites the file, and participants' read activity is visible to
-  other participants' applications.
+  other participants. This is intended (read status is shown on messages) and disclosed to users.
+- Read information is only as current as the last file exchange; it is not live.
 
 ## 11. Decision record
 
@@ -381,7 +393,7 @@ Required behavior:
 | Read state storage                  | In the file, `readstate.json`, per participant                                                 |
 | Saving                              | Automatic, atomic replace; no manual Save, no Save As                                          |
 | Update mechanism                    | electron-updater, GitHub Releases, stable only                                                 |
-| Code signing                        | Signed releases if budget allows; document SmartScreen otherwise                               |
+| Code signing                        | Not in the MVP; SmartScreen warning documented; may be added later                             |
 | Keep or remove Spring Boot / JavaFX | Remove                                                                                         |
 
 ## 12. Disposition of the existing JavaFX project
@@ -417,11 +429,8 @@ Alternatives considered
 - Java jpackage: https://docs.oracle.com/en/java/javase/21/jpackage/
 - Tauri: https://v2.tauri.app/
 
-## Changes in revision 3
+## Changes in revision 4
 
-- Status changed to Accepted for Option D; the spike plan and the "Confirmed" column were removed. Verification now
-  happens during implementation (see the implementation plan).
-- Read state moved into the file (`readstate.json`) with the read-on-reply rules; local state now holds only settings.
-- Removed numeric limits; ZIP safety no longer relies on size limits.
-- Removed Save As; documented the autosave and atomic-replace strategy.
-- Decided the file-association consent mechanism (custom NSIS script, with an in-app fallback).
+- Read status of other participants is now displayed (consequence and domain query documented).
+- Code signing decided: unsigned in the MVP. Section 4.4 and the decision record updated; GitHub account protection
+  added as the trust anchor for updates.

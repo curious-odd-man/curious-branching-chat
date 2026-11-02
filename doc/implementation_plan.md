@@ -1,6 +1,6 @@
 # BranchChat — Implementation Plan
 
-**Inputs:** `branchchat_requirements.md` (revision 3), `adr.md` (ADR-001, Accepted)  
+**Inputs:** `branchchat_requirements.md` (revision 4), `adr.md` (ADR-001, Accepted)  
 **Stack:** Electron + TypeScript, React, TipTap (ProseMirror), electron-builder (NSIS), electron-updater  
 **Platform:** Windows 10 and Windows 11
 
@@ -86,7 +86,9 @@ Tasks
     - mark one, mark thread, mark all;
     - sending a message in a thread reads all earlier messages in that thread;
     - creating a branch reads the source message;
-    - only the local participant's entry is changed; other entries are preserved.
+    - only the local participant's entry is changed; other entries are preserved;
+    - query "who has read message M": known participants except the author whose entry contains M, with the states
+      read by all / some / none (FR-122 to FR-124).
 - **Schemas** in `shared/validation`: manifest, discussion, read state, rich-text content subset (ADR section 5.4),
   with `schemaVersion` and a migration framework (initially version 1 only, but the mechanism exists).
 - **Document module** in `main/document`:
@@ -229,19 +231,25 @@ Tasks
   (FR-112). Confirm that scrolling and opening a thread do not mark anything read.
 - Side panel: unread count per branch and an indicator on ancestors with unread descendants; total unread in the
   window title or header (FR-113).
-- Participant entries of other people are preserved untouched on every write (FR-120, FR-122).
+- Participant entries of other people are preserved untouched on every write (FR-120).
+- **Read status display:** a compact indicator on every message (for example check marks) showing read by all, some,
+  or none of the other known participants; names shown on hover or click; the author is not listed
+  (FR-122 to FR-124). Participants who never wrote to the file are not shown.
+- **Privacy notice:** a one-time notice, before the first read-state write on a computer, that read status is visible
+  to other participants (FR-125); the notice is remembered in local settings.
 
 Tests
 
 - Scenario: A writes, B opens (all unread), B marks one message read, B replies in the branch, B sends the file back;
-  A opens it and still sees B's read-state entry intact and B's messages as unread for A.
+  A opens it, sees B's read status on the right messages, and B's own messages as unread for A.
+- Indicator states with two and three participants (all / some / none); a participant without an entry is not shown.
 - Counting rules, including ancestors and inherited context.
 
 Exit criteria
 
 - Acceptance criterion 22 passes.
 
-Requirements: FR-108 to FR-113, FR-120 to FR-122.
+Requirements: FR-108 to FR-113, FR-120 to FR-125.
 
 ### Phase 6 — Images (M)
 
@@ -299,7 +307,8 @@ Tasks
 - Background check at startup and periodically; manual **Help > Check for updates**; setting to disable automatic
   checks (FR-095 to FR-097).
 - Update dialog: version, release date, release notes, download size; "open release page" (FR-098, FR-099).
-- Download the correct artifact; verify checksum (and publisher signature when signed); refuse to install on failure
+- Download the correct artifact; verify checksum (publisher signature only if signing is added later); refuse to
+  install on failure
   (FR-100 to FR-102, FR-119).
 - Apply on restart; the app is closed during replacement (FR-106). Settings and the association survive
   (FR-103). Discussion files are never touched (FR-104).
@@ -332,8 +341,10 @@ Tasks
 - **Real-world exchange test:** send `.branchchat` files through WhatsApp (phone to desktop and desktop to desktop,
   WhatsApp Desktop and WhatsApp Web) and confirm the extension and content are unchanged and the file opens;
   note the behavior when WhatsApp renames duplicates.
-- **Code signing:** set up signing in CI if the certificate is available (NFR-016); otherwise document the SmartScreen
-  warning in the release notes and the README.
+- **Unsigned release (decided):** write the SmartScreen guidance ("More info", then "Run anyway", with screenshots)
+  into the release notes template, the README, and the user guide; publish the installer's SHA-256 checksum in every
+  release; enable two-factor authentication and restrict write access on the GitHub repository; build releases only in
+  CI (NFR-016, FR-119).
 - **Release automation:** tagging builds the installer in CI, uploads the installer, `latest.yml`, and blockmap to a
   GitHub Release, and publishes it as a stable release; prereleases are used only for testing.
 - **Documentation:** short user guide in Russian (install, associate, create, branch, unread, exchange the file,
@@ -378,7 +389,7 @@ roughly 10 to 14 weeks in total; treat this as an estimate that the first two ph
 | FR-076 to FR-081                           | 3, 9                   |
 | FR-082 to FR-092, FR-118                   | 0, 2, 7                |
 | FR-093 to FR-107, FR-119                   | 8                      |
-| FR-108 to FR-113, FR-120 to FR-122         | 1 (rules), 5 (UI)      |
+| FR-108 to FR-113, FR-120 to FR-125         | 1 (rules), 5 (UI)      |
 | FR-115, FR-117                             | 2                      |
 | NFR-001 to NFR-013, NFR-017                | 0 to 9 (verified in 9) |
 | NFR-014                                    | 1, 3, 9                |
@@ -401,30 +412,24 @@ roughly 10 to 14 weeks in total; treat this as an estimate that the first two ph
 
 ## 7. Risks and mitigations
 
-| Risk                                                               | Mitigation                                                                                                                    |
-|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-| Quote anchoring breaks across complex formatting                   | Built and tested in phase 4 right after the editor; quote text is the durable fallback; broad selection test matrix           |
-| Frequent autosave of large files is slow or fragile                | Copy unchanged ZIP entries raw; write queue with coalescing; atomic replace with retry; tested with large fixtures in phase 1 |
-| Antivirus or sync tools lock the file during replace               | Retry with backoff; do not hold the file open; clear error if it still fails                                                  |
-| Installer consent for the file association is hard in NSIS         | Fallback in-app consent dialog (ADR section 4.3); decided in phase 7                                                          |
-| SmartScreen and antivirus warnings on an unsigned installer        | Obtain a code-signing certificate before 1.0; otherwise document the warning                                                  |
-| Updater failure leaves a broken install                            | Test corrupted and interrupted updates in phase 8; previous version must remain usable                                        |
-| Malicious or malformed files received through WhatsApp             | Schema validation, no HTML rendering, ZIP safety, link allowlist; fuzz-style fixtures                                         |
-| Electron security regressions over time                            | Lint rules for dangerous settings; scheduled dependency and Electron updates; security checklist in release process           |
-| Russian spell checking unavailable offline                         | Verify in phase 9; fall back to the operating system spell checker or document the limitation                                 |
-| WhatsApp alters or blocks the `.branchchat` extension              | Test in phase 9; if blocked, document a workaround (for example sending as a ZIP and renaming) and revisit the extension      |
-| Read state in the file reveals read activity to other participants | Documented consequence; not shown in the MVP; can be revisited later                                                          |
-| A file replaced outside the app while open could be overwritten    | See open decision below                                                                                                       |
+| Risk                                                        | Mitigation                                                                                                                    |
+|-------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+| Quote anchoring breaks across complex formatting            | Built and tested in phase 4 right after the editor; quote text is the durable fallback; broad selection test matrix           |
+| Frequent autosave of large files is slow or fragile         | Copy unchanged ZIP entries raw; write queue with coalescing; atomic replace with retry; tested with large fixtures in phase 1 |
+| Antivirus or sync tools lock the file during replace        | Retry with backoff; do not hold the file open; clear error if it still fails                                                  |
+| Installer consent for the file association is hard in NSIS  | Fallback in-app consent dialog (ADR section 4.3); decided in phase 7                                                          |
+| SmartScreen and antivirus warnings on an unsigned installer | Documented in release notes, README, and user guide; checksum published; signing can be added later                           |
+| GitHub account compromise would allow a malicious update    | Two-factor authentication, restricted write access, CI-only release builds                                                    |
+| Updater failure leaves a broken install                     | Test corrupted and interrupted updates in phase 8; previous version must remain usable                                        |
+| Malicious or malformed files received through WhatsApp      | Schema validation, no HTML rendering, ZIP safety, link allowlist; fuzz-style fixtures                                         |
+| Electron security regressions over time                     | Lint rules for dangerous settings; scheduled dependency and Electron updates; security checklist in release process           |
+| Russian spell checking unavailable offline                  | Verify in phase 9; fall back to the operating system spell checker or document the limitation                                 |
+| WhatsApp alters or blocks the `.branchchat` extension       | Test in phase 9; if blocked, document a workaround (for example sending as a ZIP and renaming) and revisit the extension      |
+| Read status is visible to other participants                | Intended feature; one-time notice (FR-125) and user-guide explanation                                                         |
 
 ## 8. Open decisions
 
-1. **Code-signing certificate** (requirements section 12): needed before phase 9 for a signed 1.0.
-2. **External change detection (new, not yet a requirement):** if the file is replaced or modified outside the app
-   while it is open (for example a returned copy saved over it), an autosave would overwrite those changes. A light
-   safeguard is to compare the file's modification time and size before each write and, on mismatch, warn the user
-   and offer to reload instead of overwriting. This is cheap to build in phase 2. Say whether to add it as a
-   requirement.
-3. **Rich-text subset version:** confirm that the TipTap/ProseMirror JSON subset (ADR section 5.4) is acceptable as
+1. **Rich-text subset version:** confirm that the TipTap/ProseMirror JSON subset (ADR section 5.4) is acceptable as
    the stored format, since it becomes part of the file contract in phase 1.
 
 ## 9. Definition of done (every phase)
@@ -434,3 +439,20 @@ roughly 10 to 14 weeks in total; treat this as an estimate that the first two ph
 - No new lint boundary violations; no `any` introduced without justification.
 - Requirements listed for the phase are demonstrably met; the coverage table in section 5 is updated if scope moved.
 - Strings are in Russian and live in the dictionary module.
+
+## 10. Code signing options (for a later release)
+
+**Decision: version 1.0 ships unsigned.** This section is kept for reference in case signing is added later.
+
+A code-signing certificate lets Windows show a verified publisher name for `BranchChat-Setup.exe` instead of "Unknown
+publisher". Prices were checked in November 2026 and change often.
+
+| Option                                        | Approximate cost    | Notes                                                                                                                                           |
+|-----------------------------------------------|---------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| Unsigned (chosen for 1.0)                     | 0                   | SmartScreen warning ("More info", then "Run anyway"); document it                                                                               |
+| Azure Artifact Signing (Microsoft)            | about $10/month     | Works from GitHub Actions; available to organizations in the EU, UK, US, Canada; individuals only in the US and Canada                          |
+| Certificate from a certificate authority (OV) | about $150–300/year | Private key must be on a hardware token or cloud signing service; some resellers sell cloud-based plans for about $110/year on multi-year terms |
+| EV certificate                                | $400+/year          | No longer avoids SmartScreen warnings; not recommended for this project                                                                         |
+
+Signing does not make SmartScreen warnings disappear on day one: reputation builds with download volume. The practical
+benefits are a verified publisher name, fewer antivirus false positives, and a verifiable update publisher.
