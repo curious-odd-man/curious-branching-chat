@@ -6,6 +6,43 @@
 
 ---
 
+## Progress
+
+| Phase                                        | Status       | Notes                                                                                                                                                                                                               |
+|----------------------------------------------|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0 — Foundation and packaging skeleton        | Done in code | Scaffold, secure Electron shell, lint boundaries, CI, installer config. Electron smoke tests pass (3). **Still to do on Windows:** install the CI-built `BranchChat-Setup.exe` on clean Windows 10 and 11 machines. |
+| 1 — Domain model and document format         | Done         | 73 unit tests: schemas, context resolution, read-state rules, ZIP read/write, atomic save, malicious fixtures, 5,000 messages with large images.                                                                    |
+| 2 — Application shell and document lifecycle | Done in code | 90 unit tests and 15 Electron end-to-end tests (run on Linux under a virtual display). **Still to do on Windows:** try the flows with real Windows dialogs, paths, and the installed app.                           |
+| 3–9                                          | Not started  |                                                                                                                                                                                                                     |
+
+Implementation decisions made in phase 1:
+
+- Messages store `authorDisplayName` (name at the time of writing) so renaming a participant affects new messages only (
+  FR-024).
+- Assets are identified by their SHA-256; images are stored uncompressed in the ZIP and copied through unchanged when
+  only the JSON changes.
+- ZIP safety relies on the reader (unsafe names, duplicate entries, declared vs actual size), not on size limits (
+  NFR-015).
+- Files from a newer schema version are refused for reading and writing (FR-012).
+
+Implementation decisions made in phase 2:
+
+- "New discussion" asks for the participant name first if none is saved (the creator becomes a participant when the file
+  is created). Sending a message asks for it too (FR-019). The name prompt is in the page; menu commands are forwarded
+  to the page so both paths use the same flow.
+- Each window shows one discussion. An empty start window is reused when a file is opened; otherwise a new window
+  opens (FR-115). Files are recognized as already open case-insensitively and across different path spellings.
+- Changes appear immediately and are written by a serialized, coalescing queue. A failed write keeps the changes in
+  memory, shows an error with "Повторить", and closing then warns (FR-008). Closing waits for pending writes first.
+- The main process pushes the full discussion to the window after every change. This is fine for now; phase 3 will
+  switch to incremental updates if large discussions need it.
+- Drag-and-drop opening is implemented (`webUtils.getPathForFile`) but not covered by an automated test, because it
+  needs a real file dropped from the operating system.
+- Test-only hooks (stubbed dialogs, isolated profile) are compiled in only by `electron-vite build --mode e2e`; the
+  release build contains none of them (checked).
+
+---
+
 ## 1. Approach
 
 1. **Domain first.** The discussion model, branching rules, context resolution, read-state rules, and the file format

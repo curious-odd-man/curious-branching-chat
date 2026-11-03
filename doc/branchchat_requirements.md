@@ -475,6 +475,8 @@ This is a conceptual model, not a final implementation schema.
 - `threadId` — thread containing the message.
 - `sequence` — position of the message in its thread (append order; authoritative for display order).
 - `authorId` — participant who authored the message.
+- `authorDisplayName` — the author's display name at the time the message was written (so that renaming a participant
+  affects new messages only, FR-024).
 - `createdAt` — timestamp (UTC), for display.
 - `content` — structured rich-text content in a versioned format (not HTML).
 - `assetReferences` — references to embedded assets.
