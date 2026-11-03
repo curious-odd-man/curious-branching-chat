@@ -45,3 +45,12 @@ faces
 src/test/resources/e2e/**/actual
 new
 target
+
+node_modules
+out
+dist
+*.tmp
+.DS_Store
+test-results
+playwright-report
+.idea

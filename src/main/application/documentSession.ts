@@ -1,0 +1,153 @@
+import {basename} from 'node:path'
+import {appendMessage, type Author, type DomainContext, DomainError, readStateAfterSend} from '@shared/domain'
+import type {DocumentContents, RichDoc} from '@shared/validation'
+import type {DocumentView} from '@shared/types/ipc'
+import {describeError} from '@shared/i18n/ru'
+import {DocumentError, newDocumentContents, readDocument, writeDocument as defaultWriter} from '../document'
+
+export type DocumentWriter = (
+  path: string,
+  contents: DocumentContents,
+  options?: { discardExisting?: boolean }
+) => Promise<void>
+
+export interface SessionDeps {
+  ctx: DomainContext
+  /** Injectable so tests can observe, delay or fail writes. */
+  writer?: DocumentWriter
+}
+
+/**
+ * One open discussion: the in-memory state plus a serialized, coalescing write queue (FR-007).
+ *
+ * Changes appear immediately; every change is then saved to the file. Several quick changes are saved with a single
+ * write of the latest state. If a write fails, the changes stay in memory, `saveError` is set, and the next change or
+ * `retrySave()` tries again (FR-008).
+ */
+export class DocumentSession {
+  /** Called whenever the visible state changes (a change was made, or a save started or finished). */
+  onChange: () => void = () => undefined
+  notices: string[] = []
+
+  private writeChain: Promise<void> = Promise.resolve()
+  private scheduled = false
+  private running = false
+  private _saveError: string | null = null
+
+  private constructor(
+    readonly path: string,
+    private contents: DocumentContents,
+    private readonly missingAssetIds: string[],
+    private readonly deps: Required<SessionDeps>
+  ) {}
+
+  static async open(path: string, deps: SessionDeps): Promise<DocumentSession> {
+    const loaded = await readDocument(path)
+    return new DocumentSession(path, loaded.contents, loaded.missingAssetIds, withDefaults(deps))
+  }
+
+  /** Creates the file immediately (requirements 4.1). Fails if it cannot be written. */
+  static async create(
+    path: string,
+    deps: SessionDeps,
+    input: { author: Author; title?: string; generator?: { name: string; version: string } }
+  ): Promise<DocumentSession> {
+    const full = withDefaults(deps)
+    const title = input.title ?? basename(path).replace(/\.branchchat$/i, '')
+    const contents = newDocumentContents(full.ctx, {
+      title,
+      author: input.author,
+      ...(input.generator ? { generator: input.generator } : {})
+    })
+    // A new file replaces whatever is at the path (the Save dialog already asked about overwriting).
+    await full.writer(path, contents, { discardExisting: true })
+    return new DocumentSession(path, contents, [], full)
+  }
+
+  get documentId(): string {
+    return this.contents.manifest.documentId
+  }
+  get saveError(): string | null {
+    return this._saveError
+  }
+  get saving(): boolean {
+    return this.scheduled || this.running
+  }
+  get fileName(): string {
+    return basename(this.path)
+  }
+
+  /** FR-112 (1): writing in a thread also marks that thread's earlier messages as read. */
+  appendMessage(author: Author, threadId: string, content: RichDoc): void {
+    const before = this.contents.discussion
+    const readState = readStateAfterSend(
+      before,
+      this.contents.readState,
+      author.participantId,
+      threadId
+    )
+    const { discussion } = appendMessage(this.deps.ctx, before, { threadId, author, content })
+    this.commit({ ...this.contents, discussion, readState })
+  }
+
+  /** Writes any pending change now; resolves when the queue is empty. Never rejects. */
+  async flush(): Promise<void> {
+    await this.writeChain
+  }
+
+  /** Tries again after a failed save. */
+  async retrySave(): Promise<void> {
+    this.scheduleSave()
+    await this.flush()
+  }
+
+  view(localParticipantId: string): DocumentView {
+    return {
+      documentId: this.documentId,
+      filePath: this.path,
+      fileName: this.fileName,
+      discussion: this.contents.discussion,
+      readState: this.contents.readState,
+      localParticipantId,
+      missingAssetIds: this.missingAssetIds,
+      saveError: this._saveError,
+      saving: this.saving,
+      notices: this.notices
+    }
+  }
+
+  private commit(next: DocumentContents): void {
+    this.contents = next
+    this.scheduleSave()
+    this.onChange()
+  }
+
+  private scheduleSave(): void {
+    if (this.scheduled) return // the pending write will pick up the latest state
+    this.scheduled = true
+    this.writeChain = this.writeChain.then(async () => {
+      this.scheduled = false // changes committed from now on schedule another write
+      this.running = true
+      const snapshot = this.contents
+      try {
+        await this.deps.writer(this.path, snapshot)
+        this._saveError = null
+      } catch (err) {
+        this._saveError = describeSaveError(err)
+      } finally {
+        this.running = false
+      }
+      this.onChange()
+    })
+  }
+}
+
+function withDefaults(deps: SessionDeps): Required<SessionDeps> {
+  return { ctx: deps.ctx, writer: deps.writer ?? ((p, c, o) => defaultWriter(p, c, o)) }
+}
+
+export function describeSaveError(err: unknown): string {
+  if (err instanceof DocumentError) return describeError(err.code)
+  if (err instanceof DomainError) return describeError(err.code)
+  return describeError('WRITE_FAILED')
+}

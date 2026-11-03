@@ -1,3 +1,6 @@
+* text=auto eol=lf
+*.branchchat binary
+
 # Java sources
 *.java          text diff=java eol=lf
 *.kt            text diff=kotlin eol=lf
