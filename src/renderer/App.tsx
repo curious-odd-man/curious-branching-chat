@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { plainTextToRichDoc, mainThread } from '@shared/domain'
+import { mainThread } from '@shared/domain'
+import type { RichDoc } from '@shared/validation'
 import { DISCUSSION_EXTENSION } from '@shared/types/constants'
 import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
@@ -48,11 +49,11 @@ export function App(): React.JSX.Element {
     [api, startNew, openDialog]
   )
 
-  const send = (text: string, clear: () => void): void =>
+  const send = (content: RichDoc, clear: () => void): void =>
     withName(() => {
       const thread = view ? mainThread(view.discussion) : null
       if (!thread) return
-      void api.appendMessage(thread.threadId, plainTextToRichDoc(text)).then((r) => {
+      void api.appendMessage(thread.threadId, content).then((r) => {
         report(r)
         if (r.ok) clear()
       })

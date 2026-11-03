@@ -20,6 +20,8 @@ export interface BranchChatApi {
   appendMessage(threadId: string, content: RichDoc): Promise<IpcResult<null>>
   retrySave(): Promise<IpcResult<null>>
   setDraftState(hasDraft: boolean): Promise<IpcResult<null>>
+  /** Opens a link in the system browser. Only http, https and mailto links are opened; call only after a click. */
+  openLink(url: string): Promise<IpcResult<boolean>>
   /** Subscribe to state changes of this window's discussion. Returns an unsubscribe function. */
   onDocumentChanged(callback: (view: DocumentView | null) => void): () => void
   onMenuCommand(callback: (command: MenuCommand) => void): () => void

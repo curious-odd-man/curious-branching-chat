@@ -3,5 +3,6 @@ import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
   resolve: { alias: { '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)) } },
+  oxc: { jsx: { runtime: 'automatic' } },
   test: { include: ['tests/**/*.test.ts'], environment: 'node' }
 })

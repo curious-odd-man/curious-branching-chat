@@ -1,4 +1,4 @@
-import { dialog } from 'electron'
+import { dialog, shell } from 'electron'
 
 interface Answers {
   save: string[]
@@ -12,10 +12,20 @@ type DialogLog = { kind: 'save' | 'open' | 'box'; [key: string]: unknown }[]
  * This module is only included in builds made with `--mode e2e`; release builds do not contain it.
  */
 export function installE2eHooks(): void {
-  const g = globalThis as unknown as { __dialogLog: DialogLog; __answers: Answers }
+  const g = globalThis as unknown as {
+    __dialogLog: DialogLog
+    __answers: Answers
+    __openedLinks: string[]
+  }
+  g.__openedLinks = []
   g.__dialogLog = []
   g.__answers = { save: [], open: [], box: [] }
   const d = dialog as unknown as Record<string, unknown>
+
+  // Never launch a real browser from tests; record what would have been opened.
+  ;(shell as unknown as Record<string, unknown>)['openExternal'] = async (url: string) => {
+    g.__openedLinks.push(url)
+  }
 
   d['showSaveDialog'] = async () => {
     g.__dialogLog.push({ kind: 'save' })

@@ -12,5 +12,5 @@
     "electron.vite.config.ts",
     "vitest.config.mts"
   ],
-  "exclude": ["tests/e2e"]
+  "exclude": ["tests/e2e", "tests/renderer"]
 }

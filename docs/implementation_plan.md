@@ -8,12 +8,13 @@
 
 ## Progress
 
-| Phase                                        | Status       | Notes                                                                                                                                                                                                               |
-|----------------------------------------------|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 0 — Foundation and packaging skeleton        | Done in code | Scaffold, secure Electron shell, lint boundaries, CI, installer config. Electron smoke tests pass (3). **Still to do on Windows:** install the CI-built `BranchChat-Setup.exe` on clean Windows 10 and 11 machines. |
-| 1 — Domain model and document format         | Done         | 73 unit tests: schemas, context resolution, read-state rules, ZIP read/write, atomic save, malicious fixtures, 5,000 messages with large images.                                                                    |
-| 2 — Application shell and document lifecycle | Done in code | 90 unit tests and 15 Electron end-to-end tests (run on Linux under a virtual display). **Still to do on Windows:** try the flows with real Windows dialogs, paths, and the installed app.                           |
-| 3–9                                          | Not started  |                                                                                                                                                                                                                     |
+| Phase                                        | Status       | Notes                                                                                                                                                                                                                                                                                                                                 |
+|----------------------------------------------|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0 — Foundation and packaging skeleton        | Done in code | Scaffold, secure Electron shell, lint boundaries, CI, installer config. Electron smoke tests pass (3). **Still to do on Windows:** install the CI-built `BranchChat-Setup.exe` on clean Windows 10 and 11 machines.                                                                                                                   |
+| 1 — Domain model and document format         | Done         | 73 unit tests: schemas, context resolution, read-state rules, ZIP read/write, atomic save, malicious fixtures, 5,000 messages with large images.                                                                                                                                                                                      |
+| 2 — Application shell and document lifecycle | Done in code | 90 unit tests and 15 Electron end-to-end tests (run on Linux under a virtual display). **Still to do on Windows:** try the flows with real Windows dialogs, paths, and the installed app.                                                                                                                                             |
+| 3 — Chat UI and rich-text editor             | Done in code | 123 unit tests and 23 Electron end-to-end tests. 5,000-message discussion: opens in about 1 s, 17 rows in the page, a sent message is visible in about 30 ms (measured on Linux under a virtual display). **Still to do on Windows:** try real keyboard layouts, clipboard pastes from Word and browsers, and Russian spell checking. |
+| 4–9                                          | Not started  |                                                                                                                                                                                                                                                                                                                                       |
 
 Implementation decisions made in phase 1:
 
@@ -40,6 +41,27 @@ Implementation decisions made in phase 2:
   needs a real file dropped from the operating system.
 - Test-only hooks (stubbed dialogs, isolated profile) are compiled in only by `electron-vite build --mode e2e`; the
   release build contains none of them (checked).
+
+Implementation decisions made in phase 3:
+
+- The editor (TipTap) is configured with exactly the formatting of requirements 4.3; everything else (code blocks,
+  quotes, strike-through, images) is not in its schema, so it cannot be typed or pasted. The editor's single `textStyle`
+  mark is converted to our separate `textColor` and `backgroundColor` marks when a message is sent (
+  `sanitizeEditorDoc`), and the result is validated against the stored schema before it leaves the page and again in the
+  main process.
+- Messages are shown by building React elements from the stored structure, never from HTML. The renderer also ignores
+  unknown nodes, unsafe links and non-plain colors, as a second line of defense.
+- Links: the dialog accepts "example.com" (becomes https), email addresses (become mailto) and refuses everything except
+  http, https and mailto. Clicking a link in a message asks the main process to open it in the system browser; the page
+  itself never navigates. Hovering shows the destination.
+- Text typed right after a colored or highlighted word keeps that color, as in other rich-text editors; the "no color"
+  entry removes it.
+- The message list is virtualized (TanStack Virtual). It opens at the newest message and scrolls to new messages only if
+  the reader is at the bottom or wrote the message; someone reading older messages is not pulled away.
+- The main process still sends the whole discussion after every change. At 5,000 messages a sent message appears in
+  about 30 ms, so incremental updates are not needed yet.
+- Not covered by automated tests: real pastes from Word or a browser (a synthetic HTML paste is tested), screen readers,
+  and visual checks at 125–200% display scaling (phase 9).
 
 ---
 

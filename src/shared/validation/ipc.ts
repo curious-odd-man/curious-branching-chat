@@ -9,3 +9,4 @@ export const appendMessageSchema = z
   .strict()
 export const draftSchema = z.object({ hasDraft: z.boolean() }).strict()
 export const noPayloadSchema = z.undefined()
+export const openLinkSchema = z.object({ url: z.string().min(1) }).strict()

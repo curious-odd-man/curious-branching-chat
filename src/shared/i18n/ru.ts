@@ -29,7 +29,52 @@ export const ru = {
   composer: {
     placeholder: 'Напишите сообщение…',
     send: 'Отправить',
-    hint: 'Ctrl+Enter — отправить'
+    hint: 'Ctrl+Enter — отправить',
+    ariaLabel: 'Текст сообщения',
+    cannotSend: 'Не удалось подготовить сообщение к отправке.'
+  },
+  editor: {
+    toolbar: 'Форматирование',
+    heading: (level: number): string => `Заголовок ${level}`,
+    bold: 'Жирный (Ctrl+B)',
+    italic: 'Курсив (Ctrl+I)',
+    underline: 'Подчёркнутый (Ctrl+U)',
+    bulletList: 'Маркированный список',
+    orderedList: 'Нумерованный список',
+    indent: 'Увеличить отступ (Tab)',
+    outdent: 'Уменьшить отступ (Shift+Tab)',
+    textColor: 'Цвет текста',
+    backgroundColor: 'Цвет фона',
+    noColor: 'Без цвета',
+    link: 'Ссылка (Ctrl+K)',
+    undo: 'Отменить (Ctrl+Z)',
+    redo: 'Повторить (Ctrl+Y)',
+    colorNames: {
+      '#d32f2f': 'Красный',
+      '#ef6c00': 'Оранжевый',
+      '#2e7d32': 'Зелёный',
+      '#1565c0': 'Синий',
+      '#6a1b9a': 'Фиолетовый',
+      '#616161': 'Серый',
+      '#fff59d': 'Жёлтый',
+      '#c8e6c9': 'Светло-зелёный',
+      '#bbdefb': 'Голубой',
+      '#f8bbd0': 'Розовый',
+      '#ffe0b2': 'Персиковый',
+      '#e0e0e0': 'Светло-серый'
+    } as Record<string, string>
+  },
+  linkDialog: {
+    title: 'Ссылка',
+    label: 'Текст ссылки',
+    url: 'Адрес',
+    apply: 'Применить',
+    remove: 'Убрать ссылку',
+    cancel: 'Отмена',
+    invalidUrl: 'Допустимы только адреса http, https и электронная почта (mailto).'
+  },
+  message: {
+    linkTitle: (href: string): string => `Открыть: ${href}`
   },
   notices: {
     twoCopies: (otherPath: string, thisPath: string): string =>

@@ -26,6 +26,7 @@ export async function readEntries(path: string): Promise<Map<string, Buffer>> {
 
 interface SavedMessage {
   authorId: string
+  content: unknown
 }
 interface SavedDiscussion {
   title: string
@@ -45,4 +46,41 @@ export async function readDiscussionFile(path: string): Promise<{
       schemaVersion: number
     }
   }
+}
+
+export interface SavedMark {
+  type: string
+  attrs?: Record<string, string>
+}
+export interface SavedText {
+  text: string
+  marks: SavedMark[]
+}
+interface SavedNode {
+  type?: string
+  text?: string
+  marks?: SavedMark[]
+  content?: SavedNode[]
+}
+
+/** Every text node of a stored message, with its marks (in document order). */
+export function textNodes(content: unknown): SavedText[] {
+  const out: SavedText[] = []
+  const walk = (node: SavedNode): void => {
+    if (node.type === 'text') out.push({ text: node.text ?? '', marks: node.marks ?? [] })
+    node.content?.forEach(walk)
+  }
+  walk(content as SavedNode)
+  return out
+}
+
+/** Node types used anywhere in a stored message. */
+export function nodeTypes(content: unknown): Set<string> {
+  const types = new Set<string>()
+  const walk = (node: SavedNode): void => {
+    if (node.type) types.add(node.type)
+    node.content?.forEach(walk)
+  }
+  walk(content as SavedNode)
+  return types
 }

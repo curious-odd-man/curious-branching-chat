@@ -7,12 +7,14 @@ import {
   appendMessageSchema,
   draftSchema,
   noPayloadSchema,
+  openLinkSchema,
   openPathSchema,
   setNameSchema
 } from '@shared/validation'
 import type { AppController, WindowEntry } from '../application/appController'
 import { AppError } from '../application/errors'
 import { DocumentError } from '../document'
+import { openExternalLink } from '../windows/security'
 import type { SettingsStore } from '../local-state/settings'
 
 function toError(err: unknown): { code: string; message: string } {
@@ -73,6 +75,7 @@ export function registerIpcHandlers(controller: AppController, settings: Setting
   handle(IPC.documentRetrySave, noPayloadSchema, async (entry) => {
     await requireSession(entry).retrySave()
   })
+  handle(IPC.linkOpen, openLinkSchema, (_entry, p) => openExternalLink(p.url))
   handle(IPC.draftSet, draftSchema, (entry, p) => {
     if (entry) entry.hasDraft = p.hasDraft
   })

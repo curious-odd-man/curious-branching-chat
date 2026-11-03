@@ -38,6 +38,7 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
       'newDocument',
       'onDocumentChanged',
       'onMenuCommand',
+      'openLink',
       'openDocumentDialog',
       'openPath',
       'retrySave',

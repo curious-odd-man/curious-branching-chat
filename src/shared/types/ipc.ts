@@ -12,6 +12,7 @@ export const IPC = {
   documentAppendMessage: 'document:append-message',
   documentRetrySave: 'document:retry-save',
   draftSet: 'draft:set',
+  linkOpen: 'link:open',
   /** main -> renderer */
   documentChanged: 'document:changed',
   menuCommand: 'menu:command'

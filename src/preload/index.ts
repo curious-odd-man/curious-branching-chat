@@ -23,6 +23,7 @@ const api: BranchChatApi = {
   appendMessage: (threadId, content) => invoke(IPC.documentAppendMessage, { threadId, content }),
   retrySave: () => invoke(IPC.documentRetrySave),
   setDraftState: (hasDraft) => invoke(IPC.draftSet, { hasDraft }),
+  openLink: (url) => invoke(IPC.linkOpen, { url }),
   onDocumentChanged: (callback) => subscribe<DocumentView | null>(IPC.documentChanged, callback),
   onMenuCommand: (callback) => subscribe<MenuCommand>(IPC.menuCommand, callback),
   getPathForFile: (file) => webUtils.getPathForFile(file as File)

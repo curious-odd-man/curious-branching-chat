@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { mainThread } from '@shared/domain'
 import { ru } from '@shared/i18n/ru'
 import type { DocumentView } from '@shared/types/ipc'
+import type { RichDoc } from '@shared/validation'
 import { Composer } from './Composer'
 import { MessageList } from './MessageList'
 
 interface Props {
   view: DocumentView
-  onSend(text: string, clear: () => void): void
+  onSend(content: RichDoc, clear: () => void): void
   onRetrySave(): void
 }
 
@@ -46,7 +47,11 @@ export function DiscussionScreen({ view, onSend, onRetrySave }: Props): React.JS
           </div>
         ))}
 
-      <MessageList messages={thread.messages} localParticipantId={view.localParticipantId} />
+      <MessageList
+        messages={thread.messages}
+        localParticipantId={view.localParticipantId}
+        onOpenLink={(href) => void window.branchchat.openLink(href)}
+      />
       <Composer onSend={onSend} />
     </div>
   )

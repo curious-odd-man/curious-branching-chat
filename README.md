@@ -27,7 +27,7 @@ On Linux as root, run the e2e tests with `BRANCHCHAT_NO_SANDBOX=1 xvfb-run -a np
 src/
   shared/      pure TypeScript, no Electron/React/Node: domain rules, schemas, types
     domain/      discussion, branching, context resolution, read-state rules
-    validation/  zod schemas, rich-text subset, integrity checks
+    validation/  zod schemas, rich-text subset, editor-to-stored conversion, link input rules, integrity checks
   main/        Electron main process
     document/    .branchchat ZIP reading/writing, atomic save, images, migrations
     windows/     launch arguments, process-wide security
@@ -36,7 +36,7 @@ src/
     e2e/         test hooks, compiled only into `--mode e2e` builds
     ipc/         validated IPC handlers
   preload/     the narrow contextBridge API
-  renderer/    React UI (Russian strings in i18n/ru.ts)
+  renderer/    React UI: components/chat (list, composer), components/editor (TipTap), components/rich (renderer)
 tests/         unit tests and tests/e2e
 docs/          requirements, ADR, implementation plan
 ```
@@ -67,4 +67,6 @@ See `docs/implementation_plan.md`.
 - Phase 1 (domain and document format): done, covered by unit tests.
 - Phase 2 (application shell and document lifecycle): done. Create, open, autosave, one window per document,
   participant name, close warnings, error handling. Covered by unit tests and 15 Electron end-to-end tests.
-- Next: phase 3 (chat UI and rich-text editor).
+- Phase 3 (chat UI and rich-text editor): done. TipTap composer with the supported formatting, read-only rendering
+  from the stored structure, safe links, virtualized message list. 123 unit tests and 23 Electron end-to-end tests.
+- Next: phase 4 (branching).

@@ -218,7 +218,7 @@ test('a failed save keeps the message, shows an error, and recovers on retry (FR
   await send(win, 'не сохранится')
   await expect(win.getByTestId('save-error')).toBeVisible()
   await expect(win.getByTestId('message')).toHaveCount(1) // the message is still shown, not lost
-  expect(win.getByTestId('composer')).toHaveValue('') // and it left the composer
+  await expect(win.getByTestId('composer')).toHaveText('') // and it left the composer
 
   await fs.mkdir(sub)
   await win.getByTestId('retry-save').click()
@@ -243,7 +243,7 @@ test('closing warns only for an unsent draft or a failed save (FR-008)', async (
   expect(warning.type).toBe('warning')
   expect(warning.detail).toContain('неотправленное сообщение')
   expect(t.app.windows()).toHaveLength(1)
-  await expect(win.getByTestId('composer')).toHaveValue('черновик') // nothing was lost
+  await expect(win.getByTestId('composer')).toHaveText('черновик') // nothing was lost
 
   // 2. send it; now nothing is unsaved, so closing shows no further dialog and the app exits
   await win.getByTestId('send').click()
