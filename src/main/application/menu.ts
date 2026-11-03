@@ -1,6 +1,6 @@
-import {app, dialog, Menu, type MenuItemConstructorOptions} from 'electron'
-import {ru} from '@shared/i18n/ru'
-import type {AppController} from './appController'
+import { app, dialog, Menu, type MenuItemConstructorOptions } from 'electron'
+import { ru } from '@shared/i18n/ru'
+import type { AppController } from './appController'
 
 export function installMenu(controller: AppController): void {
   const template: MenuItemConstructorOptions[] = [

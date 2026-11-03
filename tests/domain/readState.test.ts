@@ -1,21 +1,21 @@
-import {describe, expect, it} from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-    appendMessage,
-    createBranch,
-    createDiscussion,
-    findMessage,
-    isUnread,
-    mainThread,
-    markAllRead,
-    markMessageRead,
-    markThreadRead,
-    readStateAfterBranch,
-    readStateAfterSend,
-    unreadSummary,
-    whoHasRead
+  appendMessage,
+  createBranch,
+  createDiscussion,
+  isUnread,
+  markAllRead,
+  markMessageRead,
+  markThreadRead,
+  mainThread,
+  readStateAfterBranch,
+  readStateAfterSend,
+  unreadSummary,
+  whoHasRead,
+  findMessage
 } from '@shared/domain'
-import type {ReadState} from '@shared/types'
-import {anna, boris, buildSample, clara, makeCtx, simple} from '../helpers/fixtures'
+import type { ReadState } from '@shared/types'
+import { anna, boris, buildSample, clara, makeCtx, simple } from '../helpers/fixtures'
 
 describe('unread rules (FR-108 to FR-112)', () => {
   it('own messages are always read; others are unread until read', () => {

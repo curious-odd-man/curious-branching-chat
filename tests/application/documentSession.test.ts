@@ -1,10 +1,10 @@
-import {promises as fs} from 'node:fs'
-import {join} from 'node:path'
-import {describe, expect, it} from 'vitest'
-import {mainThread, plainTextToRichDoc} from '@shared/domain'
-import {readDocument, writeDocument} from '../../src/main/document'
-import {DocumentSession, type DocumentWriter} from '../../src/main/application/documentSession'
-import {anna, boris, makeCtx, withTempDir} from '../helpers/fixtures'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { plainTextToRichDoc, mainThread } from '@shared/domain'
+import { readDocument, writeDocument } from '../../src/main/document'
+import { DocumentSession, type DocumentWriter } from '../../src/main/application/documentSession'
+import { anna, boris, makeCtx, withTempDir } from '../helpers/fixtures'
 
 const text = (t: string) => plainTextToRichDoc(t)
 const deferred = () => {

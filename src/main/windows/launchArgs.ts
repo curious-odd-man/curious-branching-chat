@@ -1,4 +1,4 @@
-import {DISCUSSION_EXTENSION} from '@shared/types/constants'
+import { DISCUSSION_EXTENSION } from '@shared/types/constants'
 
 export { DISCUSSION_EXTENSION }
 

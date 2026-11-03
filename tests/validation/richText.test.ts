@@ -1,6 +1,11 @@
-import {describe, expect, it} from 'vitest'
-import {checkDiscussionIntegrity, collectImageAssetIds, richDocSchema, richTextToPlain} from '@shared/validation'
-import {buildSample, para, richDoc, simple, text} from '../helpers/fixtures'
+import { describe, expect, it } from 'vitest'
+import {
+  checkDiscussionIntegrity,
+  collectImageAssetIds,
+  richDocSchema,
+  richTextToPlain
+} from '@shared/validation'
+import { buildSample, para, richDoc, simple, text } from '../helpers/fixtures'
 
 describe('rich-text schema', () => {
   it('accepts every supported node and mark', () => {

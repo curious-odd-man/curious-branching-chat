@@ -1,6 +1,6 @@
 import yauzl from 'yauzl'
-import type {Readable} from 'node:stream'
-import {DocumentError} from './errors'
+import type { Readable } from 'node:stream'
+import { DocumentError } from './errors'
 
 const OPTIONS: yauzl.Options = {
   lazyEntries: true,

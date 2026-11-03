@@ -1,4 +1,4 @@
-import type {RichDoc, RichNode} from '../validation/richText'
+import type { RichDoc, RichNode } from '../validation/richText'
 
 /** Turns text typed in a plain box into a rich-text document: one paragraph per line, blank lines preserved. */
 export function plainTextToRichDoc(text: string): RichDoc {

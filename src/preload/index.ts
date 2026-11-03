@@ -1,6 +1,6 @@
-import {contextBridge, ipcRenderer, webUtils} from 'electron'
-import type {BranchChatApi} from '@shared/types/api'
-import {type DocumentView, IPC, type IpcResult, type MenuCommand} from '@shared/types/ipc'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { BranchChatApi } from '@shared/types/api'
+import { IPC, type DocumentView, type IpcResult, type MenuCommand } from '@shared/types/ipc'
 
 const invoke = <T>(channel: string, payload?: unknown): Promise<IpcResult<T>> =>
   ipcRenderer.invoke(channel, payload) as Promise<IpcResult<T>>

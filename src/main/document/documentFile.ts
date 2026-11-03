@@ -1,21 +1,21 @@
-import {createWriteStream, promises as fs} from 'node:fs'
+import { createWriteStream, promises as fs } from 'node:fs'
 import yazl from 'yazl'
-import type {ZodType} from 'zod'
+import type { ZodType } from 'zod'
 import {
-    type AssetInfo,
-    checkDiscussionIntegrity,
-    CURRENT_SCHEMA_VERSION,
-    discussionSchema,
-    type DocumentContents,
-    FORMAT_NAME,
-    manifestSchema,
-    readStateSchema
+  CURRENT_SCHEMA_VERSION,
+  FORMAT_NAME,
+  checkDiscussionIntegrity,
+  discussionSchema,
+  manifestSchema,
+  readStateSchema,
+  type DocumentContents,
+  type AssetInfo
 } from '@shared/validation'
-import {type PreparedImage, verifyImageAsset} from './assets'
-import {DocumentError} from './errors'
-import {migrateToCurrent, type RawDocument} from './migrations'
-import {writeFileAtomically} from './atomicWrite'
-import {collect, openEntry, readEntryBuffer, scanZip} from './zip'
+import { verifyImageAsset, type PreparedImage } from './assets'
+import { DocumentError } from './errors'
+import { migrateToCurrent, type RawDocument } from './migrations'
+import { writeFileAtomically } from './atomicWrite'
+import { collect, openEntry, readEntryBuffer, scanZip } from './zip'
 
 export const MANIFEST_ENTRY = 'manifest.json'
 export const DISCUSSION_ENTRY = 'discussion.json'

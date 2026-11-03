@@ -1,13 +1,19 @@
-import {app, ipcMain, type IpcMainInvokeEvent} from 'electron'
-import {ZodError, type ZodType} from 'zod'
-import {DomainError} from '@shared/domain'
-import {describeError} from '@shared/i18n/ru'
-import {IPC, type IpcResult} from '@shared/types/ipc'
-import {appendMessageSchema, draftSchema, noPayloadSchema, openPathSchema, setNameSchema} from '@shared/validation'
-import type {AppController, WindowEntry} from '../application/appController'
-import {AppError} from '../application/errors'
-import {DocumentError} from '../document'
-import type {SettingsStore} from '../local-state/settings'
+import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { ZodError, type ZodType } from 'zod'
+import { DomainError } from '@shared/domain'
+import { describeError } from '@shared/i18n/ru'
+import { IPC, type IpcResult } from '@shared/types/ipc'
+import {
+  appendMessageSchema,
+  draftSchema,
+  noPayloadSchema,
+  openPathSchema,
+  setNameSchema
+} from '@shared/validation'
+import type { AppController, WindowEntry } from '../application/appController'
+import { AppError } from '../application/errors'
+import { DocumentError } from '../document'
+import type { SettingsStore } from '../local-state/settings'
 
 function toError(err: unknown): { code: string; message: string } {
   if (err instanceof AppError || err instanceof DocumentError || err instanceof DomainError)

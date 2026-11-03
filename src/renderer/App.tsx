@@ -1,10 +1,10 @@
-import {useCallback, useEffect, useRef, useState} from 'react'
-import {mainThread, plainTextToRichDoc} from '@shared/domain'
-import {DISCUSSION_EXTENSION} from '@shared/types/constants'
-import {Launcher} from './components/Launcher'
-import {NamePrompt} from './components/NamePrompt'
-import {DiscussionScreen} from './components/chat/DiscussionScreen'
-import {useDocumentView, useSettings} from './hooks'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { plainTextToRichDoc, mainThread } from '@shared/domain'
+import { DISCUSSION_EXTENSION } from '@shared/types/constants'
+import { Launcher } from './components/Launcher'
+import { NamePrompt } from './components/NamePrompt'
+import { DiscussionScreen } from './components/chat/DiscussionScreen'
+import { useDocumentView, useSettings } from './hooks'
 
 export function App(): React.JSX.Element {
   const api = window.branchchat

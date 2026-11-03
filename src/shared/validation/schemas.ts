@@ -1,5 +1,5 @@
-import {z} from 'zod'
-import {richDocSchema} from './richText'
+import { z } from 'zod'
+import { richDocSchema } from './richText'
 
 export const FORMAT_NAME = 'branchchat'
 export const CURRENT_SCHEMA_VERSION = 1

@@ -1,4 +1,4 @@
-import {z} from 'zod'
+import { z } from 'zod'
 
 /**
  * Stored rich-text format: a documented subset of the ProseMirror/TipTap JSON document.

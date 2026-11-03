@@ -1,6 +1,6 @@
-import {spawn} from 'node:child_process'
-import {expect, test} from '@playwright/test'
-import {cleanup, launchApp, type TestApp} from './helpers/app'
+import { spawn } from 'node:child_process'
+import { expect, test } from '@playwright/test'
+import { cleanup, launchApp, type TestApp } from './helpers/app'
 
 // Run through `npm run test:e2e`, which makes the test build first. In containers running as root, set
 // BRANCHCHAT_NO_SANDBOX=1.

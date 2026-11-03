@@ -1,4 +1,4 @@
-import {dialog} from 'electron'
+import { dialog } from 'electron'
 
 interface Answers {
   save: string[]

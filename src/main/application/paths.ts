@@ -1,4 +1,4 @@
-import {resolve, win32} from 'node:path'
+import { resolve, win32 } from 'node:path'
 
 /**
  * A key that identifies a file for "is this already open?" checks. Windows paths are case-insensitive and may use

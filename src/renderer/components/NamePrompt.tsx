@@ -1,5 +1,5 @@
-import {useState} from 'react'
-import {ru} from '@shared/i18n/ru'
+import { useState } from 'react'
+import { ru } from '@shared/i18n/ru'
 
 interface Props {
   onSubmit(name: string): void

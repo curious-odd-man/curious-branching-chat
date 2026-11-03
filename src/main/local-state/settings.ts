@@ -1,8 +1,8 @@
-import {promises as fs} from 'node:fs'
-import {join} from 'node:path'
-import {z} from 'zod'
-import type {SettingsView} from '@shared/types/ipc'
-import {writeFileAtomically} from '../document/atomicWrite'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { z } from 'zod'
+import type { SettingsView } from '@shared/types/ipc'
+import { writeFileAtomically } from '../document/atomicWrite'
 
 const settingsSchema = z
   .object({ participantId: z.string().min(1), displayName: z.string().min(1).optional() })

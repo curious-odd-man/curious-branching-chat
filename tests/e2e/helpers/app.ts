@@ -1,7 +1,7 @@
-import {_electron as electron, type ElectronApplication, type Page} from '@playwright/test'
-import {mkdtemp, rm} from 'node:fs/promises'
-import {tmpdir} from 'node:os'
-import {join} from 'node:path'
+import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 export interface DialogLogEntry {
   kind: 'save' | 'open' | 'box'

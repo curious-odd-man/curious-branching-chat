@@ -1,7 +1,7 @@
-import type {AssetInfo, DiscussionData, Message, Participant, Thread} from '../validation/schemas'
-import {collectImageAssetIds, type RichDoc} from '../validation/richText'
-import type {Author, DomainContext} from './context'
-import {DomainError} from './errors'
+import type { AssetInfo, DiscussionData, Message, Participant, Thread } from '../validation/schemas'
+import { collectImageAssetIds, type RichDoc } from '../validation/richText'
+import type { Author, DomainContext } from './context'
+import { DomainError } from './errors'
 
 export function createDiscussion(
   ctx: DomainContext,

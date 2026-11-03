@@ -1,4 +1,4 @@
-import {CURRENT_SCHEMA_VERSION} from '@shared/validation'
+import { CURRENT_SCHEMA_VERSION } from '@shared/validation'
 
 /** Raw, not yet schema-validated document parts. */
 export interface RawDocument {

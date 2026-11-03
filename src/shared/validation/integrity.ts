@@ -1,5 +1,5 @@
-import type {DiscussionData} from './schemas'
-import {collectImageAssetIds} from './richText'
+import type { DiscussionData } from './schemas'
+import { collectImageAssetIds } from './richText'
 
 /** Cross-reference checks that a plain schema cannot express. Returns a list of problems (empty = valid). */
 export function checkDiscussionIntegrity(d: DiscussionData): string[] {

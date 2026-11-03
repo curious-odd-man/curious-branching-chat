@@ -1,8 +1,8 @@
-import {promises as fs} from 'node:fs'
-import {join} from 'node:path'
-import {describe, expect, it} from 'vitest'
-import {DocumentError, writeFileAtomically} from '../../src/main/document'
-import {withTempDir} from '../helpers/fixtures'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { DocumentError, writeFileAtomically } from '../../src/main/document'
+import { withTempDir } from '../helpers/fixtures'
 
 const noSleep = async (): Promise<void> => undefined
 

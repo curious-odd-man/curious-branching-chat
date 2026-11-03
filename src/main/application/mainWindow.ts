@@ -1,5 +1,5 @@
-import {BrowserWindow} from 'electron'
-import {join} from 'node:path'
+import { BrowserWindow } from 'electron'
+import { join } from 'node:path'
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({

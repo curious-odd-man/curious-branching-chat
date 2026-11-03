@@ -1,11 +1,11 @@
-import {mkdtemp, rm} from 'node:fs/promises'
-import {tmpdir} from 'node:os'
-import {join} from 'node:path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import yazl from 'yazl'
-import {randomUUID} from 'node:crypto'
-import {appendMessage, type Author, createBranch, type DomainContext} from '@shared/domain'
-import type {DocumentContents, RichDoc, RichNode} from '@shared/types'
-import {newDocumentContents} from '../../src/main/document/factory'
+import { randomUUID } from 'node:crypto'
+import { appendMessage, createBranch, type Author, type DomainContext } from '@shared/domain'
+import type { DocumentContents, RichDoc, RichNode } from '@shared/types'
+import { newDocumentContents } from '../../src/main/document/factory'
 
 /** Deterministic clock and ids so tests are repeatable. */
 export function makeCtx(prefix = 'id'): DomainContext & { tick(): void } {

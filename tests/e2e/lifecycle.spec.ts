@@ -1,8 +1,8 @@
-import {expect, type Page, test} from '@playwright/test'
-import {promises as fs} from 'node:fs'
-import {join} from 'node:path'
-import {readDiscussionFile} from './helpers/readFile'
-import {cleanup, launchApp, tempDir, type TestApp} from './helpers/app'
+import { expect, test, type Page } from '@playwright/test'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { readDiscussionFile } from './helpers/readFile'
+import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 
 const apps: TestApp[] = []
 const dirs: string[] = []

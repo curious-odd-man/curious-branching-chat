@@ -1,4 +1,4 @@
-import type {DiscussionData, ReadState} from '../validation/schemas'
+import type { DiscussionData, ReadState } from '../validation/schemas'
 
 /** IPC channel names shared by main and preload. */
 export const IPC = {

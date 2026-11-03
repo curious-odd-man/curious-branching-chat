@@ -1,19 +1,28 @@
-import {describe, expect, it} from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-    addAsset,
-    appendMessage,
-    branchCountsByMessage,
-    buildHierarchy,
-    createBranch,
-    DomainError,
-    findThread,
-    groupBranchesByStatus,
-    mainThread,
-    resolveContext,
-    setThreadStatus,
-    setThreadTitle
+  DomainError,
+  appendMessage,
+  branchCountsByMessage,
+  buildHierarchy,
+  createBranch,
+  findThread,
+  groupBranchesByStatus,
+  mainThread,
+  resolveContext,
+  setThreadStatus,
+  setThreadTitle,
+  addAsset
 } from '@shared/domain'
-import {anna, boris, buildSample, clara, makeCtx, para, richDoc, simple} from '../helpers/fixtures'
+import {
+  anna,
+  boris,
+  buildSample,
+  clara,
+  makeCtx,
+  para,
+  richDoc,
+  simple
+} from '../helpers/fixtures'
 
 describe('messages', () => {
   it('assigns sequence numbers and snapshots the author name (FR-024)', () => {

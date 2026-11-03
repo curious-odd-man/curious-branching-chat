@@ -1,6 +1,6 @@
-import {describe, expect, it} from 'vitest'
-import {extractDiscussionPaths} from '../../src/main/windows/launchArgs'
-import {formatTimestamp} from '../../src/renderer/i18n/format'
+import { describe, expect, it } from 'vitest'
+import { extractDiscussionPaths } from '../../src/main/windows/launchArgs'
+import { formatTimestamp } from '../../src/renderer/i18n/format'
 
 describe('extractDiscussionPaths', () => {
   it('finds .branchchat paths, ignores flags and other files', () => {

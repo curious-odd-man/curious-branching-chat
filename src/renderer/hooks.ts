@@ -1,5 +1,5 @@
-import {useEffect, useState} from 'react'
-import type {DocumentView, SettingsView} from '@shared/types/ipc'
+import { useEffect, useState } from 'react'
+import type { DocumentView, SettingsView } from '@shared/types/ipc'
 
 /** The discussion shown in this window: undefined while loading, null when the window has none. */
 export function useDocumentView(): DocumentView | null | undefined {

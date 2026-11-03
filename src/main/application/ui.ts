@@ -1,6 +1,6 @@
-import {app, type BrowserWindow, dialog, type MessageBoxOptions} from 'electron'
-import {join} from 'node:path'
-import {ru} from '@shared/i18n/ru'
+import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electron'
+import { join } from 'node:path'
+import { ru } from '@shared/i18n/ru'
 
 export interface CloseProblems {
   unsentDraft: boolean

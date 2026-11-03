@@ -1,5 +1,5 @@
-import {promises as fs} from 'node:fs'
-import {readEntries} from './readFile'
+import { promises as fs } from 'node:fs'
+import { readEntries } from './readFile'
 import yazl from 'yazl'
 
 /** Copies a discussion file but marks its manifest with a schema version this build does not know. */

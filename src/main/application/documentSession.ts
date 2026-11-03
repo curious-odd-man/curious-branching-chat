@@ -1,9 +1,21 @@
-import {basename} from 'node:path'
-import {appendMessage, type Author, type DomainContext, DomainError, readStateAfterSend} from '@shared/domain'
-import type {DocumentContents, RichDoc} from '@shared/validation'
-import type {DocumentView} from '@shared/types/ipc'
-import {describeError} from '@shared/i18n/ru'
-import {DocumentError, newDocumentContents, readDocument, writeDocument as defaultWriter} from '../document'
+import { basename } from 'node:path'
+import {
+  appendMessage,
+  DomainError,
+  readStateAfterSend,
+  type Author,
+  type DomainContext
+} from '@shared/domain'
+import type { RichDoc } from '@shared/validation'
+import type { DocumentContents } from '@shared/validation'
+import type { DocumentView } from '@shared/types/ipc'
+import { describeError } from '@shared/i18n/ru'
+import {
+  DocumentError,
+  newDocumentContents,
+  readDocument,
+  writeDocument as defaultWriter
+} from '../document'
 
 export type DocumentWriter = (
   path: string,

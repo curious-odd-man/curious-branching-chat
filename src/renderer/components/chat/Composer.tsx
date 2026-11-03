@@ -1,5 +1,5 @@
-import {useEffect, useState} from 'react'
-import {ru} from '@shared/i18n/ru'
+import { useEffect, useState } from 'react'
+import { ru } from '@shared/i18n/ru'
 
 interface Props {
   /** Called with the text; call `clear` once it was sent. */

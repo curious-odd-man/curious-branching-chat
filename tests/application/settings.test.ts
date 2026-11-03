@@ -1,10 +1,10 @@
-import {promises as fs} from 'node:fs'
-import {join} from 'node:path'
-import {describe, expect, it} from 'vitest'
-import {plainTextToRichDoc} from '@shared/domain'
-import {SettingsStore} from '../../src/main/local-state/settings'
-import {pathKey} from '../../src/main/application/paths'
-import {withTempDir} from '../helpers/fixtures'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { plainTextToRichDoc } from '@shared/domain'
+import { SettingsStore } from '../../src/main/local-state/settings'
+import { pathKey } from '../../src/main/application/paths'
+import { withTempDir } from '../helpers/fixtures'
 
 describe('SettingsStore', () => {
   it('generates the participant ID once and remembers the name (FR-017, FR-020)', async () => {

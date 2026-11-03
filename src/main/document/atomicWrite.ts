@@ -1,7 +1,7 @@
-import {promises as fs} from 'node:fs'
-import {randomBytes} from 'node:crypto'
-import {basename, dirname, join} from 'node:path'
-import {DocumentError} from './errors'
+import { promises as fs } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { basename, dirname, join } from 'node:path'
+import { DocumentError } from './errors'
 
 export interface AtomicWriteOptions {
   /** Injectable for tests. */

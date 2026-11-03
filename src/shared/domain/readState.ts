@@ -1,5 +1,5 @@
-import type {DiscussionData, Message, Participant, ReadState} from '../validation/schemas'
-import {findMessage, findThread} from './discussion'
+import type { DiscussionData, Message, Participant, ReadState } from '../validation/schemas'
+import { findMessage, findThread } from './discussion'
 
 /**
  * Read-state rules (requirements 5.10). Read state is stored in the file, per participant.

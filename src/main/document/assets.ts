@@ -1,6 +1,6 @@
-import {createHash} from 'node:crypto'
-import type {AssetInfo} from '@shared/validation'
-import {DocumentError} from './errors'
+import { createHash } from 'node:crypto'
+import type { AssetInfo } from '@shared/validation'
+import { DocumentError } from './errors'
 
 export interface PreparedImage {
   data: Buffer

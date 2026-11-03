@@ -1,5 +1,5 @@
-import {type Author, createDiscussion, type DomainContext} from '@shared/domain'
-import {CURRENT_SCHEMA_VERSION, type DocumentContents, FORMAT_NAME} from '@shared/validation'
+import { createDiscussion, type Author, type DomainContext } from '@shared/domain'
+import { CURRENT_SCHEMA_VERSION, FORMAT_NAME, type DocumentContents } from '@shared/validation'
 
 /** Contents of a brand-new, empty discussion (requirements 4.1). */
 export function newDocumentContents(

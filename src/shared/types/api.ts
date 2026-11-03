@@ -1,5 +1,12 @@
-import type {RichDoc} from '../validation/richText'
-import type {AppInfo, DocumentView, IpcResult, MenuCommand, OpenOutcome, SettingsView} from './ipc'
+import type { RichDoc } from '../validation/richText'
+import type {
+  AppInfo,
+  DocumentView,
+  IpcResult,
+  MenuCommand,
+  OpenOutcome,
+  SettingsView
+} from './ipc'
 
 /** The only surface the renderer can reach (exposed by the preload script as `window.branchchat`). */
 export interface BranchChatApi {

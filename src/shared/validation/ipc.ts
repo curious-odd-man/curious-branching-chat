@@ -1,5 +1,5 @@
-import {z} from 'zod'
-import {richDocSchema} from './richText'
+import { z } from 'zod'
+import { richDocSchema } from './richText'
 
 /** Payload schemas for IPC channels. The renderer is never trusted. */
 export const setNameSchema = z.object({ displayName: z.string().trim().min(1) }).strict()

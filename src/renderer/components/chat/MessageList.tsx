@@ -1,8 +1,8 @@
-import {useEffect, useRef} from 'react'
-import {richTextToPlain} from '@shared/validation'
-import type {Message} from '@shared/types'
-import {ru} from '@shared/i18n/ru'
-import {formatTimestamp} from '../../i18n/format'
+import { useEffect, useRef } from 'react'
+import { richTextToPlain } from '@shared/validation'
+import type { Message } from '@shared/types'
+import { ru } from '@shared/i18n/ru'
+import { formatTimestamp } from '../../i18n/format'
 
 interface Props {
   messages: Message[]

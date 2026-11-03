@@ -1,7 +1,7 @@
-import type {DiscussionData, Message, Thread, ThreadStatus} from '../validation/schemas'
-import type {Author, DomainContext} from './context'
-import {DomainError} from './errors'
-import {ensureParticipant, findMessage, findThread, touch} from './discussion'
+import type { DiscussionData, Message, Thread, ThreadStatus } from '../validation/schemas'
+import type { Author, DomainContext } from './context'
+import { DomainError } from './errors'
+import { ensureParticipant, findMessage, findThread, touch } from './discussion'
 
 export interface CreateBranchInput {
   sourceMessageId: string

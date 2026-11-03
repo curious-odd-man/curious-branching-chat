@@ -1,4 +1,4 @@
-import {ru} from '@shared/i18n/ru'
+import { ru } from '@shared/i18n/ru'
 
 interface Props {
   version: string

@@ -1,29 +1,29 @@
-import {promises as fs} from 'node:fs'
-import {join} from 'node:path'
-import {describe, expect, it} from 'vitest'
-import {addAsset, appendMessage, mainThread} from '@shared/domain'
-import type {DocumentContents} from '@shared/types'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { addAsset, appendMessage, mainThread } from '@shared/domain'
+import type { DocumentContents } from '@shared/types'
 import {
-    DocumentError,
-    type DocumentErrorCode,
-    prepareImage,
-    readDocument,
-    readImageAsset,
-    writeDocument
+  DocumentError,
+  prepareImage,
+  readDocument,
+  readImageAsset,
+  writeDocument,
+  type DocumentErrorCode
 } from '../../src/main/document'
-import {scanZip} from '../../src/main/document/zip'
+import { scanZip } from '../../src/main/document/zip'
 import {
-    anna,
-    boris,
-    buildSample,
-    buildZip,
-    makeCtx,
-    para,
-    patchName,
-    pngBytes,
-    richDoc,
-    simple,
-    withTempDir
+  anna,
+  boris,
+  buildSample,
+  buildZip,
+  makeCtx,
+  para,
+  patchName,
+  pngBytes,
+  richDoc,
+  simple,
+  withTempDir
 } from '../helpers/fixtures'
 
 const jsonOf = (c: DocumentContents) => ({

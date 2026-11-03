@@ -1,5 +1,5 @@
-import {app, session, shell} from 'electron'
-import {isAllowedLinkHref} from '@shared/validation'
+import { app, session, shell } from 'electron'
+import { isAllowedLinkHref } from '@shared/validation'
 
 /** Opens a link only if its protocol is allowed (http, https, mailto) — NFR-014. Call only after an explicit user action. */
 export async function openExternalLink(url: string): Promise<boolean> {

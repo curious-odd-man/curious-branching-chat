@@ -1,4 +1,4 @@
-import type {BranchChatApi} from '../shared/types/api'
+import type { BranchChatApi } from '../shared/types/api'
 
 declare global {
   interface Window {

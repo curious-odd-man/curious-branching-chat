@@ -1,9 +1,9 @@
-import {useState} from 'react'
-import {mainThread} from '@shared/domain'
-import {ru} from '@shared/i18n/ru'
-import type {DocumentView} from '@shared/types/ipc'
-import {Composer} from './Composer'
-import {MessageList} from './MessageList'
+import { useState } from 'react'
+import { mainThread } from '@shared/domain'
+import { ru } from '@shared/i18n/ru'
+import type { DocumentView } from '@shared/types/ipc'
+import { Composer } from './Composer'
+import { MessageList } from './MessageList'
 
 interface Props {
   view: DocumentView

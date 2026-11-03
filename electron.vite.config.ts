@@ -1,6 +1,6 @@
-import {defineConfig} from 'electron-vite'
+import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
-import {resolve} from 'node:path'
+import { resolve } from 'node:path'
 
 const alias = { '@shared': resolve(__dirname, 'src/shared') }
 
