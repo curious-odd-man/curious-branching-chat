@@ -36,7 +36,7 @@ src/
     e2e/         test hooks, compiled only into `--mode e2e` builds
     ipc/         validated IPC handlers
   preload/     the narrow contextBridge API
-  renderer/    React UI: components/chat (list, composer), components/editor (TipTap), components/rich (renderer)
+  renderer/    React UI: components/chat (list, composer), components/branches (panel, header), components/editor (TipTap), components/rich (renderer)
 tests/         unit tests and tests/e2e
 docs/          requirements, ADR, implementation plan
 ```
@@ -69,4 +69,7 @@ See `docs/implementation_plan.md`.
   participant name, close warnings, error handling. Covered by unit tests and 15 Electron end-to-end tests.
 - Phase 3 (chat UI and rich-text editor): done. TipTap composer with the supported formatting, read-only rendering
   from the stored structure, safe links, virtualized message list. 123 unit tests and 23 Electron end-to-end tests.
-- Next: phase 4 (branching).
+- Phase 4 (branching): done. "Reply to this" from any selection, inherited context with the quoted passage highlighted,
+  nested branches, side panel (active/closed), titles, close/reopen, badges, go to source. 150 unit tests and 33
+  Electron end-to-end tests.
+- Next: phase 5 (unread messages).

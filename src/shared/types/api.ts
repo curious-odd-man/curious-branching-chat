@@ -20,6 +20,14 @@ export interface BranchChatApi {
   appendMessage(threadId: string, content: RichDoc): Promise<IpcResult<null>>
   retrySave(): Promise<IpcResult<null>>
   setDraftState(hasDraft: boolean): Promise<IpcResult<null>>
+  /** "Reply to this": creates a branch from a selected passage; resolves with the new branch's ID. */
+  createBranch(
+    sourceMessageId: string,
+    selectionStart: number,
+    selectionEnd: number
+  ): Promise<IpcResult<{ threadId: string }>>
+  setBranchStatus(threadId: string, status: 'open' | 'closed'): Promise<IpcResult<null>>
+  setBranchTitle(threadId: string, title: string): Promise<IpcResult<null>>
   /** Opens a link in the system browser. Only http, https and mailto links are opened; call only after a click. */
   openLink(url: string): Promise<IpcResult<boolean>>
   /** Subscribe to state changes of this window's discussion. Returns an unsubscribe function. */

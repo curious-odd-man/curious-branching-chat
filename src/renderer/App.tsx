@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { mainThread } from '@shared/domain'
 import type { RichDoc } from '@shared/validation'
 import { DISCUSSION_EXTENSION } from '@shared/types/constants'
@@ -14,6 +14,10 @@ export function App(): React.JSX.Element {
   const [version, setVersion] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<{ run: () => void } | null>(null)
+  // Which thread this window shows; reset when another discussion is shown.
+  const [nav, setNav] = useState<{ documentId: string; threadId: string; focus?: string } | null>(
+    null
+  )
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
@@ -49,13 +53,37 @@ export function App(): React.JSX.Element {
     [api, startNew, openDialog]
   )
 
+  const activeThreadId = useMemo(() => {
+    if (!view) return null
+    const exists =
+      nav?.documentId === view.documentId &&
+      view.discussion.threads.some((t) => t.threadId === nav.threadId)
+    return exists && nav ? nav.threadId : mainThread(view.discussion).threadId
+  }, [view, nav])
+
+  const selectThread = useCallback(
+    (threadId: string, focus?: string) => {
+      if (!view) return
+      setNav({ documentId: view.documentId, threadId, ...(focus ? { focus } : {}) })
+    },
+    [view]
+  )
+
   const send = (content: RichDoc, clear: () => void): void =>
     withName(() => {
-      const thread = view ? mainThread(view.discussion) : null
-      if (!thread) return
-      void api.appendMessage(thread.threadId, content).then((r) => {
+      if (!activeThreadId) return
+      void api.appendMessage(activeThreadId, content).then((r) => {
         report(r)
         if (r.ok) clear()
+      })
+    })
+
+  /** "Reply to this": creates the branch (asks for the name first if needed) and opens it. */
+  const reply = (selection: { messageId: string; start: number; end: number }): void =>
+    withName(() => {
+      void api.createBranch(selection.messageId, selection.start, selection.end).then((r) => {
+        report(r)
+        if (r.ok) selectThread(r.data.threadId)
       })
     })
 
@@ -93,7 +121,15 @@ export function App(): React.JSX.Element {
       ) : (
         <DiscussionScreen
           view={view}
+          threadId={activeThreadId ?? ''}
+          {...(nav?.focus && nav.threadId === activeThreadId ? { focusMessageId: nav.focus } : {})}
+          onSelectThread={selectThread}
           onSend={send}
+          onReply={reply}
+          onSetStatus={(threadId, status) =>
+            void api.setBranchStatus(threadId, status).then(report)
+          }
+          onSetTitle={(threadId, title) => void api.setBranchTitle(threadId, title).then(report)}
           onRetrySave={() => void api.retrySave().then(report)}
         />
       )}

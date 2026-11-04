@@ -1,11 +1,18 @@
 import { basename } from 'node:path'
 import {
   appendMessage,
+  createBranch,
   DomainError,
+  findMessage,
+  quoteFromSelection,
+  readStateAfterBranch,
   readStateAfterSend,
+  setThreadStatus,
+  setThreadTitle,
   type Author,
   type DomainContext
 } from '@shared/domain'
+import type { ThreadStatus } from '@shared/validation'
 import type { RichDoc } from '@shared/validation'
 import type { DocumentContents } from '@shared/validation'
 import type { DocumentView } from '@shared/types/ipc'
@@ -100,6 +107,51 @@ export class DocumentSession {
     )
     const { discussion } = appendMessage(this.deps.ctx, before, { threadId, author, content })
     this.commit({ ...this.contents, discussion, readState })
+  }
+
+  /**
+   * "Reply to this" (FR-049 to FR-056, FR-112 case 2): creates a branch from a selected passage of a message and
+   * marks that message as read. The quote is taken from the stored message, not from the caller. Returns the new
+   * branch's ID.
+   */
+  createBranch(
+    author: Author,
+    input: { sourceMessageId: string; selectionStart: number; selectionEnd: number }
+  ): string {
+    const before = this.contents.discussion
+    const { message } = findMessage(before, input.sourceMessageId)
+    const quoteText = quoteFromSelection(message, input.selectionStart, input.selectionEnd)
+    const readState = readStateAfterBranch(
+      before,
+      this.contents.readState,
+      author.participantId,
+      input.sourceMessageId
+    )
+    const { discussion, thread } = createBranch(this.deps.ctx, before, {
+      sourceMessageId: input.sourceMessageId,
+      quoteText,
+      selectionStart: input.selectionStart,
+      selectionEnd: input.selectionEnd,
+      author
+    })
+    this.commit({ ...this.contents, discussion, readState })
+    return thread.threadId
+  }
+
+  /** Close or reopen a branch (FR-059, FR-060). */
+  setThreadStatus(threadId: string, status: ThreadStatus): void {
+    this.commit({
+      ...this.contents,
+      discussion: setThreadStatus(this.deps.ctx, this.contents.discussion, threadId, status)
+    })
+  }
+
+  /** Optional branch title (FR-058); an empty title removes it. */
+  setThreadTitle(threadId: string, title: string): void {
+    this.commit({
+      ...this.contents,
+      discussion: setThreadTitle(this.deps.ctx, this.contents.discussion, threadId, title)
+    })
   }
 
   /** Writes any pending change now; resolves when the queue is empty. Never rejects. */

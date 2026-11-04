@@ -140,3 +140,90 @@ describe('DocumentSession', () => {
     })
   })
 })
+
+describe('DocumentSession branches', () => {
+  async function sessionWithMessage(dir: string) {
+    const file = join(dir, 'a.branchchat')
+    const s = await DocumentSession.create(file, { ctx: makeCtx() }, { author: anna })
+    const threadId = mainThread(s.view(anna.participantId).discussion).threadId
+    s.appendMessage(anna, threadId, text('Привет, это идея про ёлку.'))
+    const messageId = mainThread(s.view(anna.participantId).discussion).messages[0]!.messageId
+    return { file, s, threadId, messageId }
+  }
+
+  it('creates a branch with the quote taken from the stored message, marks the source read, and saves (FR-112)', async () => {
+    await withTempDir(async (dir) => {
+      const { file, s, messageId } = await sessionWithMessage(dir)
+      const branchId = s.createBranch(boris, {
+        sourceMessageId: messageId,
+        selectionStart: 17,
+        selectionEnd: 25
+      })
+      await s.flush()
+      const saved = (await readDocument(file)).contents
+      const branch = saved.discussion.threads.find((t) => t.threadId === branchId)!
+      expect(branch).toMatchObject({
+        sourceMessageId: messageId,
+        quoteText: 'про ёлку',
+        selectionStart: 17,
+        selectionEnd: 25,
+        status: 'open',
+        createdBy: boris.participantId
+      })
+      expect(saved.readState[boris.participantId]).toEqual([messageId]) // replying marks the source message read
+      expect(saved.discussion.participants.map((p) => p.participantId)).toContain(
+        boris.participantId
+      )
+    })
+  })
+
+  it('refuses selections outside the message, empty selections and unknown messages', async () => {
+    await withTempDir(async (dir) => {
+      const { s, messageId } = await sessionWithMessage(dir)
+      await s.flush() // the setup message has been saved; from here on nothing may be scheduled
+      const base = { sourceMessageId: messageId }
+      expect(() => s.createBranch(boris, { ...base, selectionStart: 5, selectionEnd: 5 })).toThrow()
+      expect(() =>
+        s.createBranch(boris, { ...base, selectionStart: 0, selectionEnd: 9999 })
+      ).toThrow(/outside/)
+      expect(() =>
+        s.createBranch(boris, { sourceMessageId: 'ghost', selectionStart: 0, selectionEnd: 3 })
+      ).toThrow(/not found/)
+      expect(() => s.createBranch(boris, { ...base, selectionStart: 7, selectionEnd: 8 })).toThrow(
+        /non-empty/
+      ) // a space
+      expect(s.saving).toBe(false) // nothing was changed or scheduled
+    })
+  })
+
+  it('closing, reopening and titles are saved; a closed branch takes no messages', async () => {
+    await withTempDir(async (dir) => {
+      const { file, s, messageId } = await sessionWithMessage(dir)
+      const branchId = s.createBranch(boris, {
+        sourceMessageId: messageId,
+        selectionStart: 0,
+        selectionEnd: 6
+      })
+      s.setThreadTitle(branchId, '  Приветствие ')
+      s.setThreadStatus(branchId, 'closed')
+      await s.flush()
+      const closed = (await readDocument(file)).contents.discussion.threads.find(
+        (t) => t.threadId === branchId
+      )!
+      expect(closed).toMatchObject({ status: 'closed', title: 'Приветствие' })
+      expect(() => s.appendMessage(boris, branchId, text('ещё'))).toThrow(/closed/)
+
+      s.setThreadStatus(branchId, 'open')
+      s.appendMessage(boris, branchId, text('ещё'))
+      await s.flush()
+      const reopened = (await readDocument(file)).contents.discussion.threads.find(
+        (t) => t.threadId === branchId
+      )!
+      expect(reopened.status).toBe('open')
+      expect(reopened.messages).toHaveLength(1)
+      expect(() =>
+        s.setThreadStatus(mainThread(s.view(anna.participantId).discussion).threadId, 'closed')
+      ).toThrow(/main thread/)
+    })
+  })
+})

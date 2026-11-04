@@ -28,10 +28,43 @@ interface SavedMessage {
   authorId: string
   content: unknown
 }
+export interface SavedThread {
+  threadId: string
+  parentThreadId?: string
+  sourceMessageId?: string
+  quoteText?: string
+  selectionStart?: number
+  selectionEnd?: number
+  title?: string
+  status: 'open' | 'closed'
+  messages: (SavedMessage & { messageId: string })[]
+}
 interface SavedDiscussion {
   title: string
   participants: { participantId: string; displayName: string }[]
-  threads: { messages: SavedMessage[] }[]
+  threads: SavedThread[]
+}
+
+export async function readReadState(path: string): Promise<Record<string, string[]>> {
+  const entries = await readEntries(path)
+  return JSON.parse(entries.get('readstate.json')!.toString('utf8')) as Record<string, string[]>
+}
+
+/** Plain text of a stored message in the offset coordinate system used by branch selections. */
+export function plainTextOf(content: unknown): string {
+  const parts: string[] = []
+  const walk = (node: SavedNode): void => {
+    if (node.type === 'text') parts.push(node.text ?? '')
+    else if (node.type === 'hardBreak') parts.push('\n')
+    else if (node.type === 'paragraph' || node.type === 'heading') {
+      node.content?.forEach(walk)
+      parts.push('\n')
+      return
+    }
+    node.content?.forEach(walk)
+  }
+  walk(content as SavedNode)
+  return parts.join('').replace(/\n+$/, '')
 }
 
 export async function readDiscussionFile(path: string): Promise<{

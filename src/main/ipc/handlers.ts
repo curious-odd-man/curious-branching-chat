@@ -5,11 +5,14 @@ import { describeError } from '@shared/i18n/ru'
 import { IPC, type IpcResult } from '@shared/types/ipc'
 import {
   appendMessageSchema,
+  createBranchSchema,
   draftSchema,
   noPayloadSchema,
   openLinkSchema,
   openPathSchema,
-  setNameSchema
+  setNameSchema,
+  setStatusSchema,
+  setTitleSchema
 } from '@shared/validation'
 import type { AppController, WindowEntry } from '../application/appController'
 import { AppError } from '../application/errors'
@@ -71,6 +74,22 @@ export function registerIpcHandlers(controller: AppController, settings: Setting
       p.threadId,
       p.content
     )
+  })
+  const requireName = (): { participantId: string; displayName: string } => {
+    const me = settings.get()
+    if (!me.displayName) throw new AppError('NAME_REQUIRED', 'Name required')
+    return { participantId: me.participantId, displayName: me.displayName }
+  }
+  handle(IPC.branchCreate, createBranchSchema, (entry, p) => ({
+    threadId: requireSession(entry).createBranch(requireName(), p)
+  }))
+  handle(IPC.branchSetStatus, setStatusSchema, (entry, p) => {
+    requireSession(entry).setThreadStatus(p.threadId, p.status)
+    return null
+  })
+  handle(IPC.branchSetTitle, setTitleSchema, (entry, p) => {
+    requireSession(entry).setThreadTitle(p.threadId, p.title)
+    return null
   })
   handle(IPC.documentRetrySave, noPayloadSchema, async (entry) => {
     await requireSession(entry).retrySave()

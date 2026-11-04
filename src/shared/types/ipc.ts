@@ -13,6 +13,9 @@ export const IPC = {
   documentRetrySave: 'document:retry-save',
   draftSet: 'draft:set',
   linkOpen: 'link:open',
+  branchCreate: 'branch:create',
+  branchSetStatus: 'branch:set-status',
+  branchSetTitle: 'branch:set-title',
   /** main -> renderer */
   documentChanged: 'document:changed',
   menuCommand: 'menu:command'

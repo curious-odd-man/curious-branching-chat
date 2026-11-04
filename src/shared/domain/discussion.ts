@@ -114,6 +114,8 @@ export function appendMessage(
   input: { threadId: string; author: Author; content: RichDoc }
 ): { discussion: DiscussionData; message: Message } {
   const thread = findThread(d, input.threadId)
+  if (thread.status === 'closed')
+    throw new DomainError('THREAD_CLOSED', 'this branch is closed; reopen it to write in it')
   if (!hasContent(input.content)) throw new DomainError('EMPTY_MESSAGE', 'message is empty')
   const assetReferences = collectImageAssetIds(input.content)
   for (const ref of assetReferences) {

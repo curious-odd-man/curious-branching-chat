@@ -80,17 +80,17 @@ association and updates (section 4). One installer `.exe` that the user download
 Electron provides Chromium for rendering and Node.js for the main process, connected through controlled IPC.
 
 - **Strengths:**
-    - Nearly everything is written in TypeScript; no Rust, no Java.
-    - Mature web editor ecosystem (TipTap/ProseMirror).
-    - Main-process access to the filesystem for ZIP handling and atomic saves, without Spring Boot.
-    - `app.requestSingleInstanceLock()` and the `second-instance` event provide a standard way to pass an opened file to
-      the running instance.
-    - Established packaging (electron-builder) and updater (electron-updater) with a GitHub Releases provider.
+  - Nearly everything is written in TypeScript; no Rust, no Java.
+  - Mature web editor ecosystem (TipTap/ProseMirror).
+  - Main-process access to the filesystem for ZIP handling and atomic saves, without Spring Boot.
+  - `app.requestSingleInstanceLock()` and the `second-instance` event provide a standard way to pass an opened file to
+    the running instance.
+  - Established packaging (electron-builder) and updater (electron-updater) with a GitHub Releases provider.
 - **Weaknesses:**
-    - Larger installer and higher memory use than Tauri or JavaFX.
-    - Security-sensitive process model; needs strict configuration (section 7).
-    - The Electron/Chromium runtime must be kept up to date.
-    - The portable single-EXE target is a poor fit for association and updates (section 4).
+  - Larger installer and higher memory use than Tauri or JavaFX.
+  - Security-sensitive process model; needs strict configuration (section 7).
+  - The Electron/Chromium runtime must be kept up to date.
+  - The portable single-EXE target is a poor fit for association and updates (section 4).
 
 ### Qualitative comparison
 
@@ -232,7 +232,12 @@ changes. Unknown nodes and marks in a received file are rejected or shown as pla
 HTML.
 
 **Branch anchors.** Messages are immutable, so the selection range stored in a branch (`selectionStart`,
-`selectionEnd`, expressed in the message content model) stays valid. The stored `quoteText` and `sourceMessageId`
+`selectionEnd`) stays valid. It is expressed as offsets in the message's plain text, defined once in
+`linearize()` (`src/shared/validation/richText.ts`): text nodes concatenated, a hard break is one newline, each
+paragraph or heading is followed by one newline. Every rendered piece of text carries its own offset
+(`<span data-o="N">`), which is how a selection in the page is converted back to stored offsets, including across
+bold, italic, link, list-item and paragraph boundaries. The main process derives the quote from the stored message
+and validates the range. The stored `quoteText` and `sourceMessageId`
 remain the durable reference; the range is used for highlighting and may be ignored if it no longer matches the quote.
 
 **Message order.** Messages carry a `sequence` number within their thread. Display order follows the sequence, not
@@ -428,6 +433,10 @@ Alternatives considered
 - JavaFX: https://openjfx.io/
 - Java jpackage: https://docs.oracle.com/en/java/javase/21/jpackage/
 - Tauri: https://v2.tauri.app/
+
+## Changes in revision 5
+
+- Branch anchors are defined precisely as plain-text offsets (section 5.4).
 
 ## Changes in revision 4
 

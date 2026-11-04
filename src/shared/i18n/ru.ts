@@ -73,6 +73,30 @@ export const ru = {
     cancel: 'Отмена',
     invalidUrl: 'Допустимы только адреса http, https и электронная почта (mailto).'
   },
+  branches: {
+    panelTitle: 'Ветки',
+    mainThread: 'Основное обсуждение',
+    active: 'Активные',
+    closed: 'Закрытые',
+    noBranches: 'Веток пока нет. Выделите текст в сообщении и нажмите «Ответить на это».',
+    replyToThis: 'Ответить на это',
+    replyHint: 'Создать ветку от выделенного фрагмента',
+    pathLabel: 'Путь',
+    titleLabel: 'Название ветки',
+    titlePlaceholder: 'Название (необязательно)',
+    close: 'Закрыть ветку',
+    reopen: 'Открыть ветку снова',
+    goToSource: 'К исходному сообщению',
+    quoteLabel: 'Цитата',
+    contextDivider: 'Ответы в этой ветке',
+    contextCaption: 'Предыдущие сообщения (только чтение)',
+    closedNotice: 'Эта ветка закрыта. Откройте её снова, чтобы написать в ней.',
+    belongsTo: (label: string): string => `из ветки «${label}»`,
+    branchCount: (n: number): string =>
+      n === 1 ? '1 ветка' : `${n} ${n < 5 && n > 1 ? 'ветки' : 'веток'}`,
+    openBranch: (label: string): string => `Открыть ветку «${label}»`,
+    messageCount: (n: number): string => String(n)
+  },
   message: {
     linkTitle: (href: string): string => `Открыть: ${href}`
   },
@@ -130,6 +154,11 @@ export const ru = {
     ASSET_MISMATCH: 'Изображение в файле повреждено.',
     WRITE_FAILED: 'Не удалось записать файл.',
     NAME_REQUIRED: 'Сначала укажите своё имя.',
+    THREAD_CLOSED: 'Ветка закрыта. Откройте её, чтобы написать в ней.',
+    INVALID_SELECTION: 'Не удалось определить выделенный фрагмент. Выделите текст ещё раз.',
+    EMPTY_QUOTE: 'Выделите текст, от которого нужно создать ветку.',
+    THREAD_NOT_FOUND: 'Ветка не найдена.',
+    MESSAGE_NOT_FOUND: 'Сообщение не найдено.',
     NO_DOCUMENT: 'Нет открытого обсуждения.',
     UNKNOWN: 'Произошла непредвиденная ошибка.'
   } as Record<string, string>

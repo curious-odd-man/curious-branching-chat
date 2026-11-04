@@ -76,8 +76,8 @@ export function buildSample(): Sample {
   const br1 = createBranch(ctx, d, {
     sourceMessageId: m2,
     quoteText: 'идеей про ёлку',
-    selectionStart: 15,
-    selectionEnd: 29,
+    selectionStart: 19,
+    selectionEnd: 33,
     author: anna
   })
   d = br1.discussion

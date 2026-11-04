@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 4)  
+**Status:** MVP requirements (revision 5)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -300,6 +300,13 @@ Proposed internal structure:
 - **FR-062.** Inherited context must be read-only and must not be duplicated as authored messages.
 - **FR-063.** Sibling branches must not automatically appear in the context of another branch.
 - **FR-064.** Child branch status must be independent of parent branch status.
+- **FR-126.** A closed branch takes no new messages. The composer is replaced by a notice with a button to reopen the
+  branch. Branches can still be created from the messages of a closed branch, and its child branches are unaffected.
+- **FR-127.** In the side panel, a branch is listed under its nearest ancestor that has the same status (Active or
+  Closed). A branch whose real parent is in the other group is labelled with the name of that parent, so a closed
+  parent never hides its open children.
+- **FR-128.** Each thread keeps its own unsent draft while the user moves between branches. Closing the window warns if
+  any thread has an unsent draft.
 
 ### 5.6. Images and links
 
@@ -388,8 +395,8 @@ file when it is exchanged.
 - **FR-111.** The user must be able to mark a message as read with an explicit control on the message. The user must
   also be able to mark all messages of the current thread, or the whole discussion, as read.
 - **FR-112.** A message also becomes read for the local participant in exactly these two cases, in addition to FR-111:
-    1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
-    2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
+  1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
+  2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
 
   Scrolling, opening a thread, or viewing a message never marks it read.
 - **FR-113.** The side panel must show the number of unread messages for each branch, and must show an indicator on a
@@ -489,7 +496,10 @@ Sent messages are immutable.
 - `parentThreadId` — parent thread, if this is a branch.
 - `sourceMessageId` — message from which the branch originated.
 - `quoteText` — selected source passage.
-- `selectionStart` and `selectionEnd` — selection range within the source message's content model.
+- `selectionStart` and `selectionEnd` — selection range within the source message, as offsets (UTF-16 code units) in
+  the message's plain text: text nodes concatenated, a hard break is one newline, and every paragraph or heading is
+  followed by one newline (trailing newlines at the very end are dropped). This does not depend on the editor or on how
+  the message is displayed.
 - `title` — optional branch title.
 - `status` — Open or Closed.
 - `createdAt` — creation timestamp.
@@ -498,6 +508,8 @@ Sent messages are immutable.
 Because sent messages are immutable, the selection range stays valid for the life of the message. The source message ID
 and stored quote text remain the durable reference; the range is used to highlight the passage and may be ignored if it
 no longer matches the quote.
+The quote stored with a branch is always taken from the stored message by the application's main process, never from
+what the window reports.
 
 ### Read state
 
@@ -646,6 +658,13 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 5
+
+- Closed branches take no new messages until reopened (FR-126). This was not specified before; reopening is one click.
+- Side panel grouping rule for a closed parent with open children (FR-127); per-thread drafts (FR-128).
+- The selection range of a branch is defined as offsets in the message's plain text (data model).
+- The quote is taken from the stored message by the main process.
 
 ## Changes in revision 4
 

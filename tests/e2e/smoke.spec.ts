@@ -31,6 +31,7 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
   expect(surface.api.sort()).toEqual(
     [
       'appendMessage',
+      'createBranch',
       'getAppInfo',
       'getDocumentState',
       'getPathForFile',
@@ -42,6 +43,8 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
       'openDocumentDialog',
       'openPath',
       'retrySave',
+      'setBranchStatus',
+      'setBranchTitle',
       'setDisplayName',
       'setDraftState'
     ].sort()

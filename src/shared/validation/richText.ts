@@ -101,16 +101,35 @@ export const richDocSchema: z.ZodType<RichDoc> = z
   .object({ type: z.literal('doc'), content: z.array(richNodeSchema) })
   .strict() as z.ZodType<RichDoc>
 
-/** Plain text of a rich-text document: blocks and list items are separated by newlines. */
-export function richTextToPlain(doc: RichDoc): string {
+export type TextNode = Extract<RichNode, { type: 'text' }>
+
+export interface TextRun {
+  node: TextNode
+  /** Offset of the node's first character in the document's plain text (UTF-16 code units). */
+  start: number
+}
+
+/**
+ * The plain-text view of a message and where every text node sits in it. This is the coordinate system for branch
+ * selections (`selectionStart` / `selectionEnd`): independent of the editor and of how the message is displayed.
+ *
+ * Text nodes contribute their text, a hard break contributes "\n", and every paragraph or heading is followed by "\n".
+ * Trailing newlines are removed from the end of the whole text only, so offsets of earlier text never change.
+ */
+export function linearize(doc: RichDoc): { text: string; runs: TextRun[] } {
   const parts: string[] = []
+  const runs: TextRun[] = []
+  let pos = 0
   const walk = (n: RichNode): void => {
     switch (n.type) {
       case 'text':
+        runs.push({ node: n, start: pos })
         parts.push(n.text)
+        pos += n.text.length
         return
       case 'hardBreak':
         parts.push('\n')
+        pos += 1
         return
       case 'image':
         return
@@ -123,11 +142,17 @@ export function richTextToPlain(doc: RichDoc): string {
       case 'heading':
         ;(n.content ?? []).forEach(walk)
         parts.push('\n')
+        pos += 1
         return
     }
   }
   doc.content.forEach(walk)
-  return parts.join('').replace(/\n+$/, '')
+  return { text: parts.join('').replace(/\n+$/, ''), runs }
+}
+
+/** Plain text of a rich-text document: blocks and list items are separated by newlines. */
+export function richTextToPlain(doc: RichDoc): string {
+  return linearize(doc).text
 }
 
 /** All image asset IDs referenced from a rich-text document, in order, without duplicates. */

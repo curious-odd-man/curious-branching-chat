@@ -24,6 +24,10 @@ const api: BranchChatApi = {
   retrySave: () => invoke(IPC.documentRetrySave),
   setDraftState: (hasDraft) => invoke(IPC.draftSet, { hasDraft }),
   openLink: (url) => invoke(IPC.linkOpen, { url }),
+  createBranch: (sourceMessageId, selectionStart, selectionEnd) =>
+    invoke(IPC.branchCreate, { sourceMessageId, selectionStart, selectionEnd }),
+  setBranchStatus: (threadId, status) => invoke(IPC.branchSetStatus, { threadId, status }),
+  setBranchTitle: (threadId, title) => invoke(IPC.branchSetTitle, { threadId, title }),
   onDocumentChanged: (callback) => subscribe<DocumentView | null>(IPC.documentChanged, callback),
   onMenuCommand: (callback) => subscribe<MenuCommand>(IPC.menuCommand, callback),
   getPathForFile: (file) => webUtils.getPathForFile(file as File)

@@ -10,3 +10,14 @@ export const appendMessageSchema = z
 export const draftSchema = z.object({ hasDraft: z.boolean() }).strict()
 export const noPayloadSchema = z.undefined()
 export const openLinkSchema = z.object({ url: z.string().min(1) }).strict()
+export const createBranchSchema = z
+  .object({
+    sourceMessageId: z.string().min(1),
+    selectionStart: z.number().int().nonnegative(),
+    selectionEnd: z.number().int().nonnegative()
+  })
+  .strict()
+export const setStatusSchema = z
+  .object({ threadId: z.string().min(1), status: z.enum(['open', 'closed']) })
+  .strict()
+export const setTitleSchema = z.object({ threadId: z.string().min(1), title: z.string() }).strict()

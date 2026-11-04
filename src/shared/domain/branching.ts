@@ -161,3 +161,65 @@ export function groupBranchesByStatus(d: DiscussionData): { active: Thread[]; cl
     closed: branches.filter((t) => t.status === 'closed')
   }
 }
+
+/** The branches that start from each message, in creation order (FR-035). */
+export function branchesBySourceMessage(d: DiscussionData): Map<string, Thread[]> {
+  const map = new Map<string, Thread[]>()
+  for (const t of d.threads) {
+    if (t.sourceMessageId === undefined) continue
+    const list = map.get(t.sourceMessageId)
+    if (list) list.push(t)
+    else map.set(t.sourceMessageId, [t])
+  }
+  return map
+}
+
+const LABEL_QUOTE_LENGTH = 40
+
+/** Name of a branch in lists: its title, or an excerpt of the quoted passage. */
+export function branchLabel(thread: Thread): string {
+  if (thread.title && thread.title.trim()) return thread.title.trim()
+  const quote = (thread.quoteText ?? '').replace(/\s+/g, ' ').trim()
+  if (quote.length === 0) return '…'
+  return quote.length > LABEL_QUOTE_LENGTH
+    ? `${quote.slice(0, LABEL_QUOTE_LENGTH).trimEnd()}…`
+    : quote
+}
+
+/**
+ * Branches of one status as a forest for the side panel (FR-031, FR-033).
+ * A branch hangs under its nearest ancestor that has the same status, or at the top level if there is none, so
+ * closing a parent never hides its still-open children (FR-064). `hiddenParent` is set when the real parent is not
+ * the one the branch is shown under, so the panel can say where it belongs.
+ */
+export interface GroupedBranchNode {
+  thread: Thread
+  children: GroupedBranchNode[]
+  /** The real parent branch when it is not displayed in this group (null when the parent is the main thread). */
+  hiddenParent: Thread | null
+}
+
+export function groupedForest(d: DiscussionData, status: ThreadStatus): GroupedBranchNode[] {
+  const byId = new Map(d.threads.map((t) => [t.threadId, t]))
+  const nodes = new Map<string, GroupedBranchNode>()
+  for (const t of d.threads) {
+    if (t.parentThreadId !== undefined && t.status === status)
+      nodes.set(t.threadId, { thread: t, children: [], hiddenParent: null })
+  }
+  const roots: GroupedBranchNode[] = []
+  for (const t of d.threads) {
+    const node = nodes.get(t.threadId)
+    if (!node) continue
+    let ancestor = t.parentThreadId === undefined ? undefined : byId.get(t.parentThreadId)
+    while (ancestor && !nodes.has(ancestor.threadId)) {
+      ancestor =
+        ancestor.parentThreadId === undefined ? undefined : byId.get(ancestor.parentThreadId)
+    }
+    const directParent = t.parentThreadId === undefined ? undefined : byId.get(t.parentThreadId)
+    if (directParent && directParent.parentThreadId !== undefined && directParent !== ancestor)
+      node.hiddenParent = directParent
+    if (ancestor) nodes.get(ancestor.threadId)?.children.push(node)
+    else roots.push(node)
+  }
+  return roots
+}

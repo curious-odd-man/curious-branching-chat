@@ -6,6 +6,7 @@ export type DomainErrorCode =
   | 'UNKNOWN_ASSET'
   | 'MAIN_THREAD_NOT_CLOSABLE'
   | 'INVALID_SELECTION'
+  | 'THREAD_CLOSED'
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode

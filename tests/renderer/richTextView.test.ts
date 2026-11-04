@@ -4,10 +4,16 @@ import { describe, expect, it } from 'vitest'
 import type { RichDoc } from '@shared/types'
 import { RichTextView } from '../../src/renderer/components/rich/RichTextView'
 
-const render = (doc: unknown): string =>
+const renderRaw = (doc: unknown, highlight?: { start: number; end: number }): string =>
   renderToStaticMarkup(
-    createElement(RichTextView, { doc: doc as RichDoc, onOpenLink: () => undefined })
+    createElement(RichTextView, {
+      doc: doc as RichDoc,
+      onOpenLink: () => undefined,
+      highlight: highlight ?? null
+    })
   )
+/** The markup without the offset bookkeeping attributes (tested separately below). */
+const render = (doc: unknown): string => renderRaw(doc).replace(/ data-o="\d+"/g, '')
 const p = (...content: unknown[]) => ({ type: 'paragraph', content })
 const t = (text: string, marks?: unknown[]) => ({ type: 'text', text, ...(marks ? { marks } : {}) })
 const doc = (...content: unknown[]) => ({ type: 'doc', content })
@@ -44,9 +50,9 @@ describe('RichTextView renders every supported feature', () => {
     expect(html).toContain('<h1><span>Один</span></h1>')
     expect(html).toContain('<h2>')
     expect(html).toContain('<h3>')
-    expect(html).toContain('<strong>жирный</strong>')
-    expect(html).toContain('<em>курсив</em>')
-    expect(html).toContain('<u>подчёркнутый</u>')
+    expect(html).toContain('<strong><span>жирный</span></strong>')
+    expect(html).toContain('<em><span>курсив</span></em>')
+    expect(html).toContain('<u><span>подчёркнутый</span></u>')
     expect(html).toContain('style="color:#d32f2f"')
     expect(html).toContain('style="background-color:#fff59d"')
     expect(html).toContain('<br/>')
@@ -121,6 +127,52 @@ describe('RichTextView is inert (NFR-014)', () => {
     )
     expect(html).not.toContain('alert(1)')
     expect(html).not.toContain('iframe')
-    expect(html).toContain('<strong>ok</strong>')
+    expect(html).toContain('<strong><span>ok</span></strong>')
+  })
+})
+
+describe('RichTextView offsets and the quoted passage (FR-054)', () => {
+  const sample = doc(
+    { type: 'heading', attrs: { level: 2 }, content: [t('Заголовок')] },
+    p(t('жирный', [{ type: 'bold' }]), t(' и '), t('курсив', [{ type: 'italic' }]))
+  ) // plain text: "Заголовок\nжирный и курсив"
+
+  it('every piece of text carries its offset in the plain text', () => {
+    const html = renderRaw(sample)
+    expect(html).toContain('<span data-o="0">Заголовок</span>')
+    expect(html).toContain('<strong><span data-o="10">жирный</span></strong>')
+    expect(html).toContain('<span data-o="16"> и </span>')
+    expect(html).toContain('<em><span data-o="19">курсив</span></em>')
+  })
+
+  it('marks the quoted passage across formatting boundaries, splitting text where needed', () => {
+    // "рный и курс" = offsets 12..23
+    const html = renderRaw(sample, { start: 12, end: 23 })
+    expect(html).toContain('<span data-o="10">жи</span>')
+    expect(html).toContain('<mark class="quote"><span data-o="12">рный</span></mark>')
+    expect(html).toContain('<mark class="quote"><span data-o="16"> и </span></mark>')
+    expect(html).toContain('<mark class="quote"><span data-o="19">курс</span></mark>')
+    expect(html).toContain('<span data-o="23">ив</span>')
+    const marked = [...html.matchAll(/<mark class="quote">.*?<\/mark>/g)].map((m) =>
+      m[0].replace(/<[^>]+>/g, '')
+    )
+    expect(marked.join('')).toBe('рный и курс')
+  })
+
+  it('does not mark anything without a highlight or outside the text', () => {
+    expect(renderRaw(sample)).not.toContain('<mark')
+    expect(renderRaw(sample, { start: 100, end: 120 })).not.toContain('<mark')
+  })
+
+  it('keeps links clickable inside the highlight', () => {
+    const html = renderRaw(
+      doc(p(t('до '), t('сайт', [{ type: 'link', attrs: { href: 'https://example.com' } }]))),
+      {
+        start: 1,
+        end: 5
+      }
+    )
+    expect(html).toContain('<a href="https://example.com"')
+    expect(html).toContain('<mark class="quote"><span data-o="3">са</span></mark>')
   })
 })
