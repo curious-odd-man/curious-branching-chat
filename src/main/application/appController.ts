@@ -197,9 +197,9 @@ export class AppController {
 
   private updateTitle(entry: WindowEntry): void {
     if (entry.win.isDestroyed()) return
-    entry.win.setTitle(
-      entry.session ? ru.discussion.windowTitle(entry.session.fileName) : ru.app.name
-    )
+    if (!entry.session) return entry.win.setTitle(ru.app.name)
+    const unread = entry.session.unreadTotal(this.deps.settings.get().participantId)
+    entry.win.setTitle(ru.discussion.windowTitle(entry.session.fileName, unread))
   }
 
   /** An empty start window is reused; otherwise a new window is created (one window per document). */

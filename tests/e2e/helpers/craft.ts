@@ -22,9 +22,11 @@ export const ul = (...items: Json[]): Json => ({ type: 'bulletList', content: it
 export const doc = (...content: Json[]): Json => ({ type: 'doc', content })
 export const simple = (text: string): Json => doc(p(t(text)))
 
+export type Person = 'anna' | 'boris' | 'clara'
+
 export interface CraftMessage {
   id: string
-  author: 'anna' | 'boris'
+  author: Person
   content: Json
 }
 export interface CraftThread {
@@ -36,17 +38,29 @@ export interface CraftThread {
   end?: number
   title?: string
   status?: 'open' | 'closed'
-  createdBy?: 'anna' | 'boris'
+  createdBy?: Person
   messages: CraftMessage[]
 }
 
 const PEOPLE = {
   anna: { participantId: 'p-anna', displayName: 'Анна' },
-  boris: { participantId: 'p-boris', displayName: 'Борис' }
+  boris: { participantId: 'p-boris', displayName: 'Борис' },
+  clara: { participantId: 'p-clara', displayName: 'Клара' }
+}
+
+export interface CraftOptions {
+  /** Who is listed as a participant (default: Анна and Борис). */
+  people?: Person[]
+  /** participantId -> IDs of messages that participant has read. */
+  readState?: Record<string, string[]>
 }
 
 /** Writes a valid discussion file directly (no application code involved). The first thread is the main thread. */
-export async function writeDiscussionFile(path: string, threads: CraftThread[]): Promise<void> {
+export async function writeDiscussionFile(
+  path: string,
+  threads: CraftThread[],
+  options: CraftOptions = {}
+): Promise<void> {
   const base = Date.UTC(2026, 0, 1, 9, 0, 0)
   let tick = 0
   const iso = (): string => new Date(base + tick++ * 60_000).toISOString()
@@ -55,7 +69,7 @@ export async function writeDiscussionFile(path: string, threads: CraftThread[]):
     title: 'Тестовое обсуждение',
     createdAt: created,
     updatedAt: created,
-    participants: [PEOPLE.anna, PEOPLE.boris],
+    participants: (options.people ?? ['anna', 'boris']).map((person) => PEOPLE[person]),
     assets: [],
     threads: threads.map((th) => ({
       threadId: th.id,
@@ -89,7 +103,7 @@ export async function writeDiscussionFile(path: string, threads: CraftThread[]):
   const zip = new yazl.ZipFile()
   zip.addBuffer(Buffer.from(JSON.stringify(manifest)), 'manifest.json')
   zip.addBuffer(Buffer.from(JSON.stringify(discussion)), 'discussion.json')
-  zip.addBuffer(Buffer.from('{}'), 'readstate.json')
+  zip.addBuffer(Buffer.from(JSON.stringify(options.readState ?? {})), 'readstate.json')
   zip.end()
   const chunks: Buffer[] = []
   for await (const chunk of zip.outputStream) chunks.push(chunk as Buffer)

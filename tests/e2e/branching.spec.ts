@@ -32,13 +32,13 @@ async function workDir(): Promise<string> {
   return d
 }
 
-/** A profile that already has a participant name, so tests do not have to type it. */
+/** A profile that already has a participant name and has seen the read-status notice (FR-125). */
 async function namedProfile(): Promise<string> {
   const dir = await tempDir('bc-profile-')
   dirs.push(dir)
   await fs.writeFile(
     join(dir, 'settings.json'),
-    JSON.stringify({ participantId: 'p-local', displayName: 'Вера' })
+    JSON.stringify({ participantId: 'p-local', displayName: 'Вера', readNoticeAcknowledged: true })
   )
   return dir
 }
@@ -447,6 +447,8 @@ test('the participant name is asked for before the first branch is created (FR-0
   await expect(win.getByTestId('branch-header')).toHaveCount(0) // nothing is created yet
   await win.getByTestId('name-input').fill('Вера')
   await win.getByTestId('name-confirm').click()
+  // replying marks the source message as read, so the one-time read-status notice follows the name (FR-125)
+  await win.getByTestId('read-notice-confirm').click()
   await expect(win.getByTestId('branch-header')).toBeVisible()
   expect(await win.getByTestId('branch-quote').textContent()).toBe('которого') // the selection was kept
 

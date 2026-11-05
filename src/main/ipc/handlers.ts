@@ -7,6 +7,8 @@ import {
   appendMessageSchema,
   createBranchSchema,
   draftSchema,
+  markMessageSchema,
+  markThreadSchema,
   noPayloadSchema,
   openLinkSchema,
   openPathSchema,
@@ -16,6 +18,7 @@ import {
 } from '@shared/validation'
 import type { AppController, WindowEntry } from '../application/appController'
 import { AppError } from '../application/errors'
+import type { ReadAction } from '../application/documentSession'
 import { DocumentError } from '../document'
 import { openExternalLink } from '../windows/security'
 import type { SettingsStore } from '../local-state/settings'
@@ -65,24 +68,50 @@ export function registerIpcHandlers(controller: AppController, settings: Setting
     entry ? controller.viewOf(entry) : null
   )
 
-  handle(IPC.documentAppendMessage, appendMessageSchema, (entry, p) => {
-    const session = requireSession(entry)
-    const me = settings.get()
-    if (!me.displayName) throw new AppError('NAME_REQUIRED', 'Name required')
-    session.appendMessage(
-      { participantId: me.participantId, displayName: me.displayName },
-      p.threadId,
-      p.content
-    )
-  })
   const requireName = (): { participantId: string; displayName: string } => {
     const me = settings.get()
     if (!me.displayName) throw new AppError('NAME_REQUIRED', 'Name required')
     return { participantId: me.participantId, displayName: me.displayName }
   }
-  handle(IPC.branchCreate, createBranchSchema, (entry, p) => ({
-    threadId: requireSession(entry).createBranch(requireName(), p)
-  }))
+  /**
+   * Before the first change to the person's read state on this computer, the window must have shown the notice that
+   * read status is visible to other participants (FR-125). Nothing is changed until it was acknowledged.
+   */
+  const withReadNotice = (entry: WindowEntry | undefined, action: ReadAction) => {
+    const session = requireSession(entry)
+    const me = requireName()
+    if (
+      !settings.get().readNoticeAcknowledged &&
+      session.readStateChangeFor(me.participantId, action)
+    )
+      throw new AppError('READ_NOTICE_REQUIRED', 'Read notice required')
+    return { session, me }
+  }
+
+  handle(IPC.documentAppendMessage, appendMessageSchema, (entry, p) => {
+    const { session, me } = withReadNotice(entry, { type: 'send', threadId: p.threadId })
+    session.appendMessage(me, p.threadId, p.content)
+  })
+  handle(IPC.readMarkMessage, markMessageSchema, (entry, p) => {
+    const { session, me } = withReadNotice(entry, { type: 'message', messageId: p.messageId })
+    session.markMessageRead(me, p.messageId)
+    return null
+  })
+  handle(IPC.readMarkThread, markThreadSchema, (entry, p) => {
+    const { session, me } = withReadNotice(entry, { type: 'thread', threadId: p.threadId })
+    session.markThreadRead(me, p.threadId)
+    return null
+  })
+  handle(IPC.readMarkAll, noPayloadSchema, (entry) => {
+    const { session, me } = withReadNotice(entry, { type: 'all' })
+    session.markAllRead(me)
+    return null
+  })
+  handle(IPC.settingsAckReadNotice, noPayloadSchema, () => settings.acknowledgeReadNotice())
+  handle(IPC.branchCreate, createBranchSchema, (entry, p) => {
+    const { session, me } = withReadNotice(entry, { type: 'branch', messageId: p.sourceMessageId })
+    return { threadId: session.createBranch(me, p) }
+  })
   handle(IPC.branchSetStatus, setStatusSchema, (entry, p) => {
     requireSession(entry).setThreadStatus(p.threadId, p.status)
     return null

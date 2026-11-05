@@ -5,7 +5,12 @@ import type { SettingsView } from '@shared/types/ipc'
 import { writeFileAtomically } from '../document/atomicWrite'
 
 const settingsSchema = z
-  .object({ participantId: z.string().min(1), displayName: z.string().min(1).optional() })
+  .object({
+    participantId: z.string().min(1),
+    displayName: z.string().min(1).optional(),
+    /** The person has seen that read status is stored in the file and visible to others (FR-125). */
+    readNoticeAcknowledged: z.boolean().optional()
+  })
   .passthrough()
 type Settings = z.infer<typeof settingsSchema>
 
@@ -48,7 +53,11 @@ export class SettingsStore {
 
   get(): SettingsView {
     if (!this.data) throw new Error('SettingsStore.load() has not been called')
-    return { participantId: this.data.participantId, displayName: this.data.displayName ?? null }
+    return {
+      participantId: this.data.participantId,
+      displayName: this.data.displayName ?? null,
+      readNoticeAcknowledged: this.data.readNoticeAcknowledged ?? false
+    }
   }
 
   async setDisplayName(name: string): Promise<SettingsView> {
@@ -56,6 +65,13 @@ export class SettingsStore {
     const trimmed = name.trim()
     if (trimmed.length === 0) throw new Error('display name must not be empty')
     this.data = { ...this.data, displayName: trimmed }
+    await this.persist()
+    return this.get()
+  }
+
+  async acknowledgeReadNotice(): Promise<SettingsView> {
+    if (!this.data) throw new Error('SettingsStore.load() has not been called')
+    this.data = { ...this.data, readNoticeAcknowledged: true }
     await this.persist()
     return this.get()
   }

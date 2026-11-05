@@ -87,6 +87,9 @@ test('headings, bold, italic, underline, colors and links survive saving and reo
   await expect(win.getByTestId('link-label')).toHaveValue('сайт')
   await win.getByTestId('link-url').fill('example.com/page')
   await win.getByTestId('link-apply').click()
+  // wait for the dialog to close and the editor to have the focus again before the next key press
+  await expect(win.getByTestId('link-label')).toHaveCount(0)
+  await expect(composer(win)).toBeFocused()
   await win.keyboard.press('ArrowRight')
 
   // a plain address becomes a link when followed by a space (FR-072)

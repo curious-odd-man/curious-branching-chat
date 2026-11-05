@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { plainTextToRichDoc, mainThread } from '@shared/domain'
 import { readDocument, writeDocument } from '../../src/main/document'
 import { DocumentSession, type DocumentWriter } from '../../src/main/application/documentSession'
-import { anna, boris, makeCtx, withTempDir } from '../helpers/fixtures'
+import { anna, boris, clara, makeCtx, withTempDir } from '../helpers/fixtures'
 
 const text = (t: string) => plainTextToRichDoc(t)
 const deferred = () => {
@@ -224,6 +224,84 @@ describe('DocumentSession branches', () => {
       expect(() =>
         s.setThreadStatus(mainThread(s.view(anna.participantId).discussion).threadId, 'closed')
       ).toThrow(/main thread/)
+    })
+  })
+})
+
+describe('DocumentSession read state', () => {
+  async function twoPeople(dir: string) {
+    const file = join(dir, 'a.branchchat')
+    const s = await DocumentSession.create(file, { ctx: makeCtx() }, { author: anna })
+    const threadId = mainThread(s.view(anna.participantId).discussion).threadId
+    s.appendMessage(anna, threadId, text('вопрос 1'))
+    s.appendMessage(anna, threadId, text('вопрос 2'))
+    await s.flush()
+    const ids = mainThread(s.view(anna.participantId).discussion).messages.map((m) => m.messageId)
+    return { file, s, threadId, ids }
+  }
+
+  it('marks a message, a thread and everything as read; saves; adds the participant (FR-111, FR-121, FR-022)', async () => {
+    await withTempDir(async (dir) => {
+      const { file, s, threadId, ids } = await twoPeople(dir)
+      expect(s.unreadTotal(boris.participantId)).toBe(2)
+
+      expect(s.markMessageRead(boris, ids[0]!)).toBe(true)
+      expect(s.unreadTotal(boris.participantId)).toBe(1)
+      await s.flush()
+      const saved = (await readDocument(file)).contents
+      expect(saved.readState[boris.participantId]).toEqual([ids[0]])
+      expect(saved.discussion.participants.map((p) => p.participantId)).toContain(
+        boris.participantId
+      )
+
+      expect(s.markThreadRead(boris, threadId)).toBe(true)
+      expect(s.unreadTotal(boris.participantId)).toBe(0)
+      expect(s.markAllRead(boris)).toBe(false) // nothing left to mark
+    })
+  })
+
+  it('does nothing (and saves nothing) when everything is already read, and never changes messages', async () => {
+    await withTempDir(async (dir) => {
+      const { s, ids } = await twoPeople(dir)
+      s.markMessageRead(boris, ids[0]!)
+      await s.flush()
+      expect(s.markMessageRead(boris, ids[0]!)).toBe(false)
+      expect(s.saving).toBe(false)
+      expect(s.markMessageRead(anna, ids[0]!)).toBe(false) // own messages are always read
+    })
+  })
+
+  it("only the local participant's entry changes; other entries are preserved on disk (FR-120)", async () => {
+    await withTempDir(async (dir) => {
+      const { file, s, ids } = await twoPeople(dir)
+      s.markMessageRead(boris, ids[0]!)
+      await s.flush()
+      s.markAllRead(clara)
+      await s.flush()
+      const saved = (await readDocument(file)).contents.readState
+      expect(saved[boris.participantId]).toEqual([ids[0]])
+      expect(saved[clara.participantId]).toEqual(ids)
+    })
+  })
+
+  it('tells beforehand whether an action would change the read state (for the privacy notice, FR-125)', async () => {
+    await withTempDir(async (dir) => {
+      const { s, threadId, ids } = await twoPeople(dir)
+      const change = (a: Parameters<typeof s.readStateChangeFor>[1]) =>
+        s.readStateChangeFor(boris.participantId, a)
+      expect(change({ type: 'message', messageId: ids[0]! })).toBe(true)
+      expect(change({ type: 'thread', threadId })).toBe(true)
+      expect(change({ type: 'all' })).toBe(true)
+      expect(change({ type: 'send', threadId })).toBe(true) // replying reads what came before
+      expect(change({ type: 'branch', messageId: ids[1]! })).toBe(true)
+      // Anna wrote everything herself, so for her nothing would change
+      for (const a of [
+        { type: 'all' },
+        { type: 'send', threadId },
+        { type: 'message', messageId: ids[0]! }
+      ] as const)
+        expect(s.readStateChangeFor(anna.participantId, a)).toBe(false)
+      expect(s.saving).toBe(false) // asking changes nothing
     })
   })
 })

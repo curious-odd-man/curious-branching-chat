@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { mainThread } from '@shared/domain'
 import type { RichDoc } from '@shared/validation'
 import { DISCUSSION_EXTENSION } from '@shared/types/constants'
+import type { IpcResult } from '@shared/types/ipc'
 import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
+import { ReadNotice } from './components/ReadNotice'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
 import { useDocumentView, useSettings } from './hooks'
 
@@ -18,6 +20,7 @@ export function App(): React.JSX.Element {
   const [nav, setNav] = useState<{ documentId: string; threadId: string; focus?: string } | null>(
     null
   )
+  const [readNotice, setReadNotice] = useState<{ retry: () => void } | null>(null)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
@@ -69,23 +72,55 @@ export function App(): React.JSX.Element {
     [view]
   )
 
+  /**
+   * Runs an action that may change the person's read state. If the one-time notice has not been shown yet, the main
+   * process refuses with READ_NOTICE_REQUIRED; the notice is shown and the action is repeated once it is confirmed
+   * (FR-125).
+   */
+  const perform = useCallback(
+    async <T,>(action: () => Promise<IpcResult<T>>, onDone?: (data: T) => void): Promise<void> => {
+      const r = await action()
+      if (!r.ok && r.error.code === 'READ_NOTICE_REQUIRED') {
+        setReadNotice({ retry: () => void perform(action, onDone) })
+        return
+      }
+      report(r)
+      if (r.ok) onDone?.(r.data)
+    },
+    [report]
+  )
+
   const send = (content: RichDoc, clear: () => void): void =>
     withName(() => {
       if (!activeThreadId) return
-      void api.appendMessage(activeThreadId, content).then((r) => {
-        report(r)
-        if (r.ok) clear()
-      })
+      void perform(() => api.appendMessage(activeThreadId, content), clear)
     })
 
   /** "Reply to this": creates the branch (asks for the name first if needed) and opens it. */
   const reply = (selection: { messageId: string; start: number; end: number }): void =>
     withName(() => {
-      void api.createBranch(selection.messageId, selection.start, selection.end).then((r) => {
-        report(r)
-        if (r.ok) selectThread(r.data.threadId)
-      })
+      void perform(
+        () => api.createBranch(selection.messageId, selection.start, selection.end),
+        (data) => selectThread(data.threadId)
+      )
     })
+
+  const markMessageRead = (messageId: string): void =>
+    withName(() => void perform(() => api.markMessageRead(messageId)))
+  const markThreadRead = (threadId: string): void =>
+    withName(() => void perform(() => api.markThreadRead(threadId)))
+  const markAllRead = (): void => withName(() => void perform(() => api.markAllRead()))
+
+  const confirmReadNotice = (): void => {
+    void api.acknowledgeReadNotice().then((r) => {
+      if (!r.ok) return report(r)
+      setSettings(r.data)
+      settingsRef.current = r.data
+      const next = readNotice
+      setReadNotice(null)
+      next?.retry()
+    })
+  }
 
   const submitName = (name: string): void => {
     void api.setDisplayName(name).then((r) => {
@@ -125,6 +160,9 @@ export function App(): React.JSX.Element {
           {...(nav?.focus && nav.threadId === activeThreadId ? { focusMessageId: nav.focus } : {})}
           onSelectThread={selectThread}
           onSend={send}
+          onMarkMessageRead={markMessageRead}
+          onMarkThreadRead={markThreadRead}
+          onMarkAllRead={markAllRead}
           onReply={reply}
           onSetStatus={(threadId, status) =>
             void api.setBranchStatus(threadId, status).then(report)
@@ -134,6 +172,9 @@ export function App(): React.JSX.Element {
         />
       )}
       {pending && <NamePrompt onSubmit={submitName} onCancel={() => setPending(null)} />}
+      {readNotice && (
+        <ReadNotice onConfirm={confirmReadNotice} onCancel={() => setReadNotice(null)} />
+      )}
     </div>
   )
 }

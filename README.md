@@ -72,4 +72,6 @@ See `docs/implementation_plan.md`.
 - Phase 4 (branching): done. "Reply to this" from any selection, inherited context with the quoted passage highlighted,
   nested branches, side panel (active/closed), titles, close/reopen, badges, go to source. 150 unit tests and 33
   Electron end-to-end tests.
-- Next: phase 5 (unread messages).
+- Phase 5 (unread messages): done. Unread highlighting, mark as read (message, thread, all), read-on-reply, panel counts,
+  window title count, read indicators, one-time notice. 157 unit tests and 40 Electron end-to-end tests.
+- Next: phase 6 (images).

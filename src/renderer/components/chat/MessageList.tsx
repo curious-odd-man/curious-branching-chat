@@ -1,10 +1,12 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { Message, Thread } from '@shared/types'
+import { isUnreadIn, readStatusOf } from '@shared/domain'
+import type { Message, Participant, Thread } from '@shared/types'
 import { ru } from '@shared/i18n/ru'
 import { formatTimestamp } from '../../i18n/format'
 import { BranchBadge } from '../branches/BranchBadge'
 import { RichTextView, type Highlight } from '../rich/RichTextView'
+import { ReadIndicator } from './ReadIndicator'
 import { readMessageSelection, type MessageSelection } from './selection'
 
 export type ListRow =
@@ -21,6 +23,10 @@ export type ListRow =
 interface Props {
   rows: ListRow[]
   localParticipantId: string
+  /** Known participants and what each has read (as sets), for unread marks and the read indicator. */
+  participants: readonly Participant[]
+  readSets: Map<string, Set<string>>
+  onMarkRead(messageId: string): void
   branchesByMessage: Map<string, Thread[]>
   onOpenLink(href: string): void
   /** "Reply to this" was chosen for a passage of a message. */
@@ -48,6 +54,9 @@ const rowKey = (row: ListRow): string => (row.kind === 'message' ? row.message.m
 export function MessageList({
   rows,
   localParticipantId,
+  participants,
+  readSets,
+  onMarkRead,
   branchesByMessage,
   onOpenLink,
   onReply,
@@ -167,6 +176,7 @@ export function MessageList({
             )
           const m = row.message
           const own = m.authorId === localParticipantId
+          const unread = isUnreadIn(readSets, localParticipantId, m)
           const classes = [
             'row',
             own ? 'own' : '',
@@ -179,14 +189,33 @@ export function MessageList({
                 className="message"
                 data-testid={row.inherited ? 'inherited-message' : 'message'}
                 data-message-id={m.messageId}
+                data-unread={unread ? 'true' : 'false'}
               >
                 <header>
                   <strong>{m.authorDisplayName}</strong>
                   <time dateTime={m.createdAt}>{formatTimestamp(m.createdAt)}</time>
-                  <BranchBadge
-                    branches={branchesByMessage.get(m.messageId) ?? []}
-                    onOpen={onOpenBranch}
-                  />
+                  {unread && (
+                    <span className="unread-label" data-testid="unread-label">
+                      {ru.unread.label}
+                    </span>
+                  )}
+                  <span className="header-tools">
+                    {unread && (
+                      <button
+                        type="button"
+                        className="mark-read"
+                        data-testid="mark-read"
+                        onClick={() => onMarkRead(m.messageId)}
+                      >
+                        {ru.unread.markRead}
+                      </button>
+                    )}
+                    <ReadIndicator status={readStatusOf(participants, readSets, m)} />
+                    <BranchBadge
+                      branches={branchesByMessage.get(m.messageId) ?? []}
+                      onOpen={onOpenBranch}
+                    />
+                  </span>
                 </header>
                 <RichTextView doc={m.content} onOpenLink={onOpenLink} highlight={row.highlight} />
               </article>

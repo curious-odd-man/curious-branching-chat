@@ -20,6 +20,11 @@ export interface BranchChatApi {
   appendMessage(threadId: string, content: RichDoc): Promise<IpcResult<null>>
   retrySave(): Promise<IpcResult<null>>
   setDraftState(hasDraft: boolean): Promise<IpcResult<null>>
+  markMessageRead(messageId: string): Promise<IpcResult<null>>
+  markThreadRead(threadId: string): Promise<IpcResult<null>>
+  markAllRead(): Promise<IpcResult<null>>
+  /** The person has seen the notice that read status is visible to other participants (FR-125). */
+  acknowledgeReadNotice(): Promise<IpcResult<SettingsView>>
   /** "Reply to this": creates a branch from a selected passage; resolves with the new branch's ID. */
   createBranch(
     sourceMessageId: string,

@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import {
   branchesBySourceMessage,
+  buildReadSets,
   findMessage,
   mainThread,
   resolveContext,
-  resolveQuoteRange
+  resolveQuoteRange,
+  unreadSummary
 } from '@shared/domain'
 import { ru } from '@shared/i18n/ru'
 import type { DocumentView } from '@shared/types/ipc'
@@ -22,6 +24,9 @@ interface Props {
   focusMessageId?: string
   onSelectThread(threadId: string, focusMessageId?: string): void
   onSend(content: RichDoc, clear: () => void): void
+  onMarkMessageRead(messageId: string): void
+  onMarkThreadRead(threadId: string): void
+  onMarkAllRead(): void
   onReply(selection: { messageId: string; start: number; end: number }): void
   onSetStatus(threadId: string, status: 'open' | 'closed'): void
   onSetTitle(threadId: string, title: string): void
@@ -34,6 +39,9 @@ export function DiscussionScreen({
   focusMessageId,
   onSelectThread,
   onSend,
+  onMarkMessageRead,
+  onMarkThreadRead,
+  onMarkAllRead,
   onReply,
   onSetStatus,
   onSetTitle,
@@ -46,6 +54,14 @@ export function DiscussionScreen({
 
   const context = useMemo(() => resolveContext(discussion, threadId), [discussion, threadId])
   const branchesByMessage = useMemo(() => branchesBySourceMessage(discussion), [discussion])
+
+  // Unread marks (FR-110, FR-113) and who has read what (FR-122); both come from the read state in the file.
+  const readSets = useMemo(() => buildReadSets(view.readState), [view.readState])
+  const unread = useMemo(
+    () => unreadSummary(discussion, view.readState, view.localParticipantId),
+    [discussion, view.readState, view.localParticipantId]
+  )
+  const threadUnread = unread.byThread.get(threadId)?.own ?? 0
   const thread = context.thread
   const isBranch = thread.parentThreadId !== undefined
 
@@ -90,6 +106,14 @@ export function DiscussionScreen({
             {status}
           </span>
         )}
+        {unread.total > 0 && (
+          <span className="unread-total">
+            <span data-testid="unread-total">{ru.unread.total(unread.total)}</span>
+            <button type="button" data-testid="mark-all-read" onClick={onMarkAllRead}>
+              {ru.unread.markAll}
+            </button>
+          </span>
+        )}
       </header>
 
       {view.saveError && (
@@ -116,6 +140,7 @@ export function DiscussionScreen({
           discussion={discussion}
           currentThreadId={threadId}
           mainThreadId={mainId}
+          unread={unread}
           onSelect={(id) => onSelectThread(id)}
         />
         <div className="thread" data-testid="thread" data-thread-id={threadId}>
@@ -129,11 +154,27 @@ export function DiscussionScreen({
               onSetStatus={(next) => onSetStatus(threadId, next)}
             />
           )}
+          {threadUnread > 0 && (
+            <div className="thread-toolbar" data-testid="thread-toolbar">
+              <span data-testid="thread-unread">{ru.unread.inThread(threadUnread)}</span>
+              <button
+                type="button"
+                data-testid="mark-thread-read"
+                title={ru.unread.markThread}
+                onClick={() => onMarkThreadRead(threadId)}
+              >
+                {ru.unread.markThread}
+              </button>
+            </div>
+          )}
           <MessageList
             // a new list per thread: it opens at the newest message, or at the focused one
             key={threadId}
             rows={rows}
             localParticipantId={view.localParticipantId}
+            participants={discussion.participants}
+            readSets={readSets}
+            onMarkRead={onMarkMessageRead}
             branchesByMessage={branchesByMessage}
             onOpenLink={(href) => void window.branchchat.openLink(href)}
             onReply={onReply}

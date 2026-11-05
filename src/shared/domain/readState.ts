@@ -118,11 +118,31 @@ export interface WhoHasRead {
   others: Participant[]
 }
 
-/** FR-122 to FR-124: read status of a message among the known participants, excluding its author. */
-export function whoHasRead(d: DiscussionData, rs: ReadState, messageId: string): WhoHasRead {
-  const { message } = findMessage(d, messageId)
-  const others = d.participants.filter((p) => p.participantId !== message.authorId)
-  const readers = others.filter((p) => (rs[p.participantId] ?? []).includes(messageId))
+/** Read state as sets, for fast lookups when many messages are shown (build once per render). */
+export function buildReadSets(rs: ReadState): Map<string, Set<string>> {
+  return new Map(Object.entries(rs).map(([participantId, ids]) => [participantId, new Set(ids)]))
+}
+
+/** True if `message` is unread for `localId`, using prebuilt sets. */
+export function isUnreadIn(
+  readSets: Map<string, Set<string>>,
+  localId: string,
+  message: Message
+): boolean {
+  return message.authorId !== localId && !readSets.get(localId)?.has(message.messageId)
+}
+
+/**
+ * FR-122 to FR-124: read status of a message among the known participants, excluding its author.
+ * A person who never wrote to the file is not a known participant and does not count either way.
+ */
+export function readStatusOf(
+  participants: readonly Participant[],
+  readSets: Map<string, Set<string>>,
+  message: Message
+): WhoHasRead {
+  const others = participants.filter((p) => p.participantId !== message.authorId)
+  const readers = others.filter((p) => readSets.get(p.participantId)?.has(message.messageId))
   const state: ReadStatus =
     others.length === 0
       ? 'no-others'
@@ -132,4 +152,9 @@ export function whoHasRead(d: DiscussionData, rs: ReadState, messageId: string):
           ? 'all'
           : 'some'
   return { state, readers, others }
+}
+
+export function whoHasRead(d: DiscussionData, rs: ReadState, messageId: string): WhoHasRead {
+  const { message } = findMessage(d, messageId)
+  return readStatusOf(d.participants, buildReadSets(rs), message)
 }

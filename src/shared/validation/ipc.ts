@@ -21,3 +21,5 @@ export const setStatusSchema = z
   .object({ threadId: z.string().min(1), status: z.enum(['open', 'closed']) })
   .strict()
 export const setTitleSchema = z.object({ threadId: z.string().min(1), title: z.string() }).strict()
+export const markMessageSchema = z.object({ messageId: z.string().min(1) }).strict()
+export const markThreadSchema = z.object({ threadId: z.string().min(1) }).strict()

@@ -18,7 +18,8 @@ export const ru = {
     cancel: 'Отмена'
   },
   discussion: {
-    windowTitle: (fileName: string): string => `${fileName} — BranchChat`,
+    windowTitle: (fileName: string, unread = 0): string =>
+      unread > 0 ? `(${unread}) ${fileName} — BranchChat` : `${fileName} — BranchChat`,
     empty: 'Пока нет сообщений. Напишите первое.',
     saved: 'Сохранено',
     saving: 'Сохранение…',
@@ -72,6 +73,32 @@ export const ru = {
     remove: 'Убрать ссылку',
     cancel: 'Отмена',
     invalidUrl: 'Допустимы только адреса http, https и электронная почта (mailto).'
+  },
+  unread: {
+    label: 'Новое',
+    markRead: 'Отметить прочитанным',
+    markThread: 'Отметить сообщения этой ветки прочитанными',
+    markAll: 'Отметить всё прочитанным',
+    total: (n: number): string => `Непрочитано: ${n}`,
+    inThread: (n: number): string => `Непрочитано здесь: ${n}`,
+    descendantsHint: 'Есть непрочитанные сообщения в дочерних ветках',
+    panelCount: (n: number): string => `Непрочитанных: ${n}`
+  },
+  readStatus: {
+    none: 'Пока никто не прочитал',
+    some: 'Прочитали не все',
+    all: 'Прочитали все',
+    readBy: 'Прочитали',
+    notReadBy: 'Не прочитали',
+    nobody: 'никто',
+    close: 'Закрыть',
+    ariaLabel: 'Кто прочитал это сообщение'
+  },
+  readNotice: {
+    title: 'Отметки о прочтении видны другим',
+    text: 'Какие сообщения вы прочитали, сохраняется в файле обсуждения. Все, у кого есть этот файл, увидят ваши отметки о прочтении. Это показывается один раз.',
+    confirm: 'Понятно',
+    cancel: 'Отмена'
   },
   branches: {
     panelTitle: 'Ветки',
@@ -154,6 +181,7 @@ export const ru = {
     ASSET_MISMATCH: 'Изображение в файле повреждено.',
     WRITE_FAILED: 'Не удалось записать файл.',
     NAME_REQUIRED: 'Сначала укажите своё имя.',
+    READ_NOTICE_REQUIRED: 'Сначала подтвердите уведомление об отметках о прочтении.',
     THREAD_CLOSED: 'Ветка закрыта. Откройте её, чтобы написать в ней.',
     INVALID_SELECTION: 'Не удалось определить выделенный фрагмент. Выделите текст ещё раз.',
     EMPTY_QUOTE: 'Выделите текст, от которого нужно создать ветку.',

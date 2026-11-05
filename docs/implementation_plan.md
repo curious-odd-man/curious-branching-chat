@@ -15,7 +15,8 @@
 | 2 — Application shell and document lifecycle | Done in code | 90 unit tests and 15 Electron end-to-end tests (run on Linux under a virtual display). **Still to do on Windows:** try the flows with real Windows dialogs, paths, and the installed app.                                                                                                                                                 |
 | 3 — Chat UI and rich-text editor             | Done in code | 123 unit tests and 23 Electron end-to-end tests. 5,000-message discussion: opens in about 1 s, 17 rows in the page, a sent message is visible in about 30 ms (measured on Linux under a virtual display). **Still to do on Windows:** try real keyboard layouts, clipboard pastes from Word and browsers, and Russian spell checking.     |
 | 4 — Branching                                | Done in code | 150 unit tests and 33 Electron end-to-end tests. Selections across bold/italic/link, list items, heading+paragraph and paragraphs; three-level nesting; reopening the file restores structure, context and highlights. **Still to do on Windows:** real mouse selection feel and the "Reply to this" button position on high-DPI screens. |
-| 5–9                                          | Not started  |                                                                                                                                                                                                                                                                                                                                           |
+| 5 — Unread messages                          | Done in code | 157 unit tests and 40 Electron end-to-end tests (three consecutive full runs passed). Includes the two-person exchange: A writes, B reads and replies, A opens the returned file. **Still to do on Windows:** check the look of unread highlighting and the read marks in both light and dark system themes.                              |
+| 6–9                                          | Not started  |                                                                                                                                                                                                                                                                                                                                           |
 
 Implementation decisions made in phase 1:
 
@@ -81,6 +82,26 @@ Implementation decisions made in phase 4:
 - Branch badges show how many branches start from a message (a short list when there are several); "go to source" opens
   the parent thread scrolled to the message and flashes it. Quoted passages are not marked in the parent thread (only in
   the branch's inherited context); this could be added later.
+
+Implementation decisions made in phase 5:
+
+- Read state lives in the file (`readstate.json`) and is changed only through the main process: explicit "Mark as
+  read" (message, thread, everything), sending a message in a thread (reads that thread's earlier messages), and "Reply
+  to this" (reads the source message). Opening or scrolling a thread never changes it.
+- The one-time notice (FR-125) is enforced by the main process: any action that would change the person's read state is
+  refused with a "notice required" answer until the notice was confirmed; the window then shows it and repeats the
+  action. Declining changes nothing. The "would it change anything?" check means a first message in an empty discussion
+  does not show the notice.
+- Marking something read needs a participant name (the person is added to the file's participants on that first write),
+  so the name prompt comes before the notice.
+- "Mark thread as read" marks the thread's own messages. Unread messages in inherited context belong to their own
+  threads and can be marked on the message itself.
+- The read indicator is one grey check (nobody else has read it), two grey checks (some), two accent-colored checks (
+  all); names in the tooltip and in a list that opens on click. Because the local person only becomes a "known
+  participant" after their first read-state change, marking one message read can turn other messages from "read by all"
+  to "read by some" (they have not read those). This follows FR-124.
+- Three test flakes were fixed in the tests, not the application: the editor test pressed a key before focus returned
+  from the link dialog, and two close-the-last-window steps raced with the app quitting.
 
 ---
 
@@ -160,23 +181,23 @@ Tasks
 - **Context resolution:** for a branch, return parent-thread messages up to and including the source message,
   recursively up to the main thread (requirements 4.5); exclude later parent messages and sibling branches.
 - **Read-state rules** (FR-108 to FR-112, FR-120):
-  - unread = authored by another participant and not in the local participant's read set;
-  - mark one, mark thread, mark all;
-  - sending a message in a thread reads all earlier messages in that thread;
-  - creating a branch reads the source message;
-  - only the local participant's entry is changed; other entries are preserved;
-  - query "who has read message M": known participants except the author whose entry contains M, with the states
-    read by all / some / none (FR-122 to FR-124).
+    - unread = authored by another participant and not in the local participant's read set;
+    - mark one, mark thread, mark all;
+    - sending a message in a thread reads all earlier messages in that thread;
+    - creating a branch reads the source message;
+    - only the local participant's entry is changed; other entries are preserved;
+    - query "who has read message M": known participants except the author whose entry contains M, with the states
+      read by all / some / none (FR-122 to FR-124).
 - **Schemas** in `shared/validation`: manifest, discussion, read state, rich-text content subset (ADR section 5.4),
   with `schemaVersion` and a migration framework (initially version 1 only, but the mechanism exists).
 - **Document module** in `main/document`:
-  - read a ZIP as streams; validate entries and schemas;
-  - write with a temporary file in the same folder and atomic replace, with retry and backoff on `EPERM`/`EBUSY`;
-  - copy unchanged entries through without recompression;
-  - do not keep the file handle open between operations;
-  - preserve unknown optional fields (FR-015);
-  - refuse to rewrite a file whose `schemaVersion` is newer than supported (FR-012) and report it clearly;
-  - image assets stored by content hash (deduplication), only PNG/JPEG/GIF/WebP (FR-116).
+    - read a ZIP as streams; validate entries and schemas;
+    - write with a temporary file in the same folder and atomic replace, with retry and backoff on `EPERM`/`EBUSY`;
+    - copy unchanged entries through without recompression;
+    - do not keep the file handle open between operations;
+    - preserve unknown optional fields (FR-015);
+    - refuse to rewrite a file whose `schemaVersion` is newer than supported (FR-012) and report it clearly;
+    - image assets stored by content hash (deduplication), only PNG/JPEG/GIF/WebP (FR-116).
 - **Fixtures:** a set of sample `.branchchat` files: minimal, with nested branches, with images, unknown fields, newer
   schema, truncated ZIP, wrong sizes, path traversal entry, malformed JSON, unknown rich-text nodes, missing asset.
 

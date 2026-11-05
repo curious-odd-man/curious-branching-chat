@@ -13,6 +13,10 @@ export const IPC = {
   documentRetrySave: 'document:retry-save',
   draftSet: 'draft:set',
   linkOpen: 'link:open',
+  readMarkMessage: 'read:mark-message',
+  readMarkThread: 'read:mark-thread',
+  readMarkAll: 'read:mark-all',
+  settingsAckReadNotice: 'settings:ack-read-notice',
   branchCreate: 'branch:create',
   branchSetStatus: 'branch:set-status',
   branchSetTitle: 'branch:set-title',
@@ -29,6 +33,8 @@ export interface AppInfo {
 export interface SettingsView {
   participantId: string
   displayName: string | null
+  /** The one-time notice about visible read status has been shown (FR-125). */
+  readNoticeAcknowledged: boolean
 }
 
 /** Everything a window needs to show its discussion. */

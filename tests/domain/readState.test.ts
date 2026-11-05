@@ -3,7 +3,10 @@ import {
   appendMessage,
   createBranch,
   createDiscussion,
+  buildReadSets,
   isUnread,
+  isUnreadIn,
+  readStatusOf,
   markAllRead,
   markMessageRead,
   markThreadRead,
@@ -166,5 +169,34 @@ describe('who has read a message (FR-122 to FR-124)', () => {
       readers: [],
       others: []
     })
+  })
+})
+
+describe('fast read status for many messages', () => {
+  it('buildReadSets, isUnreadIn and readStatusOf agree with the array-based functions', () => {
+    const { contents, ids } = buildSample()
+    const d = contents.discussion
+    const rs: ReadState = {
+      [boris.participantId]: [ids.mainMessages[0]!, ids.branch1Messages[0]!],
+      [clara.participantId]: [ids.mainMessages[0]!]
+    }
+    const sets = buildReadSets(rs)
+    for (const t of d.threads) {
+      for (const m of t.messages) {
+        expect(isUnreadIn(sets, boris.participantId, m)).toBe(isUnread(rs, boris.participantId, m))
+        expect(isUnreadIn(sets, anna.participantId, m)).toBe(isUnread(rs, anna.participantId, m))
+        expect(readStatusOf(d.participants, sets, m)).toEqual(whoHasRead(d, rs, m.messageId))
+      }
+    }
+  })
+
+  it('a participant who is only in the read state (never wrote) is not counted', () => {
+    const { contents, ids } = buildSample()
+    const d = contents.discussion // participants: Анна, Борис
+    const m = findMessage(d, ids.mainMessages[0]!).message // by Анна
+    const sets = buildReadSets({ [clara.participantId]: [ids.mainMessages[0]!] })
+    const status = readStatusOf(d.participants, sets, m)
+    expect(status.others.map((p) => p.participantId)).toEqual([boris.participantId])
+    expect(status.state).toBe('none') // Клара's entry does not make it "some"
   })
 })

@@ -30,12 +30,16 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
   // exactly the functions of BranchChatApi — nothing else is reachable from the page
   expect(surface.api.sort()).toEqual(
     [
+      'acknowledgeReadNotice',
       'appendMessage',
       'createBranch',
       'getAppInfo',
       'getDocumentState',
       'getPathForFile',
       'getSettings',
+      'markAllRead',
+      'markMessageRead',
+      'markThreadRead',
       'newDocument',
       'onDocumentChanged',
       'onMenuCommand',

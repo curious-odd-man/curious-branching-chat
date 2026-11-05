@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 5)  
+**Status:** MVP requirements (revision 6)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -393,15 +393,17 @@ file when it is exchanged.
 - **FR-110.** Unread messages must be clearly and persistently highlighted in the chat view (for example with an
   accent bar and background), including in inherited context shown inside a branch.
 - **FR-111.** The user must be able to mark a message as read with an explicit control on the message. The user must
-  also be able to mark all messages of the current thread, or the whole discussion, as read.
+  also be able to mark all messages of the current thread, or the whole discussion, as read. "Mark thread as read" marks
+  the messages of that thread itself, not the inherited context shown in a branch (those belong to their own threads).
 - **FR-112.** A message also becomes read for the local participant in exactly these two cases, in addition to FR-111:
-  1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
-  2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
+    1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
+    2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
 
   Scrolling, opening a thread, or viewing a message never marks it read.
 - **FR-113.** The side panel must show the number of unread messages for each branch, and must show an indicator on a
   branch whose descendant branches contain unread messages. The window title or discussion header should show the
-  total unread count.
+  total unread count. The window title starts with the total in parentheses, for example
+  "(3) идея.branchchat — BranchChat".
 - **FR-120.** Read state must be stored in the discussion file as a set of message IDs per participant ID. The
   application writes only the local participant's entry; entries of other participants must be preserved unchanged.
 - **FR-121.** Read-state changes are saved immediately like other changes (FR-007) and must not alter any sent
@@ -413,7 +415,8 @@ file when it is exchanged.
   by none. "Known participants" are the participants listed in the document.
 - **FR-124.** A person who has never written to the file is not a known participant and is therefore not shown as
   having read or not read anything. Read information reflects the file as last saved by each participant; it is not
-  live.
+  live. Once a person has changed their read state, they become a known participant (FR-022), so
+  messages they have not read then show as not read by them.
 - **FR-125.** Because read status is visible to the other participants, the application must tell the user this with a
   one-time notice before the first write of a read-state change on that computer (for example when the first message
   is marked as read or sent), and the user guide must explain it.
@@ -658,6 +661,12 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 6
+
+- "Mark thread as read" covers the thread's own messages only (FR-111).
+- The window title shows the unread total (FR-113).
+- Clarified that a person becomes a known participant after their first read-state change (FR-124).
 
 ## Changes in revision 5
 

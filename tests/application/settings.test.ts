@@ -12,15 +12,24 @@ describe('SettingsStore', () => {
       let n = 0
       const a = new SettingsStore(dir, () => `id-${++n}`)
       await a.load()
-      expect(a.get()).toEqual({ participantId: 'id-1', displayName: null })
+      expect(a.get()).toEqual({
+        participantId: 'id-1',
+        displayName: null,
+        readNoticeAcknowledged: false
+      })
       expect(await a.setDisplayName('  Анна  ')).toEqual({
         participantId: 'id-1',
-        displayName: 'Анна'
+        displayName: 'Анна',
+        readNoticeAcknowledged: false
       })
 
       const b = new SettingsStore(dir, () => `id-${++n}`) // e.g. next application start
       await b.load()
-      expect(b.get()).toEqual({ participantId: 'id-1', displayName: 'Анна' })
+      expect(b.get()).toEqual({
+        participantId: 'id-1',
+        displayName: 'Анна',
+        readNoticeAcknowledged: false
+      })
     })
   })
 
@@ -56,6 +65,20 @@ describe('SettingsStore', () => {
         future: 7,
         displayName: 'Борис'
       })
+    })
+  })
+})
+
+describe('SettingsStore read notice (FR-125)', () => {
+  it('is remembered once acknowledged', async () => {
+    await withTempDir(async (dir) => {
+      const a = new SettingsStore(dir, () => 'p')
+      await a.load()
+      expect(a.get().readNoticeAcknowledged).toBe(false)
+      expect((await a.acknowledgeReadNotice()).readNoticeAcknowledged).toBe(true)
+      const b = new SettingsStore(dir, () => 'other')
+      await b.load()
+      expect(b.get().readNoticeAcknowledged).toBe(true)
     })
   })
 })

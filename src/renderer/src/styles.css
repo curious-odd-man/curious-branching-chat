@@ -512,3 +512,110 @@ mark.quote {
 .row:focus-within {
   z-index: 10;
 }
+
+/* ---- unread and read status ---------------------------------------------------------------------------------- */
+.message[data-unread='true'] {
+  border-left: 4px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+.row.inherited .message[data-unread='true'] {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-style: solid;
+  border-color: var(--accent);
+}
+.message header {
+  align-items: center;
+}
+.unread-label {
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.header-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+.header-tools .branch-badge-wrap {
+  margin-left: 0;
+}
+.mark-read {
+  padding: 0 0.45rem;
+  font-size: 0.75rem;
+  border-radius: 999px;
+}
+.read-indicator-wrap {
+  position: relative;
+}
+.read-indicator {
+  padding: 0 0.3rem;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  letter-spacing: -0.12em;
+  opacity: 0.55;
+}
+.read-indicator.some {
+  opacity: 0.85;
+}
+.read-indicator.all {
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 700;
+}
+.read-popover {
+  position: absolute;
+  right: 0;
+  top: 120%;
+  z-index: 6;
+  display: grid;
+  gap: 0.15rem;
+  min-width: 11rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: Canvas;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+  font-weight: 400;
+  white-space: normal;
+}
+.row:has(.read-popover) {
+  z-index: 10;
+}
+.unread-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.thread-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: 0.88rem;
+}
+.panel-unread {
+  min-width: 1.3rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+.panel-dot {
+  color: var(--accent);
+  font-size: 0.7rem;
+}

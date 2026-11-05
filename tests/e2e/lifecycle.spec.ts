@@ -249,7 +249,9 @@ test('closing warns only for an unsent draft or a failed save (FR-008)', async (
   await win.getByTestId('send').click()
   await expect(win.getByTestId('status')).toHaveText('Сохранено')
   const exited = new Promise<void>((resolve) => t.app.process().once('exit', () => resolve()))
-  await t.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
+  await t.app
+    .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
+    .catch(() => undefined) // the app quits while this call is answered
   await exited
   expect((await readDiscussionFile(file)).discussion.threads[0]!.messages).toHaveLength(1)
 })
@@ -261,7 +263,10 @@ test('closing right after sending still saves the message', async () => {
   await createDiscussion(t, win, file)
   await send(win, 'последнее сообщение')
   const exited = new Promise<void>((resolve) => t.app.process().once('exit', () => resolve()))
-  await t.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close()) // no waiting for "Сохранено"
+  // no waiting for "Сохранено": the app quits while this call is answered
+  await t.app
+    .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
+    .catch(() => undefined)
   await exited
   expect((await readDiscussionFile(file)).discussion.threads[0]!.messages).toHaveLength(1)
 })

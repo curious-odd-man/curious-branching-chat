@@ -24,6 +24,10 @@ const api: BranchChatApi = {
   retrySave: () => invoke(IPC.documentRetrySave),
   setDraftState: (hasDraft) => invoke(IPC.draftSet, { hasDraft }),
   openLink: (url) => invoke(IPC.linkOpen, { url }),
+  markMessageRead: (messageId) => invoke(IPC.readMarkMessage, { messageId }),
+  markThreadRead: (threadId) => invoke(IPC.readMarkThread, { threadId }),
+  markAllRead: () => invoke(IPC.readMarkAll),
+  acknowledgeReadNotice: () => invoke(IPC.settingsAckReadNotice),
   createBranch: (sourceMessageId, selectionStart, selectionEnd) =>
     invoke(IPC.branchCreate, { sourceMessageId, selectionStart, selectionEnd }),
   setBranchStatus: (threadId, status) => invoke(IPC.branchSetStatus, { threadId, status }),

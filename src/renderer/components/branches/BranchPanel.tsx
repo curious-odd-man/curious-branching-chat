@@ -1,5 +1,10 @@
 import { useMemo } from 'react'
-import { branchLabel, groupedForest, type GroupedBranchNode } from '@shared/domain'
+import {
+  branchLabel,
+  groupedForest,
+  type GroupedBranchNode,
+  type UnreadSummary
+} from '@shared/domain'
 import { ru } from '@shared/i18n/ru'
 import type { DiscussionData } from '@shared/types'
 
@@ -7,6 +12,8 @@ interface Props {
   discussion: DiscussionData
   currentThreadId: string
   mainThreadId: string
+  /** Unread messages per thread, and in the branches below it (FR-113). */
+  unread: UnreadSummary
   onSelect(threadId: string): void
 }
 
@@ -15,6 +22,7 @@ export function BranchPanel({
   discussion,
   currentThreadId,
   mainThreadId,
+  unread,
   onSelect
 }: Props): React.JSX.Element {
   const active = useMemo(() => groupedForest(discussion, 'open'), [discussion])
@@ -41,6 +49,7 @@ export function BranchPanel({
                 {ru.branches.belongsTo(branchLabel(node.hiddenParent))}
               </small>
             )}
+            <UnreadMarks counts={unread.byThread.get(t.threadId)} />
             <span className="panel-count">{t.messages.length}</span>
           </button>
           {node.children.length > 0 && <ul>{renderNodes(node.children, depth + 1)}</ul>}
@@ -57,7 +66,8 @@ export function BranchPanel({
         data-testid="panel-main"
         onClick={() => onSelect(mainThreadId)}
       >
-        {ru.branches.mainThread}
+        <span className="panel-label">{ru.branches.mainThread}</span>
+        <UnreadMarks counts={unread.byThread.get(mainThreadId)} />
       </button>
 
       <section data-testid="panel-active">
@@ -76,5 +86,37 @@ export function BranchPanel({
         </section>
       )}
     </aside>
+  )
+}
+
+/** Number of unread messages in the thread, and a dot when branches below it have unread messages. */
+function UnreadMarks({
+  counts
+}: {
+  counts: { own: number; descendants: number } | undefined
+}): React.JSX.Element | null {
+  if (!counts || (counts.own === 0 && counts.descendants === 0)) return null
+  return (
+    <>
+      {counts.own > 0 && (
+        <span
+          className="panel-unread"
+          data-testid="panel-unread"
+          title={ru.unread.panelCount(counts.own)}
+        >
+          {counts.own}
+        </span>
+      )}
+      {counts.descendants > 0 && (
+        <span
+          className="panel-dot"
+          data-testid="panel-dot"
+          title={ru.unread.descendantsHint}
+          aria-label={ru.unread.descendantsHint}
+        >
+          ●
+        </span>
+      )}
+    </>
   )
 }

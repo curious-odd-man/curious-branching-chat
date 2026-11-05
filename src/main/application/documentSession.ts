@@ -3,7 +3,12 @@ import {
   appendMessage,
   createBranch,
   DomainError,
+  ensureParticipant,
   findMessage,
+  markAllRead,
+  markMessageRead,
+  markThreadRead,
+  unreadSummary,
   quoteFromSelection,
   readStateAfterBranch,
   readStateAfterSend,
@@ -12,7 +17,7 @@ import {
   type Author,
   type DomainContext
 } from '@shared/domain'
-import type { ThreadStatus } from '@shared/validation'
+import type { ReadState, ThreadStatus } from '@shared/validation'
 import type { RichDoc } from '@shared/validation'
 import type { DocumentContents } from '@shared/validation'
 import type { DocumentView } from '@shared/types/ipc'
@@ -29,6 +34,14 @@ export type DocumentWriter = (
   contents: DocumentContents,
   options?: { discardExisting?: boolean }
 ) => Promise<void>
+
+/** What a caller is about to do, to find out beforehand whether it will change the person's read state. */
+export type ReadAction =
+  | { type: 'send'; threadId: string }
+  | { type: 'branch'; messageId: string }
+  | { type: 'message'; messageId: string }
+  | { type: 'thread'; threadId: string }
+  | { type: 'all' }
 
 export interface SessionDeps {
   ctx: DomainContext
@@ -138,6 +151,65 @@ export class DocumentSession {
     return thread.threadId
   }
 
+  /** Explicit "mark as read" for one message (FR-111). Returns false if it was already read. */
+  markMessageRead(author: Author, messageId: string): boolean {
+    return this.commitReadState(
+      author,
+      markMessageRead(
+        this.contents.discussion,
+        this.contents.readState,
+        author.participantId,
+        messageId
+      )
+    )
+  }
+
+  /** Marks the thread's own messages as read (FR-111). */
+  markThreadRead(author: Author, threadId: string): boolean {
+    return this.commitReadState(
+      author,
+      markThreadRead(
+        this.contents.discussion,
+        this.contents.readState,
+        author.participantId,
+        threadId
+      )
+    )
+  }
+
+  /** Marks every message of the discussion as read (FR-111). */
+  markAllRead(author: Author): boolean {
+    return this.commitReadState(
+      author,
+      markAllRead(this.contents.discussion, this.contents.readState, author.participantId)
+    )
+  }
+
+  /** Would this action change the person's read state? (Used to show the privacy notice first, FR-125.) */
+  readStateChangeFor(participantId: string, action: ReadAction): boolean {
+    const { discussion, readState } = this.contents
+    const next = ((): ReadState => {
+      switch (action.type) {
+        case 'send':
+          return readStateAfterSend(discussion, readState, participantId, action.threadId)
+        case 'branch':
+          return readStateAfterBranch(discussion, readState, participantId, action.messageId)
+        case 'message':
+          return markMessageRead(discussion, readState, participantId, action.messageId)
+        case 'thread':
+          return markThreadRead(discussion, readState, participantId, action.threadId)
+        case 'all':
+          return markAllRead(discussion, readState, participantId)
+      }
+    })()
+    return next !== readState
+  }
+
+  /** Total unread messages for a participant (window title, header; FR-113). */
+  unreadTotal(participantId: string): number {
+    return unreadSummary(this.contents.discussion, this.contents.readState, participantId).total
+  }
+
   /** Close or reopen a branch (FR-059, FR-060). */
   setThreadStatus(threadId: string, status: ThreadStatus): void {
     this.commit({
@@ -178,6 +250,17 @@ export class DocumentSession {
       saving: this.saving,
       notices: this.notices
     }
+  }
+
+  /** Saves a read-state change (FR-121); the participant is added to the file on this first write (FR-022). */
+  private commitReadState(author: Author, readState: ReadState): boolean {
+    if (readState === this.contents.readState) return false
+    this.commit({
+      ...this.contents,
+      discussion: ensureParticipant(this.contents.discussion, author),
+      readState
+    })
+    return true
   }
 
   private commit(next: DocumentContents): void {
