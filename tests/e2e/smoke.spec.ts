@@ -44,13 +44,15 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
       'onDocumentChanged',
       'onMenuCommand',
       'openLink',
+      'pickImage',
       'openDocumentDialog',
       'openPath',
       'retrySave',
       'setBranchStatus',
       'setBranchTitle',
       'setDisplayName',
-      'setDraftState'
+      'setDraftState',
+      'stageImage'
     ].sort()
   )
 })

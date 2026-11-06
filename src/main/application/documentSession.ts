@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto'
 import { basename } from 'node:path'
 import {
   appendMessage,
+  addAsset,
   createBranch,
   DomainError,
   ensureParticipant,
@@ -18,21 +20,25 @@ import {
   type DomainContext
 } from '@shared/domain'
 import type { ReadState, ThreadStatus } from '@shared/validation'
-import type { RichDoc } from '@shared/validation'
+import { collectImageAssetIds, type RichDoc } from '@shared/validation'
+import type { StagedImage } from '@shared/types/assets'
 import type { DocumentContents } from '@shared/validation'
 import type { DocumentView } from '@shared/types/ipc'
 import { describeError } from '@shared/i18n/ru'
 import {
   DocumentError,
   newDocumentContents,
+  prepareImage,
   readDocument,
-  writeDocument as defaultWriter
+  readImageAsset,
+  writeDocument as defaultWriter,
+  type PreparedImage
 } from '../document'
 
 export type DocumentWriter = (
   path: string,
   contents: DocumentContents,
-  options?: { discardExisting?: boolean }
+  options?: { discardExisting?: boolean; newAssets?: PreparedImage[] }
 ) => Promise<void>
 
 /** What a caller is about to do, to find out beforehand whether it will change the person's read state. */
@@ -65,6 +71,12 @@ export class DocumentSession {
   private scheduled = false
   private running = false
   private _saveError: string | null = null
+  /** Identifies this open discussion in image URLs (see src/shared/types/assets.ts). */
+  readonly sessionId = randomUUID()
+  /** Images added to a draft. They are kept in memory only; nothing is written until a message uses them. */
+  private readonly staged = new Map<string, PreparedImage>()
+  /** Images used by sent messages but not yet written to the file. */
+  private pendingAssets: PreparedImage[] = []
 
   private constructor(
     readonly path: string,
@@ -109,6 +121,35 @@ export class DocumentSession {
     return basename(this.path)
   }
 
+  /**
+   * Adds image bytes to the draft (FR-065 to FR-067). Only PNG, JPEG, GIF and WebP are accepted (FR-116); there is no
+   * size limit (NFR-015). The image is stored in the file only when a message containing it is sent; one that is
+   * never sent leaves no trace in the file. Identical images are the same asset (deduplicated by checksum).
+   */
+  stageImage(data: Buffer): StagedImage {
+    const image = prepareImage(data)
+    if (!this.staged.has(image.sha256)) this.staged.set(image.sha256, image)
+    return { assetId: image.sha256, mediaType: image.mediaType, size: image.size }
+  }
+
+  /**
+   * Bytes of an embedded image, for display (FR-068). Images that are not saved yet come from memory; the others are
+   * read from the file and checked against their recorded type and checksum. Null means "show a placeholder"
+   * (FR-075): the data is missing, damaged, or does not match.
+   */
+  async readAssetBytes(assetId: string): Promise<{ data: Buffer; mediaType: string } | null> {
+    const memory = this.pendingAssets.find((a) => a.sha256 === assetId) ?? this.staged.get(assetId)
+    if (memory) return { data: memory.data, mediaType: memory.mediaType }
+    const info = this.contents.discussion.assets.find((a) => a.assetId === assetId)
+    if (!info) return null
+    try {
+      const data = await readImageAsset(this.path, info)
+      return data ? { data, mediaType: info.mediaType } : null
+    } catch {
+      return null
+    }
+  }
+
   /** FR-112 (1): writing in a thread also marks that thread's earlier messages as read. */
   appendMessage(author: Author, threadId: string, content: RichDoc): void {
     const before = this.contents.discussion
@@ -118,7 +159,24 @@ export class DocumentSession {
       author.participantId,
       threadId
     )
-    const { discussion } = appendMessage(this.deps.ctx, before, { threadId, author, content })
+    // Images used for the first time are registered in the file now, and their bytes queued for the next write.
+    let withAssets = before
+    const added: PreparedImage[] = []
+    for (const assetId of collectImageAssetIds(content)) {
+      if (withAssets.assets.some((a) => a.assetId === assetId)) continue
+      const image = this.staged.get(assetId)
+      if (!image)
+        throw new DomainError('UNKNOWN_ASSET', `image ${assetId} was not added to the draft`)
+      withAssets = addAsset(withAssets, {
+        path: image.path,
+        mediaType: image.mediaType,
+        size: image.size,
+        sha256: image.sha256
+      }).discussion
+      added.push(image)
+    }
+    const { discussion } = appendMessage(this.deps.ctx, withAssets, { threadId, author, content })
+    this.pendingAssets.push(...added)
     this.commit({ ...this.contents, discussion, readState })
   }
 
@@ -240,6 +298,7 @@ export class DocumentSession {
   view(localParticipantId: string): DocumentView {
     return {
       documentId: this.documentId,
+      sessionId: this.sessionId,
       filePath: this.path,
       fileName: this.fileName,
       discussion: this.contents.discussion,
@@ -276,8 +335,16 @@ export class DocumentSession {
       this.scheduled = false // changes committed from now on schedule another write
       this.running = true
       const snapshot = this.contents
+      const assets = [...this.pendingAssets]
       try {
-        await this.deps.writer(this.path, snapshot)
+        await this.deps.writer(
+          this.path,
+          snapshot,
+          assets.length > 0 ? { newAssets: assets } : undefined
+        )
+        // saved: these images now come from the file, so their memory can be released
+        this.pendingAssets = this.pendingAssets.filter((a) => !assets.includes(a))
+        for (const a of assets) this.staged.delete(a.sha256)
         this._saveError = null
       } catch (err) {
         this._saveError = describeSaveError(err)

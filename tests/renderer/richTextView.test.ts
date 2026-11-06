@@ -176,3 +176,53 @@ describe('RichTextView offsets and the quoted passage (FR-054)', () => {
     expect(html).toContain('<mark class="quote"><span data-o="3">са</span></mark>')
   })
 })
+
+describe('RichTextView images (FR-068, FR-075)', () => {
+  const sha = 'ab'.repeat(32)
+  const gone = 'cd'.repeat(32)
+  const images = {
+    url: (id: string) => `bcasset://asset/s1/${id}`,
+    missing: new Set([gone]),
+    onOpen: () => undefined,
+    onLoad: () => undefined
+  }
+  const withImages = (d: unknown): string =>
+    renderToStaticMarkup(
+      createElement(RichTextView, { doc: d as RichDoc, onOpenLink: () => undefined, images })
+    )
+  const image = (assetId: string, alt?: string) => ({
+    type: 'image',
+    attrs: { assetId, ...(alt ? { alt } : {}) }
+  })
+
+  it('shows an image from the discussion address, inline with text', () => {
+    const html = withImages(doc(p(t('до '), image(sha), t(' после'))))
+    expect(html).toContain(`src="bcasset://asset/s1/${sha}"`)
+    expect(html).toContain('data-testid="message-image"')
+    expect(html).toContain('до ')
+    expect(html).toContain(' после')
+  })
+
+  it('shows a placeholder for an image whose data is missing, and keeps the rest of the message', () => {
+    const html = withImages(doc(p(t('текст'), image(gone))))
+    expect(html).toContain('data-testid="image-placeholder"')
+    expect(html).not.toContain('<img')
+    expect(html).toContain('текст')
+  })
+
+  it('escapes the alternative text', () => {
+    const html = withImages(doc(p(image(sha, '"><script>alert(1)</script>'))))
+    expect(html).not.toContain('<script')
+    expect(html).toContain('&quot;&gt;&lt;script&gt;')
+  })
+
+  it('shows no images when none are provided (for example in a context that does not support them)', () => {
+    expect(render(doc(p(t('a'), image(sha))))).not.toContain('<img')
+  })
+
+  it('images do not move the offsets of the text around them', () => {
+    const html = renderRaw(doc(p(t('до '), image(sha), t(' после'))))
+    expect(html).toContain('<span data-o="0">до </span>')
+    expect(html).toContain('<span data-o="3"> после</span>')
+  })
+})

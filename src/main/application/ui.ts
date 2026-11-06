@@ -11,6 +11,8 @@ export interface CloseProblems {
 export interface Ui {
   pickSavePath(parent: BrowserWindow | undefined): Promise<string | null>
   pickOpenPath(parent: BrowserWindow | undefined): Promise<string | null>
+  /** Lets the person choose an image file (FR-067). */
+  pickImagePath(parent: BrowserWindow | undefined): Promise<string | null>
   showError(
     parent: BrowserWindow | undefined,
     title: string,
@@ -46,6 +48,19 @@ export const electronUi: Ui = {
       defaultPath: app.getPath('documents'),
       properties: ['openFile' as const],
       filters
+    }
+    const result = parent
+      ? await dialog.showOpenDialog(parent, options)
+      : await dialog.showOpenDialog(options)
+    return result.canceled || result.filePaths.length === 0 ? null : (result.filePaths[0] ?? null)
+  },
+
+  async pickImagePath(parent) {
+    const options = {
+      title: ru.images.pickTitle,
+      defaultPath: app.getPath('pictures'),
+      properties: ['openFile' as const],
+      filters: [{ name: ru.images.pickFilter, extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]
     }
     const result = parent
       ? await dialog.showOpenDialog(parent, options)

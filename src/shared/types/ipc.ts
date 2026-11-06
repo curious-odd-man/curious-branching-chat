@@ -17,6 +17,8 @@ export const IPC = {
   readMarkThread: 'read:mark-thread',
   readMarkAll: 'read:mark-all',
   settingsAckReadNotice: 'settings:ack-read-notice',
+  imageStage: 'image:stage',
+  imagePick: 'image:pick',
   branchCreate: 'branch:create',
   branchSetStatus: 'branch:set-status',
   branchSetTitle: 'branch:set-title',
@@ -40,6 +42,8 @@ export interface SettingsView {
 /** Everything a window needs to show its discussion. */
 export interface DocumentView {
   documentId: string
+  /** Identifies this open window's discussion in image URLs (see assets.ts). */
+  sessionId: string
   filePath: string
   fileName: string
   discussion: DiscussionData

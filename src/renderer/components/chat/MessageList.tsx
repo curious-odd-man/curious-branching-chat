@@ -5,7 +5,7 @@ import type { Message, Participant, Thread } from '@shared/types'
 import { ru } from '@shared/i18n/ru'
 import { formatTimestamp } from '../../i18n/format'
 import { BranchBadge } from '../branches/BranchBadge'
-import { RichTextView, type Highlight } from '../rich/RichTextView'
+import { RichTextView, type Highlight, type ImageContext } from '../rich/RichTextView'
 import { ReadIndicator } from './ReadIndicator'
 import { readMessageSelection, type MessageSelection } from './selection'
 
@@ -27,6 +27,8 @@ interface Props {
   participants: readonly Participant[]
   readSets: Map<string, Set<string>>
   onMarkRead(messageId: string): void
+  /** Images of this discussion; the list adds its own scroll handling when an image loads. */
+  images: Omit<ImageContext, 'onLoad'>
   branchesByMessage: Map<string, Thread[]>
   onOpenLink(href: string): void
   /** "Reply to this" was chosen for a passage of a message. */
@@ -57,6 +59,7 @@ export function MessageList({
   participants,
   readSets,
   onMarkRead,
+  images,
   branchesByMessage,
   onOpenLink,
   onReply,
@@ -69,6 +72,9 @@ export function MessageList({
   const [selection, setSelection] = useState<MessageSelection | null>(null)
   const [flashId, setFlashId] = useState<string | null>(null)
 
+  const rowCount = useRef(rows.length)
+  rowCount.current = rows.length
+
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scroller.current,
@@ -79,6 +85,15 @@ export function MessageList({
       return row ? rowKey(row) : index
     }
   })
+
+  // A picture changes the height of its message when it finishes loading; stay at the bottom if we were there.
+  const imageContext: ImageContext = {
+    ...images,
+    onLoad: () => {
+      if (atBottom.current && rowCount.current > 0)
+        virtualizer.scrollToIndex(rowCount.current - 1, { align: 'end' })
+    }
+  }
 
   useLayoutEffect(() => {
     const count = rows.length
@@ -217,7 +232,12 @@ export function MessageList({
                     />
                   </span>
                 </header>
-                <RichTextView doc={m.content} onOpenLink={onOpenLink} highlight={row.highlight} />
+                <RichTextView
+                  doc={m.content}
+                  onOpenLink={onOpenLink}
+                  highlight={row.highlight}
+                  images={imageContext}
+                />
               </article>
             </div>
           )

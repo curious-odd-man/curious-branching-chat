@@ -15,6 +15,7 @@ const BACKGROUND_COLORS = [
 interface Props {
   editor: Editor
   onLink(): void
+  onImage(): void
 }
 
 interface ToolButtonProps {
@@ -52,7 +53,7 @@ function ToolButton({
   )
 }
 
-export function EditorToolbar({ editor, onLink }: Props): React.JSX.Element {
+export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Element {
   const s = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -163,6 +164,9 @@ export function EditorToolbar({ editor, onLink }: Props): React.JSX.Element {
       />
       <ToolButton testId="tb-link" label={ru.editor.link} active={s.link} onClick={onLink}>
         🔗
+      </ToolButton>
+      <ToolButton testId="tb-image" label={ru.images.insert} onClick={onImage}>
+        🖼
       </ToolButton>
       <span className="sep" />
       <ToolButton

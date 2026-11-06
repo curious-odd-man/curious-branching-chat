@@ -1,4 +1,4 @@
-import { Fragment, useMemo, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import {
   isAllowedLinkHref,
   linearize,
@@ -8,6 +8,18 @@ import {
   type RichNode
 } from '@shared/validation'
 import { ru } from '@shared/i18n/ru'
+
+/** What the message view needs to show embedded images (FR-068, FR-069, FR-075). */
+export interface ImageContext {
+  /** Address of an image of this discussion. */
+  url(assetId: string): string
+  /** Images the file lists but has no data for: shown as placeholders. */
+  missing: ReadonlySet<string>
+  /** The person clicked an image: open the larger view. */
+  onOpen(assetId: string, alt: string | undefined): void
+  /** An image finished loading (its size changes the height of the message). */
+  onLoad(): void
+}
 
 export interface Highlight {
   start: number
@@ -20,6 +32,8 @@ interface Props {
   onOpenLink(href: string): void
   /** A passage (offsets in the message's plain text) to mark as the quoted part of a branch (FR-054). */
   highlight?: Highlight | null
+  /** Without this, images are not shown. */
+  images?: ImageContext
 }
 
 /**
@@ -32,12 +46,17 @@ interface Props {
  * Every piece of text is in a `<span data-o="N">` where N is the offset of its first character in the message's plain
  * text. That is how a selection in the page is turned into the offsets stored with a branch (see ../selection.ts).
  */
-export function RichTextView({ doc, onOpenLink, highlight = null }: Props): React.JSX.Element {
+export function RichTextView({
+  doc,
+  onOpenLink,
+  highlight = null,
+  images
+}: Props): React.JSX.Element {
   const offsets = useMemo(
     () => new Map(linearize(doc).runs.map((run) => [run.node, run.start])),
     [doc]
   )
-  const ctx: Ctx = { offsets, highlight, onOpenLink }
+  const ctx: Ctx = { offsets, highlight, onOpenLink, images }
   return <div className="rich">{doc.content.map((node, i) => renderNode(node, i, ctx))}</div>
 }
 
@@ -45,6 +64,7 @@ interface Ctx {
   offsets: Map<RichNode, number>
   highlight: Highlight | null
   onOpenLink(href: string): void
+  images: ImageContext | undefined
 }
 
 function renderNode(node: RichNode, key: number, ctx: Ctx): ReactNode {
@@ -78,8 +98,14 @@ function renderNode(node: RichNode, key: number, ctx: Ctx): ReactNode {
     case 'listItem':
       return <li key={key}>{children(node.content)}</li>
     case 'image':
-      // Images arrive in phase 6.
-      return null
+      return ctx.images ? (
+        <ChatImage
+          key={key}
+          assetId={node.attrs.assetId}
+          alt={node.attrs.alt}
+          images={ctx.images}
+        />
+      ) : null
     default:
       return null
   }
@@ -171,4 +197,52 @@ function wrapMarks(
     }
   }
   return out
+}
+
+/**
+ * An embedded image, shown inline and clickable for a larger view. If the data is missing from the file, damaged, or
+ * cannot be displayed, a placeholder is shown instead and the rest of the message is unaffected (FR-075).
+ */
+function ChatImage({
+  assetId,
+  alt,
+  images
+}: {
+  assetId: string
+  alt: string | undefined
+  images: ImageContext
+}): React.JSX.Element {
+  const [failed, setFailed] = useState(false)
+  if (failed || images.missing.has(assetId))
+    return (
+      <span
+        className="image-placeholder"
+        role="img"
+        aria-label={ru.images.unavailable}
+        title={ru.images.unavailableHint}
+        data-testid="image-placeholder"
+      >
+        🖼 {ru.images.unavailable}
+      </span>
+    )
+  return (
+    <button
+      type="button"
+      className="image-button"
+      aria-label={ru.images.view}
+      data-testid="image-button"
+      onClick={() => images.onOpen(assetId, alt)}
+    >
+      <img
+        className="msg-image"
+        src={images.url(assetId)}
+        alt={alt ?? ''}
+        decoding="async"
+        data-testid="message-image"
+        data-asset-id={assetId}
+        onError={() => setFailed(true)}
+        onLoad={images.onLoad}
+      />
+    </button>
+  )
 }

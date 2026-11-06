@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 6)  
+**Status:** MVP requirements (revision 7)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -324,6 +324,17 @@ Proposed internal structure:
   entire discussion.
 - **FR-116.** Supported embedded image types are PNG, JPEG, GIF, and WebP. Other types, including SVG, are not
   accepted in the MVP.
+- **FR-129.** An image added to a draft is stored in the discussion file only when a message containing it is sent. An
+  image that is removed from the draft, or never sent, leaves no trace in the file. The same image (same content) is
+  stored once, however many messages use it.
+- **FR-130.** When pasting, if the clipboard contains both text and image data (as when copying cells from a
+  spreadsheet), the text is pasted. If it contains only image data (a screenshot), the image is inserted.
+- **FR-131.** An image whose data is missing from the file, does not match its recorded type or checksum, or cannot be
+  displayed is shown as a placeholder (FR-075); the rest of the message and the discussion are unaffected.
+- **FR-132.** Clicking an image opens a larger view that closes with Escape, with a close button, or with a click
+  outside the picture.
+- **FR-133.** An image is part of the message but not of its text: it does not change the position of text selections
+  or the quote of a branch.
 
 ### 5.7. Language and text handling
 
@@ -394,10 +405,11 @@ file when it is exchanged.
   accent bar and background), including in inherited context shown inside a branch.
 - **FR-111.** The user must be able to mark a message as read with an explicit control on the message. The user must
   also be able to mark all messages of the current thread, or the whole discussion, as read. "Mark thread as read" marks
-  the messages of that thread itself, not the inherited context shown in a branch (those belong to their own threads).
+  the
+  messages of that thread itself, not the inherited context shown in a branch (those belong to their own threads).
 - **FR-112.** A message also becomes read for the local participant in exactly these two cases, in addition to FR-111:
-    1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
-    2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
+  1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
+  2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
 
   Scrolling, opening a thread, or viewing a message never marks it read.
 - **FR-113.** The side panel must show the number of unread messages for each branch, and must show an indicator on a
@@ -471,7 +483,7 @@ This is a conceptual model, not a final implementation schema.
 - `updatedAt` — last modification timestamp.
 - `participants` — participants known to this discussion.
 - `threads` — main thread and branches.
-- `assets` — embedded images and other resources.
+- `assets` — embedded images (each identified by the SHA-256 of its content, so identical images are stored once).
 - `readState` — read message IDs per participant (stored as a separate entry in the ZIP).
 
 ### Participant
@@ -661,6 +673,11 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 7
+
+- Images (phase 6): staged in the draft and stored only when sent (FR-129), paste rules (FR-130), placeholders for
+  damaged data (FR-131), the larger view (FR-132), and images not affecting text offsets (FR-133).
 
 ## Changes in revision 6
 

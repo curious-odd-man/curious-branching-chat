@@ -74,4 +74,6 @@ See `docs/implementation_plan.md`.
   Electron end-to-end tests.
 - Phase 5 (unread messages): done. Unread highlighting, mark as read (message, thread, all), read-on-reply, panel counts,
   window title count, read indicators, one-time notice. 157 unit tests and 40 Electron end-to-end tests.
-- Next: phase 6 (images).
+- Phase 6 (images): done. Paste, drop and file chooser; inline display and larger view; placeholders; no size limit.
+  181 unit tests and 52 Electron end-to-end tests.
+- Next: phase 7 (Windows integration: installer option for the `.branchchat` association).

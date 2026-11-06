@@ -1,7 +1,9 @@
 import { BrowserWindow, type WebContents } from 'electron'
+import { promises as fs } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import type { DomainContext } from '@shared/domain'
 import { describeError, ru } from '@shared/i18n/ru'
+import type { StagedImage } from '@shared/types/assets'
 import { IPC, type DocumentView, type MenuCommand, type OpenOutcome } from '@shared/types/ipc'
 import { DocumentError } from '../document'
 import type { SettingsStore } from '../local-state/settings'
@@ -59,6 +61,27 @@ export class AppController {
     win.on('closed', () => this.entries.delete(entry.id))
     this.updateTitle(entry)
     return entry
+  }
+
+  /** The open discussion with this session ID (used to answer image requests). */
+  sessionById(sessionId: string): DocumentSession | undefined {
+    for (const entry of this.entries.values())
+      if (entry.session?.sessionId === sessionId) return entry.session
+    return undefined
+  }
+
+  /** "Insert image…": lets the person choose a file and adds it to the draft (FR-067). Null if cancelled. */
+  async pickImage(entry: WindowEntry | undefined): Promise<StagedImage | null> {
+    if (!entry?.session) throw new AppError('NO_DOCUMENT', 'No open discussion')
+    const path = await this.deps.ui.pickImagePath(entry.win)
+    if (!path) return null
+    let data: Buffer
+    try {
+      data = await fs.readFile(path)
+    } catch {
+      throw new AppError('IMAGE_READ_FAILED', 'Cannot read the image file')
+    }
+    return entry.session.stageImage(data)
   }
 
   entryFor(sender: WebContents): WindowEntry | undefined {

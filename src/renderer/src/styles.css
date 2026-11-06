@@ -619,3 +619,60 @@ mark.quote {
   color: var(--accent);
   font-size: 0.7rem;
 }
+
+/* ---- images ------------------------------------------------------------------------------------------------- */
+.image-button {
+  display: inline-block;
+  padding: 0;
+  border: none;
+  background: transparent;
+  line-height: 0;
+  vertical-align: bottom;
+  cursor: zoom-in;
+}
+.msg-image {
+  display: block;
+  max-width: min(100%, 28rem);
+  max-height: 20rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--soft);
+}
+.image-placeholder {
+  display: inline-block;
+  padding: 0.35rem 0.7rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--soft);
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+.editor-content img.editor-image {
+  max-width: 12rem;
+  max-height: 8rem;
+  margin: 0.1rem 0.2rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  vertical-align: bottom;
+}
+.editor-content img.editor-image.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+.viewer {
+  background: rgb(0 0 0 / 0.82);
+  z-index: 30;
+  cursor: zoom-out;
+}
+.viewer-image {
+  max-width: 95vw;
+  max-height: 92vh;
+  object-fit: contain;
+  cursor: default;
+}
+.viewer-close {
+  position: fixed;
+  top: 0.8rem;
+  right: 1rem;
+  z-index: 31;
+  font-size: 1.1rem;
+}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   branchesBySourceMessage,
   buildReadSets,
@@ -9,11 +9,13 @@ import {
   unreadSummary
 } from '@shared/domain'
 import { ru } from '@shared/i18n/ru'
+import { assetUrl } from '@shared/types/assets'
 import type { DocumentView } from '@shared/types/ipc'
 import { richTextToPlain, type RichDoc } from '@shared/validation'
 import { BranchHeader } from '../branches/BranchHeader'
 import { BranchPanel } from '../branches/BranchPanel'
 import { Composer } from './Composer'
+import { ImageViewer } from './ImageViewer'
 import { MessageList, type ListRow } from './MessageList'
 
 interface Props {
@@ -48,8 +50,18 @@ export function DiscussionScreen({
   onRetrySave
 }: Props): React.JSX.Element {
   const [dismissed, setDismissed] = useState<string[]>([])
+  const [viewer, setViewer] = useState<{ assetId: string; alt: string } | null>(null)
   const discussion = view.discussion
   const mainId = mainThread(discussion).threadId
+  const closeViewer = useCallback(() => setViewer(null), [])
+  const images = useMemo(
+    () => ({
+      url: (assetId: string) => assetUrl(view.sessionId, assetId),
+      missing: new Set(view.missingAssetIds),
+      onOpen: (assetId: string, alt: string | undefined) => setViewer({ assetId, alt: alt ?? '' })
+    }),
+    [view.sessionId, view.missingAssetIds]
+  )
   const status = view.saveError ? null : view.saving ? ru.discussion.saving : ru.discussion.saved
 
   const context = useMemo(() => resolveContext(discussion, threadId), [discussion, threadId])
@@ -175,6 +187,7 @@ export function DiscussionScreen({
             participants={discussion.participants}
             readSets={readSets}
             onMarkRead={onMarkMessageRead}
+            images={images}
             branchesByMessage={branchesByMessage}
             onOpenLink={(href) => void window.branchchat.openLink(href)}
             onReply={onReply}
@@ -182,6 +195,7 @@ export function DiscussionScreen({
             {...(focusMessageId ? { focusMessageId } : {})}
           />
           <Composer
+            sessionId={view.sessionId}
             threadId={threadId}
             blocked={
               closed
@@ -196,6 +210,9 @@ export function DiscussionScreen({
           />
         </div>
       </div>
+      {viewer && (
+        <ImageViewer url={images.url(viewer.assetId)} alt={viewer.alt} onClose={closeViewer} />
+      )}
     </div>
   )
 }

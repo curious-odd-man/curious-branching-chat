@@ -263,6 +263,23 @@ The application does not keep the discussion file open between writes, so Explor
 time. Unchanged ZIP entries (especially large images) are copied through without recompression so that frequent
 saves stay cheap even for large files.
 
+**Images.** Images are added through the main process, never as files or URLs chosen by the page:
+
+- Paste, drop and "Insert image…" send the bytes (or a chosen file) to the main process, which accepts only PNG, JPEG,
+  GIF and WebP by looking at the first bytes (SVG is refused), computes the SHA-256, and keeps the image in memory as
+  part of the draft. There is no size limit.
+- When a message that uses the image is sent, the image is registered in `discussion.json` (its id is its SHA-256) and
+  written to `assets/images/<sha256>.<ext>` by the next save. An image that is never sent is never written.
+- The window shows images through the app's own `bcasset:` scheme: `bcasset://asset/<sessionId>/<assetId>`. The main
+  process answers only for discussions that are open (the session id is random per window), checks the recorded type
+  and checksum before returning anything, sends the response as an image with `nosniff`, and answers 404 for missing or
+  damaged data, which the window shows as a placeholder. The content security policy allows `img-src bcasset:` and
+  nothing remote.
+- A pasted HTML `<img>` cannot create an image in the editor unless it carries the id of an image this app rendered,
+  and an id that was never added to the draft is refused when the message is sent.
+- Images are stored uncompressed in the ZIP and copied through unchanged when only the JSON changes, so saving a
+  message in a discussion with large images stays fast.
+
 ### 5.5 Conceptual service interfaces
 
 - `DiscussionDocumentRepository`
@@ -433,6 +450,10 @@ Alternatives considered
 - JavaFX: https://openjfx.io/
 - Java jpackage: https://docs.oracle.com/en/java/javase/21/jpackage/
 - Tauri: https://v2.tauri.app/
+
+## Changes in revision 7
+
+- Documented how images are added, stored and shown (section 5.4).
 
 ## Changes in revision 5
 

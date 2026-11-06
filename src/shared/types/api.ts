@@ -1,4 +1,5 @@
 import type { RichDoc } from '../validation/richText'
+import type { StagedImage } from './assets'
 import type {
   AppInfo,
   DocumentView,
@@ -20,6 +21,10 @@ export interface BranchChatApi {
   appendMessage(threadId: string, content: RichDoc): Promise<IpcResult<null>>
   retrySave(): Promise<IpcResult<null>>
   setDraftState(hasDraft: boolean): Promise<IpcResult<null>>
+  /** Adds image bytes (pasted, dropped) to the draft. Nothing is saved until a message containing it is sent. */
+  stageImage(data: Uint8Array): Promise<IpcResult<StagedImage>>
+  /** Lets the person choose an image file; resolves with null if they cancel. */
+  pickImage(): Promise<IpcResult<StagedImage | null>>
   markMessageRead(messageId: string): Promise<IpcResult<null>>
   markThreadRead(threadId: string): Promise<IpcResult<null>>
   markAllRead(): Promise<IpcResult<null>>

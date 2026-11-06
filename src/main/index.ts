@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { AppController } from './application/appController'
+import { installAssetProtocol, registerAssetScheme } from './application/assetProtocol'
 import { systemContext } from './application/clock'
 import { createMainWindow } from './application/mainWindow'
 import { installMenu } from './application/menu'
@@ -18,6 +19,9 @@ if (__E2E_HOOKS__) {
   const userDataOverride = process.env['BRANCHCHAT_USER_DATA']
   if (userDataOverride) app.setPath('userData', userDataOverride)
 }
+
+// The scheme used to show embedded images must be registered before the app is ready.
+registerAssetScheme()
 
 // One application instance; a second launch (e.g. double-clicking another .branchchat file) is forwarded here.
 const gotLock = app.requestSingleInstanceLock()
@@ -44,6 +48,7 @@ if (!gotLock) {
       appVersion: app.getVersion(),
       createWindow: createMainWindow
     })
+    installAssetProtocol(controller)
     applyGlobalSecurity()
     registerIpcHandlers(controller, settings)
     installMenu(controller)

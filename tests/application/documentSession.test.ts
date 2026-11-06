@@ -4,7 +4,19 @@ import { describe, expect, it } from 'vitest'
 import { plainTextToRichDoc, mainThread } from '@shared/domain'
 import { readDocument, writeDocument } from '../../src/main/document'
 import { DocumentSession, type DocumentWriter } from '../../src/main/application/documentSession'
-import { anna, boris, clara, makeCtx, withTempDir } from '../helpers/fixtures'
+import { scanZip } from '../../src/main/document/zip'
+import {
+  anna,
+  boris,
+  clara,
+  makeCtx,
+  para,
+  pngBytes,
+  richDoc,
+  simple,
+  text as textNode,
+  withTempDir
+} from '../helpers/fixtures'
 
 const text = (t: string) => plainTextToRichDoc(t)
 const deferred = () => {
@@ -302,6 +314,158 @@ describe('DocumentSession read state', () => {
       ] as const)
         expect(s.readStateChangeFor(anna.participantId, a)).toBe(false)
       expect(s.saving).toBe(false) // asking changes nothing
+    })
+  })
+})
+
+describe('DocumentSession images', () => {
+  const imageDoc = (assetId: string) =>
+    richDoc(para({ type: 'image', attrs: { assetId } }), para(textNode('подпись')))
+  const entries = async (file: string): Promise<string[]> => {
+    const names: string[] = []
+    await scanZip(file, (e) => void names.push(e.fileName))
+    return names.filter((n) => n.startsWith('assets/'))
+  }
+  async function fresh(
+    dir: string,
+    deps: Partial<Parameters<typeof DocumentSession.create>[1]> = {}
+  ) {
+    const file = join(dir, 'a.branchchat')
+    const s = await DocumentSession.create(file, { ctx: makeCtx(), ...deps }, { author: anna })
+    return { file, s, threadId: mainThread(s.view(anna.participantId).discussion).threadId }
+  }
+
+  it('accepts PNG, JPEG, GIF and WebP only (FR-116), with no size limit (NFR-015)', async () => {
+    await withTempDir(async (dir) => {
+      const { s } = await fresh(dir)
+      expect(s.stageImage(pngBytes())).toMatchObject({ mediaType: 'image/png' })
+      const jpeg = Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+        Buffer.alloc(30 * 1024 * 1024)
+      ])
+      expect(s.stageImage(jpeg)).toMatchObject({ mediaType: 'image/jpeg', size: jpeg.length })
+      expect(s.stageImage(Buffer.from('GIF89a\x01\x00\x01\x00'))).toMatchObject({
+        mediaType: 'image/gif'
+      })
+      expect(s.stageImage(Buffer.from('RIFF\x00\x00\x00\x00WEBPVP8 '))).toMatchObject({
+        mediaType: 'image/webp'
+      })
+      for (const bad of [
+        Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+        Buffer.from('BM\x00\x00\x00\x00'),
+        Buffer.from('%PDF-1.7'),
+        Buffer.alloc(0)
+      ])
+        expect(() => s.stageImage(bad)).toThrow(/PNG, JPEG, GIF/)
+    })
+  })
+
+  it('an image that is never sent leaves no trace in the file', async () => {
+    await withTempDir(async (dir) => {
+      const { file, s, threadId } = await fresh(dir)
+      s.stageImage(pngBytes())
+      s.appendMessage(anna, threadId, simple('без картинки'))
+      await s.flush()
+      expect(await entries(file)).toEqual([])
+      expect((await readDocument(file)).contents.discussion.assets).toEqual([])
+    })
+  })
+
+  it('stores a sent image in the file, registers it, and can show it before and after saving (FR-066, FR-068)', async () => {
+    await withTempDir(async (dir) => {
+      const { file, s, threadId } = await fresh(dir)
+      const { assetId } = s.stageImage(pngBytes())
+      s.appendMessage(anna, threadId, imageDoc(assetId))
+      expect((await s.readAssetBytes(assetId))?.data.equals(pngBytes())).toBe(true) // from memory, not saved yet
+      await s.flush()
+
+      const saved = (await readDocument(file)).contents.discussion
+      expect(saved.assets).toHaveLength(1)
+      expect(saved.assets[0]).toMatchObject({
+        assetId,
+        mediaType: 'image/png',
+        path: `assets/images/${assetId}.png`
+      })
+      expect(mainThread(saved).messages[0]!.assetReferences).toEqual([assetId])
+      expect(await entries(file)).toEqual([`assets/images/${assetId}.png`])
+      const fromFile = await s.readAssetBytes(assetId)
+      expect(fromFile?.mediaType).toBe('image/png')
+      expect(fromFile?.data.equals(pngBytes())).toBe(true)
+    })
+  })
+
+  it('the same image in two messages is one asset (deduplicated by checksum)', async () => {
+    await withTempDir(async (dir) => {
+      const { file, s, threadId } = await fresh(dir)
+      const first = s.stageImage(pngBytes())
+      const second = s.stageImage(pngBytes()) // pasted again
+      expect(second.assetId).toBe(first.assetId)
+      s.appendMessage(anna, threadId, imageDoc(first.assetId))
+      await s.flush()
+      s.appendMessage(anna, threadId, imageDoc(first.assetId)) // used again, already in the file
+      await s.flush()
+      expect(await entries(file)).toHaveLength(1)
+      expect((await readDocument(file)).contents.discussion.assets).toHaveLength(1)
+      expect(mainThread((await readDocument(file)).contents.discussion).messages).toHaveLength(2)
+    })
+  })
+
+  it('refuses an image that was never added to the draft, without changing anything', async () => {
+    await withTempDir(async (dir) => {
+      const { s, threadId } = await fresh(dir)
+      await s.flush()
+      expect(() => s.appendMessage(anna, threadId, imageDoc('a'.repeat(64)))).toThrow(
+        /was not added/
+      )
+      expect(s.saving).toBe(false)
+      expect(mainThread(s.view(anna.participantId).discussion).messages).toHaveLength(0)
+    })
+  })
+
+  it('keeps the image queued when saving fails, and writes it on retry (FR-008)', async () => {
+    await withTempDir(async (dir) => {
+      let fail = true
+      const writer: DocumentWriter = async (p, c, o) => {
+        if (fail && o?.newAssets) throw new Error('disk full')
+        await writeDocument(p, c, o)
+      }
+      const { file, s, threadId } = await fresh(dir, { writer })
+      const { assetId } = s.stageImage(pngBytes())
+      s.appendMessage(anna, threadId, imageDoc(assetId))
+      await s.flush()
+      expect(s.saveError).not.toBeNull()
+      expect((await s.readAssetBytes(assetId))?.data.equals(pngBytes())).toBe(true) // still available in memory
+      fail = false
+      await s.retrySave()
+      expect(s.saveError).toBeNull()
+      expect(await entries(file)).toEqual([`assets/images/${assetId}.png`])
+    })
+  })
+
+  it('shows a placeholder (null) for missing, unknown or damaged image data (FR-075)', async () => {
+    await withTempDir(async (dir) => {
+      // a writer that "loses" the image data: the file lists the image but has no entry for it
+      const writer: DocumentWriter = (p, c, o) => writeDocument(p, c, o && { ...o, newAssets: [] })
+      const { file, s, threadId } = await fresh(dir, { writer })
+      const { assetId } = s.stageImage(pngBytes())
+      s.appendMessage(anna, threadId, imageDoc(assetId))
+      await s.flush()
+      expect(await entries(file)).toEqual([])
+      expect(await s.readAssetBytes(assetId)).toBeNull() // listed, but the data is not in the file
+      expect(await s.readAssetBytes('b'.repeat(64))).toBeNull() // not listed at all
+
+      // damaged: the bytes in the file do not match the recorded checksum
+      const reopened = await DocumentSession.open(file, { ctx: makeCtx('o') })
+      expect(reopened.view(anna.participantId).missingAssetIds).toEqual([assetId])
+    })
+  })
+
+  it('every session has its own id, used in image URLs', async () => {
+    await withTempDir(async (dir) => {
+      const { file, s } = await fresh(dir)
+      const other = await DocumentSession.open(file, { ctx: makeCtx('o') })
+      expect(s.sessionId).not.toBe(other.sessionId)
+      expect(s.view(anna.participantId).sessionId).toBe(s.sessionId)
     })
   })
 })

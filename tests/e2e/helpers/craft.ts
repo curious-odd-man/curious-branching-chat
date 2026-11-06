@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import yazl from 'yazl'
 
@@ -19,6 +20,7 @@ export const h = (level: 1 | 2 | 3, text: string): Json => ({
 })
 export const li = (...content: Json[]): Json => ({ type: 'listItem', content })
 export const ul = (...items: Json[]): Json => ({ type: 'bulletList', content: items })
+export const img = (assetId: string): Json => ({ type: 'image', attrs: { assetId } })
 export const doc = (...content: Json[]): Json => ({ type: 'doc', content })
 export const simple = (text: string): Json => doc(p(t(text)))
 
@@ -48,7 +50,26 @@ const PEOPLE = {
   clara: { participantId: 'p-clara', displayName: 'Клара' }
 }
 
+export interface CraftAsset {
+  data: Buffer
+  /** normal: stored correctly; missing: listed but no data in the file; corrupt: data that does not match its checksum. */
+  mode?: 'normal' | 'missing' | 'corrupt'
+}
+
+export const sha256 = (data: Buffer): string => createHash('sha256').update(data).digest('hex')
+
+function imageIds(node: unknown, out: string[] = []): string[] {
+  if (typeof node !== 'object' || node === null) return out
+  const n = node as { type?: string; attrs?: { assetId?: string }; content?: unknown[] }
+  if (n.type === 'image' && n.attrs?.assetId && !out.includes(n.attrs.assetId))
+    out.push(n.attrs.assetId)
+  n.content?.forEach((c) => imageIds(c, out))
+  return out
+}
+
 export interface CraftOptions {
+  /** PNG images embedded in the file; message content refers to them by `sha256(data)`. */
+  assets?: CraftAsset[]
   /** Who is listed as a participant (default: Анна and Борис). */
   people?: Person[]
   /** participantId -> IDs of messages that participant has read. */
@@ -70,7 +91,13 @@ export async function writeDiscussionFile(
     createdAt: created,
     updatedAt: created,
     participants: (options.people ?? ['anna', 'boris']).map((person) => PEOPLE[person]),
-    assets: [],
+    assets: (options.assets ?? []).map((a) => ({
+      assetId: sha256(a.data),
+      path: `assets/images/${sha256(a.data)}.png`,
+      mediaType: 'image/png',
+      size: a.data.length,
+      sha256: sha256(a.data)
+    })),
     threads: threads.map((th) => ({
       threadId: th.id,
       ...(th.parent ? { parentThreadId: th.parent } : {}),
@@ -90,7 +117,7 @@ export async function writeDiscussionFile(
         authorDisplayName: PEOPLE[m.author].displayName,
         createdAt: iso(),
         content: m.content,
-        assetReferences: []
+        assetReferences: imageIds(m.content)
       }))
     }))
   }
@@ -104,6 +131,11 @@ export async function writeDiscussionFile(
   zip.addBuffer(Buffer.from(JSON.stringify(manifest)), 'manifest.json')
   zip.addBuffer(Buffer.from(JSON.stringify(discussion)), 'discussion.json')
   zip.addBuffer(Buffer.from(JSON.stringify(options.readState ?? {})), 'readstate.json')
+  for (const asset of options.assets ?? []) {
+    if (asset.mode === 'missing') continue
+    const data = asset.mode === 'corrupt' ? Buffer.from(asset.data).reverse() : asset.data
+    zip.addBuffer(data, `assets/images/${sha256(asset.data)}.png`, { compress: false })
+  }
   zip.end()
   const chunks: Buffer[] = []
   for await (const chunk of zip.outputStream) chunks.push(chunk as Buffer)

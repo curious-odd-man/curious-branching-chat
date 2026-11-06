@@ -1,5 +1,10 @@
 export type AppErrorCode =
-  'NAME_REQUIRED' | 'READ_NOTICE_REQUIRED' | 'NO_DOCUMENT' | 'FORBIDDEN' | 'INVALID_REQUEST'
+  | 'NAME_REQUIRED'
+  | 'IMAGE_READ_FAILED'
+  | 'READ_NOTICE_REQUIRED'
+  | 'NO_DOCUMENT'
+  | 'FORBIDDEN'
+  | 'INVALID_REQUEST'
 
 export class AppError extends Error {
   readonly code: AppErrorCode

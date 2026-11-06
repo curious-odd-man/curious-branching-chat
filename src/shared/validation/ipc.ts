@@ -23,3 +23,4 @@ export const setStatusSchema = z
 export const setTitleSchema = z.object({ threadId: z.string().min(1), title: z.string() }).strict()
 export const markMessageSchema = z.object({ messageId: z.string().min(1) }).strict()
 export const markThreadSchema = z.object({ threadId: z.string().min(1) }).strict()
+export const stageImageSchema = z.object({ data: z.instanceof(Uint8Array) }).strict()

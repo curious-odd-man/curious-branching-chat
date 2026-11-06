@@ -118,3 +118,29 @@ describe('discussion integrity', () => {
     expect(richDocSchema.safeParse(simple('ok')).success).toBe(true)
   })
 })
+
+import { assetUrl, parseAssetUrl } from '@shared/types/assets'
+
+describe('image URLs (bcasset:)', () => {
+  const sha = 'ab'.repeat(32)
+  it('round-trips', () => {
+    expect(parseAssetUrl(assetUrl('1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed', sha))).toEqual({
+      sessionId: '1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed',
+      assetId: sha
+    })
+  })
+  it.each([
+    'https://example.com/x.png',
+    'file:///C:/x.png',
+    `bcasset://other/s1/${sha}`,
+    `bcasset://asset/s1`,
+    `bcasset://asset/s1/${sha}/extra`,
+    'bcasset://asset/s1/not-a-hash',
+    `bcasset://asset/s1/${sha.toUpperCase()}`,
+    `bcasset://asset/../${sha}`,
+    `bcasset://asset/${'x'.repeat(80)}/${sha}`,
+    'not a url'
+  ])('rejects %s', (url) => {
+    expect(parseAssetUrl(url)).toBeNull()
+  })
+})

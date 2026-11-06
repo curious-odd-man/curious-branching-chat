@@ -13,6 +13,7 @@ import {
   openLinkSchema,
   openPathSchema,
   setNameSchema,
+  stageImageSchema,
   setStatusSchema,
   setTitleSchema
 } from '@shared/validation'
@@ -123,6 +124,12 @@ export function registerIpcHandlers(controller: AppController, settings: Setting
   handle(IPC.documentRetrySave, noPayloadSchema, async (entry) => {
     await requireSession(entry).retrySave()
   })
+  handle(IPC.imageStage, stageImageSchema, (entry, p) =>
+    requireSession(entry).stageImage(
+      Buffer.from(p.data.buffer, p.data.byteOffset, p.data.byteLength)
+    )
+  )
+  handle(IPC.imagePick, noPayloadSchema, (entry) => controller.pickImage(entry))
   handle(IPC.linkOpen, openLinkSchema, (_entry, p) => openExternalLink(p.url))
   handle(IPC.draftSet, draftSchema, (entry, p) => {
     if (entry) entry.hasDraft = p.hasDraft

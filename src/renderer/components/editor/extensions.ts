@@ -1,4 +1,4 @@
-import { Extension } from '@tiptap/core'
+import { Extension, Node as TiptapNode } from '@tiptap/core'
 import Bold from '@tiptap/extension-bold'
 import Document from '@tiptap/extension-document'
 import HardBreak from '@tiptap/extension-hard-break'
@@ -15,6 +15,8 @@ import { isAllowedLinkHref } from '@shared/validation'
 
 interface Callbacks {
   placeholder: string
+  /** Address of an embedded image, for display in the editor. */
+  srcFor(assetId: string): string
   onSubmit(): void
   onLinkShortcut(): void
 }
@@ -24,6 +26,7 @@ const Shortcuts = Extension.create<Callbacks>({
   name: 'branchchatShortcuts',
   addOptions: () => ({
     placeholder: '',
+    srcFor: () => '',
     onSubmit: () => undefined,
     onLinkShortcut: () => undefined
   }),
@@ -41,6 +44,50 @@ const Shortcuts = Extension.create<Callbacks>({
   }
 })
 
+const IMAGE_ID = /^[0-9a-f]{64}$/
+
+/**
+ * An embedded image in a draft (FR-065 to FR-067). Images only come from the application's own image staging (paste,
+ * drop, file chooser): pasted HTML cannot create one unless it carries the id of an image this app rendered, and an
+ * id that was never staged is refused when the message is sent.
+ */
+const ImageNode = TiptapNode.create<{ srcFor(assetId: string): string }>({
+  name: 'image',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  draggable: true,
+  selectable: true,
+  addOptions: () => ({ srcFor: () => '' }),
+  addAttributes() {
+    return {
+      assetId: { default: null, parseHTML: (el) => el.getAttribute('data-asset-id') },
+      alt: { default: null }
+    }
+  },
+  parseHTML() {
+    return [
+      {
+        tag: 'img[data-asset-id]',
+        getAttrs: (el) =>
+          IMAGE_ID.test((el as HTMLElement).getAttribute('data-asset-id') ?? '') ? null : false
+      }
+    ]
+  },
+  renderHTML({ node }) {
+    return [
+      'img',
+      {
+        src: this.options.srcFor(String(node.attrs['assetId'])),
+        alt: (node.attrs['alt'] as string | null) ?? '',
+        'data-asset-id': String(node.attrs['assetId']),
+        class: 'editor-image',
+        draggable: 'false'
+      }
+    ]
+  }
+})
+
 /**
  * The editor supports exactly the formatting of requirements 4.3 and nothing else. Everything else (code blocks,
  * quotes, strike-through, images, ...) is simply not part of the schema, so it cannot be typed or pasted.
@@ -51,6 +98,7 @@ export function createExtensions(callbacks: Callbacks) {
     Paragraph,
     Text,
     HardBreak,
+    ImageNode.configure({ srcFor: callbacks.srcFor }),
     Heading.configure({ levels: [1, 2, 3] }),
     Bold,
     Italic,
