@@ -384,23 +384,47 @@ Provide a manual **Rescan shared folder** action. Temporary synchronization prob
 ## 21. Open decisions
 
 1. Which reviewed public-key encryption and message-authentication construction will be used?
+
 > suggest one
+
 2. Is forward secrecy required in v1, or explicitly deferred?
+
 > no
+
 3. What key backup and recovery experience is acceptable?
+
 > none needed
+
 4. How will key revocation/replacement work after device loss?
+
 > n/a
+
 5. What is the existing conversation storage format?
+
 > infer from code
+
 6. What attachment size and retention limits are appropriate?
+
 > no retentions. no attachements (images handling does not change)
+
 7. Which Drive for Desktop versions and folder-availability modes will be supported?
+
 > explain this
+
 8. What exactly does “delivered” mean in the UI?
+
 > similar to WhatsApp (sent - one grey checkmark, delivered - two grey checkmarks, read - green checkmarks)
+
 9. How long should acknowledged transport files remain in the shared folder?
+
 > recepient deletes those after processing.
+
+Few more additional notes.
+
+1. support multiple users in same discussion (they all share same root in google drive)
+2. implementation should support future other ways to sync files. I.e. if I'd write it in Java - i'd use interface and
+   then several implementations (now the google drive only, later more)
+3.
 
 ## Appendix: Implementation cautions
 
