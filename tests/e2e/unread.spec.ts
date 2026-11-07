@@ -208,8 +208,11 @@ test('writing a message reads the earlier messages of that thread only; "Reply t
 
   // replying to a2 in branch a reads a2 only; a1 stays unread
   await panel(win, 'a').click()
+  await expect(win.getByTestId('thread')).toHaveAttribute('data-thread-id', 'a')
   await selectText(win.locator('[data-message-id=a2]'), 'Ответ Анны')
   await win.getByTestId('reply-to-this').click()
+  // the new branch is shown (a branch header was already on screen, so wait for the thread to change)
+  await expect(win.getByTestId('thread')).not.toHaveAttribute('data-thread-id', 'a')
   await expect(win.getByTestId('branch-header')).toBeVisible()
   await expect(win.locator('[data-message-id=a2]')).toHaveAttribute('data-unread', 'false')
   await expect(win.locator('[data-message-id=a1]')).toHaveAttribute('data-unread', 'true') // inherited, still unread

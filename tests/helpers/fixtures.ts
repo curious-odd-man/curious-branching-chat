@@ -35,7 +35,10 @@ export async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T
   try {
     return await fn(dir)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    // retried: on Windows a file can stay locked for a moment after it was closed; never fail a test over cleanup
+    await rm(dir, { recursive: true, force: true, maxRetries: 30, retryDelay: 200 }).catch(
+      () => undefined
+    )
   }
 }
 

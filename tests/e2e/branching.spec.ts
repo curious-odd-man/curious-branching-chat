@@ -80,9 +80,12 @@ async function sendText(win: Page, text: string): Promise<void> {
 }
 
 async function replyTo(win: Page, message: Locator, from: string, to = from): Promise<void> {
+  const before = await win.getByTestId('thread').getAttribute('data-thread-id')
   await selectText(message, from, to)
   await expect(reply(win)).toBeVisible()
   await reply(win).click()
+  // wait for the new branch itself: when replying from inside a branch, a branch header is already on screen
+  await expect(win.getByTestId('thread')).not.toHaveAttribute('data-thread-id', before ?? '')
   await expect(win.getByTestId('branch-header')).toBeVisible()
 }
 

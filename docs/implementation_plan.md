@@ -123,6 +123,17 @@ Implementation decisions made in phase 6:
 - Clipboard test note: this Electron version has the asynchronous, web-style clipboard in the main process (
   `write([ClipboardItem])`), which the real-clipboard test uses.
 
+First run of the test suite on Windows (by the project owner) found six failures, all in the tests, none in the
+application:
+
+- Five tests passed but failed afterwards while deleting their temporary profile folder: on Windows, Chromium's helper
+  processes can keep files locked for a moment after the app has closed (`EPERM`). Cleanup now retries for a few seconds
+  and never fails a test; a folder that cannot be removed is left in the temp directory.
+- One branching test read the branch context before the new branch had opened (it waited for "a branch header is
+  visible", which was already true when replying from inside a branch). `replyTo` now waits until the shown thread
+  actually changes. The same wait was added in one unread test. Both groups of tests also passed under heavy CPU load on
+  Linux.
+
 ---
 
 ## 1. Approach

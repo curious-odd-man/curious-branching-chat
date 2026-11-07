@@ -71,6 +71,17 @@ export async function launchApp(
   }
 }
 
+/**
+ * Removes temporary folders. On Windows, Chromium's helper processes can keep files in a profile folder locked for a
+ * moment after the application has closed (EPERM/EBUSY), so removal is retried; a folder that still cannot be removed
+ * is left behind in the temp directory and must never make a test fail.
+ */
 export async function cleanup(...dirs: string[]): Promise<void> {
-  await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })))
+  await Promise.all(
+    dirs.map((d) =>
+      rm(d, { recursive: true, force: true, maxRetries: 30, retryDelay: 200 }).catch(
+        () => undefined
+      )
+    )
+  )
 }
