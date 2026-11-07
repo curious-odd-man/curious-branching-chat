@@ -346,7 +346,8 @@ conversation ID, and membership version locally.
 10. Mark the local transport write as complete for that recipient.
 11. Wait for signed delivery/read receipts from recipients.
 
-Atomic local rename/move reduces the chance of observing a partial local write. It does not guarantee atomic publication by
+Atomic local rename/move reduces the chance of observing a partial local write. It does not guarantee atomic publication
+by
 the synchronization provider or immediate availability to recipients.
 
 If writing to some recipient inboxes succeeds and others fail, retain per-recipient state and retry only the missing
@@ -763,45 +764,79 @@ establishment, concurrent onboarding, and the exact activation condition need to
    descriptor/roster, or whether it should also contain other shared state such as protocol capabilities, display names,
    or a compact history index. Message history should remain in the existing local storage unless a separate
    shared-history requirement is approved.
+
+> It is already defined - just keep it as close as possible to existing version. This shall be discussed further, when
+> you will get access to code.
+
 2. **How are public keys trusted?** If participants upload public keys to a shared folder, how does the initiator verify
    that a key belongs to the intended person? Options include out-of-band fingerprint comparison, QR exchange, a trusted
    invitation link, or a combination. Folder presence alone is not authentication.
+
+> For v1 access to the shared folder is enough. Initiator shall have an option to discard participant (public key) on
+> bootstrap.
+
 3. **How are invitations delivered and protected?** Decide whether invitation files are encrypted to the invitee's
    public key, signed only, or also delivered through an independent channel. Define expiry, replay protection, and
    acceptance/decline behavior.
+
+> encrypted with invitees public key. no need for extra protection
+
 4. **Who can create the BranchChat file and update membership?** The proposal uses one initiator/administrator as the
    single writer in v1. Decide whether administrator succession is needed if that user loses their device or private
    keys.
+
+> anyone can - since any participant can share his local branchchat file - there is only so much secresy.
+
 5. **What happens if the initiator loses private keys?** Decide whether a new administrator can be appointed, and what
    proof authorizes that transition.
+
+> No administrator. only initiator. after - all participants are equal
+
 6. **Can an administrator remove a participant?** Users cannot leave in v1, but removal by an administrator is not
    specified. Decide whether v1 has immutable membership after chat creation or supports administrator removal.
+
+> no.
+
 7. **What is the exact rejoin policy after key loss?** The user can create a new identity and be invited again, but the
    new key cannot decrypt old ciphertext. Decide whether history remains local-only, whether a trusted participant can
    export/re-share plaintext history, or whether rejoining starts with future messages only.
+
+> any new invitation contains current state of chat. So this is independent if new joiner or re-joiner comes. The only
+> difference that re-joiner have id already in chat, while new joiner gets a new one.
+
 8. **Which non-Google transports are in v1?** Google Drive must be optional. Decide whether v1 ships with only a generic
    local-folder adapter (usable with any third-party sync tool), plus local-only mode, or includes another named
    provider.
+> only those 2
 9. **What does "works without Google Drive" mean?** Confirm whether it means another synchronization provider, manual
    transfer of encrypted files, local-only chat storage, or all of these. Remote real-time/asynchronous exchange still
    requires a transport.
+> same as current version. only file is updated. file is then manually shared between users
 10. **How is a shared folder provisioned for participants?** Confirm whether each participant is expected to create
     their own public-key bundle in the folder before the initiator creates the chat, and whether folder write
     permissions allow this.
+> users do this manually. app guides them
 11. **What is the activation threshold?** Does the initiator activate the conversation after all invitees accept, or can
     a subset start while other invitees are pending?
+> as soon as every participant will be able to read messages
 12. **Can a participant join after the chat is already active?** Define whether the administrator can issue a new
     invitation at any time and how all existing participants learn and approve the new BranchChat version.
+> yes.
 13. **How should concurrent or stale BranchChat copies be reconciled?** The single-writer proposal reduces conflicts,
-    but define behavior for stale clients, duplicate state versions, rollback attempts, and administrator device
-    replacement.
+    but define behavior for stale clients, duplicate state versions, rollback attempts.
+> Not applicable. The reconciliation is either busiess as usual, or just sharing a chat file.
 14. **What exact data is in the BranchChat file?** Confirm whether display names, avatars, public-key history,
     invitation status, and participant status are shared fields or local presentation data.
+> read state: `{"797e7122-e76c-4d9b-b27e-2ed0942b8a76":["46c19cfa-4ff8-444a-8c86-ee33d143fb4b","ac7e0a65-11fe-4b7e-a44c-28111307607c"]}`
+> manifest: `{"format":"branchchat","schemaVersion":1,"documentId":"40bdb2b4-eb8f-4d0d-b844-d424044b578d","createdAt":"2026-11-03T15:14:12.254Z","generator":{"name":"BranchChat","version":"0.1.0"}}`
+> discussion: title, participants, threads, messages
 15. **What does no edits/deletions cover?** This document assumes user-visible message edits/deletions are unsupported,
     while transport cleanup of already-processed files remains allowed. Confirm whether conversation metadata or
     participant display names can be changed.
+> cannot change
 16. **Are read receipts mandatory?** Decide whether each participant can disable read receipts and how that affects
     group aggregate read state.
+> yes.
 
 ## 23. Decisions and implementation notes
 
