@@ -5,22 +5,22 @@ discussion, shared through WhatsApp or any file-sharing tool.
 
 Stack: Electron + TypeScript, React, TipTap (from phase 3), electron-builder (NSIS), electron-updater (phase 8).
 Design documents are in [`docs/`](docs): requirements, ADR-001, and the implementation plan.
-Also there: [security review](docs/02-done/security-review.md), [performance results](docs/02-done/performance.md),
-[acceptance matrix](docs/02-done/acceptance.md), [release process](docs/02-done/release-process.md), the Russian
-[user guide](docs/other/user-guide.ru.md) and the Windows [test checklist](docs/windows-test-checklist.md).
+Also there: [security review](docs/security-review.md), [performance results](docs/performance.md),
+[acceptance matrix](docs/acceptance.md), [release process](docs/release-process.md), the Russian
+[user guide](docs/user-guide.ru.md) and the Windows [test checklist](docs/windows-test-checklist.md).
 
 ## Commands
 
-| Command                | What it does                                                        |
-| ---------------------- | ------------------------------------------------------------------- |
-| `npm install`          | Install dependencies                                                |
-| `npm run dev`          | Start the app with hot reload                                       |
-| `npm run build`        | Build main, preload and renderer into `out/`                       |
-| `npm test`             | Unit tests (Vitest): domain, validation, document format            |
-| `npm run test:e2e`     | Builds a test build (`--mode e2e`, dialogs stubbed) and runs the Electron tests (Playwright) |
-| `npm run lint`         | ESLint, including the import-boundary rules                         |
-| `npm run typecheck`    | TypeScript for main/shared and renderer/shared                      |
-| `npm run package`      | Build the unsigned per-user installer `dist/BranchChat-Setup.exe`   |
+| Command             | What it does                                                                                 |
+|---------------------|----------------------------------------------------------------------------------------------|
+| `npm install`       | Install dependencies                                                                         |
+| `npm run dev`       | Start the app with hot reload                                                                |
+| `npm run build`     | Build main, preload and renderer into `out/`                                                 |
+| `npm test`          | Unit tests (Vitest): domain, validation, document format                                     |
+| `npm run test:e2e`  | Builds a test build (`--mode e2e`, dialogs stubbed) and runs the Electron tests (Playwright) |
+| `npm run lint`      | ESLint, including the import-boundary rules                                                  |
+| `npm run typecheck` | TypeScript for main/shared and renderer/shared                                               |
+| `npm run package`   | Build the unsigned per-user installer `dist/BranchChat-Setup.exe`                            |
 
 On Linux as root, run the e2e tests with `BRANCHCHAT_NO_SANDBOX=1 xvfb-run -a npm run test:e2e`.
 
@@ -75,7 +75,8 @@ See `docs/implementation_plan.md`.
 - Phase 4 (branching): done. "Reply to this" from any selection, inherited context with the quoted passage highlighted,
   nested branches, side panel (active/closed), titles, close/reopen, badges, go to source. 150 unit tests and 33
   Electron end-to-end tests.
-- Phase 5 (unread messages): done. Unread highlighting, mark as read (message, thread, all), read-on-reply, panel counts,
+- Phase 5 (unread messages): done. Unread highlighting, mark as read (message, thread, all), read-on-reply, panel
+  counts,
   window title count, read indicators, one-time notice. 157 unit tests and 40 Electron end-to-end tests.
 - Phase 6 (images): done. Paste, drop and file chooser; inline display and larger view; placeholders; no size limit.
   181 unit tests and 52 Electron end-to-end tests.
@@ -84,21 +85,24 @@ See `docs/implementation_plan.md`.
 ## Installing an unsigned build (SmartScreen)
 
 Releases are not code-signed yet. On first run Windows SmartScreen may show "Windows protected your PC": choose
-**More info**, then **Run anyway** (in Russian Windows: **Подробнее**, then **Выполнить в любом случае**). Verify the download
+**More info**, then **Run anyway** (in Russian Windows: **Подробнее**, then **Выполнить в любом случае**). Verify the
+download
 first with `Get-FileHash .\BranchChat-Setup.exe -Algorithm SHA256` and compare with the value on the release page. Full
-steps in Russian: [`docs/user-guide.ru.md`](docs/other/user-guide.ru.md).
+steps in Russian: [`docs/user-guide.ru.md`](docs/user-guide.ru.md).
 
 ## Releasing
 
-Releases are built by CI only: push a tag `vX.Y.Z` equal to `version` in `package.json` and `.github/workflows/release.yml`
+Releases are built by CI only: push a tag `vX.Y.Z` equal to `version` in `package.json` and
+`.github/workflows/release.yml`
 tests, packages the unsigned installer and publishes a stable GitHub Release with `latest.yml`, the blockmap and a
 SHA-256. Details and the one-time setup (real GitHub owner in `electron-builder.yml`, public repository, two-factor
-authentication) are in [`docs/release-process.md`](docs/02-done/release-process.md).
+authentication) are in [`docs/release-process.md`](docs/release-process.md).
 
 ## Notes for developers
 
 - `npm run build` makes the **release** build; `npm run build:e2e` makes the **test** build used by Playwright. They
-  write to the same `out/` folder: after packaging, run `npm run build:e2e` again before running the e2e tests (a release
+  write to the same `out/` folder: after packaging, run `npm run build:e2e` again before running the e2e tests (a
+  release
   build ignores the isolated test profile and test dialogs).
 - Release builds must not contain test hooks (CI and the release workflow search for them).
 - Offline spell check uses the Windows spell checker (Russian and English); it needs the Russian language pack.

@@ -1,3 +1,4 @@
+import { CURRENT_VERSION } from './helpers/version'
 import { spawn } from 'node:child_process'
 import { expect, test } from '@playwright/test'
 import { cleanup, launchApp, type TestApp } from './helpers/app'
@@ -18,7 +19,7 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
   const win = await t.app.firstWindow()
   await expect(win.locator('h1')).toHaveText('BranchChat') // start window of the app
   await expect(win.locator('main')).toContainText('Обсуждения с ветвлением')
-  await expect(win.locator('small')).toContainText('Версия 0.1.0') // round trip through IPC
+  await expect(win.locator('small')).toContainText(`Версия ${CURRENT_VERSION}`) // round trip through IPC
 
   const surface = await win.evaluate(() => ({
     api: Object.keys(window.branchchat),
