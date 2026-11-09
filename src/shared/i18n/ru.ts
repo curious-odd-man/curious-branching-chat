@@ -8,7 +8,18 @@ export const ru = {
   launcher: {
     newDiscussion: 'Новое обсуждение',
     openDiscussion: 'Открыть обсуждение…',
-    dropHint: 'Или перетащите файл .branchchat в это окно.'
+    dropHint: 'Или перетащите файл .branchchat в это окно.',
+    recentHeading: 'Недавние обсуждения',
+    recentMissing: 'файл не найден',
+    recentClear: 'Очистить список',
+    recentRemove: (name: string): string => `Убрать «${name}» из списка`
+  },
+  recent: {
+    menuTitle: 'Открыть недавние',
+    menuEmpty: 'Список пуст',
+    menuClear: 'Очистить список',
+    menuMissing: 'не найден',
+    jumpListCategory: 'Недавние'
   },
   nameDialog: {
     title: 'Как вас зовут?',
@@ -110,6 +121,13 @@ export const ru = {
     nameLabel: 'Ваше имя',
     nameHint: 'Новое имя будет показано в новых сообщениях. Прежние сообщения не изменятся.',
     saveName: 'Сохранить имя',
+    startupHeading: 'Запуск и недавние обсуждения',
+    openLastFile: 'Открывать последнее обсуждение при запуске',
+    openLastFileHint:
+      'Если BranchChat запущен без файла, откроется обсуждение, с которым вы работали в прошлый раз. Если файл удалён или перемещён, откроется начальный экран.',
+    recentLimitLabel: 'Сколько недавних обсуждений помнить',
+    recentLimitHint:
+      'Список виден на начальном экране, в меню «Файл» и на значке в панели задач. 0 — не хранить список. Если уменьшить число, самые старые записи будут забыты.',
     nameSaved: 'Имя сохранено.',
     close: 'Закрыть'
   },

@@ -6,6 +6,7 @@ import {
   type DocumentView,
   type IpcResult,
   type MenuCommand,
+  type RecentFileView,
   type UpdateView
 } from '@shared/types/ipc'
 
@@ -38,6 +39,12 @@ const api: BranchChatApi = {
   markAllRead: () => invoke(IPC.readMarkAll),
   acknowledgeReadNotice: () => invoke(IPC.settingsAckReadNotice),
   setAutoUpdateCheck: (enabled) => invoke(IPC.settingsSetAutoUpdate, { enabled }),
+  setRecentFilesLimit: (limit) => invoke(IPC.settingsSetRecentLimit, { limit }),
+  setOpenLastFileOnStartup: (enabled) => invoke(IPC.settingsSetOpenLast, { enabled }),
+  getRecentFiles: () => invoke(IPC.recentGet),
+  removeRecentFile: (path) => invoke(IPC.recentRemove, { path }),
+  clearRecentFiles: () => invoke(IPC.recentClear),
+  onRecentFilesChanged: (callback) => subscribe<RecentFileView[]>(IPC.recentChanged, callback),
   getUpdateState: () => invoke(IPC.updateGetState),
   checkForUpdates: () => invoke(IPC.updateCheck),
   downloadUpdate: () => invoke(IPC.updateDownload),

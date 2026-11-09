@@ -320,6 +320,9 @@ button:disabled {
   background: Canvas;
   color: CanvasText;
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.3);
+  /* A dialog taller than the window scrolls instead of pushing its buttons off screen (NFR-003). */
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 .dialog label {
   display: block;
@@ -808,5 +811,64 @@ mark.quote {
   }
   .composer {
     padding-top: 0.3rem;
+  }
+}
+
+/* Recent discussions on the start screen */
+.launcher .recent {
+  margin-top: 1.5rem;
+  text-align: left;
+}
+.recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.recent-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.recent ul {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.recent-item {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+.recent-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+.recent-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.recent-dir {
+  font-size: 0.82rem;
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+}
+.recent-item.missing .recent-name {
+  text-decoration: line-through;
+}
+.recent-item.missing .recent-open {
+  opacity: 0.55;
+}
+.recent-remove {
+  flex: 0 0 auto;
+}
+@media (forced-colors: active) {
+  .recent-item.missing .recent-open {
+    opacity: 1;
+    border-style: dashed;
   }
 }

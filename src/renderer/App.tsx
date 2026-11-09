@@ -10,7 +10,7 @@ import { ReadNotice } from './components/ReadNotice'
 import { SettingsDialog } from './components/SettingsDialog'
 import { UpdateDialog } from './components/UpdateDialog'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
-import { useDocumentView, useSettings, useUpdateState } from './hooks'
+import { useDocumentView, useRecentFiles, useSettings, useUpdateState } from './hooks'
 
 export function App(): React.JSX.Element {
   const api = window.branchchat
@@ -24,6 +24,7 @@ export function App(): React.JSX.Element {
     null
   )
   const update = useUpdateState()
+  const recent = useRecentFiles()
   const [bannerHidden, setBannerHidden] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [readNotice, setReadNotice] = useState<{ retry: () => void } | null>(null)
@@ -182,7 +183,15 @@ export function App(): React.JSX.Element {
           </div>
         )}
       {view === undefined ? null : view === null ? (
-        <Launcher version={version} onNew={startNew} onOpen={openDialog} />
+        <Launcher
+          version={version}
+          recent={recent}
+          onNew={startNew}
+          onOpen={openDialog}
+          onOpenRecent={(path) => void api.openPath(path).then(report)}
+          onRemoveRecent={(path) => void api.removeRecentFile(path).then(report)}
+          onClearRecent={() => void api.clearRecentFiles().then(report)}
+        />
       ) : (
         <DiscussionScreen
           view={view}

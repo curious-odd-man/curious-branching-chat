@@ -37,6 +37,13 @@ async function createDiscussion(t: TestApp, win: Page, file: string, name = '–ê–
   await expect(win.getByTestId('composer')).toBeVisible()
 }
 
+/** A new start would reopen the last discussion (the default); tests that expect the start screen turn that off. */
+async function turnOffReopenLast(userData: string): Promise<void> {
+  const file = join(userData, 'settings.json')
+  const settings = JSON.parse(await fs.readFile(file, 'utf8')) as Record<string, unknown>
+  await fs.writeFile(file, JSON.stringify({ ...settings, openLastFileOnStartup: false }))
+}
+
 async function send(win: Page, text: string): Promise<void> {
   await win.getByTestId('composer').fill(text)
   await win.getByTestId('send').click()
@@ -94,6 +101,7 @@ test('cancelling the Save dialog creates nothing', async () => {
   const { t, win } = await start()
   await createDiscussion(t, win, join(await workDir(), 'x.branchchat')) // sets the name
   await t.close()
+  await turnOffReopenLast(t.userData) // otherwise the second start reopens the discussion just created
   const again = await start({ userData: t.userData })
   await again.win.getByTestId('launcher-new').click() // no answer queued => dialog is cancelled
   await expect(again.win.getByTestId('launcher-new')).toBeVisible()

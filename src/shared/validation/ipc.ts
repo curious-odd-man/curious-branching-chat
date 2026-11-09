@@ -26,3 +26,6 @@ export const markThreadSchema = z.object({ threadId: z.string().min(1) }).strict
 export const stageImageSchema = z.object({ data: z.instanceof(Uint8Array) }).strict()
 export const setAssociationSchema = z.object({ enabled: z.boolean() }).strict()
 export const setAutoUpdateSchema = z.object({ enabled: z.boolean() }).strict()
+export const setRecentLimitSchema = z.object({ limit: z.number().int().nonnegative() }).strict()
+export const setOpenLastSchema = z.object({ enabled: z.boolean() }).strict()
+export const recentPathSchema = z.object({ path: z.string().min(1) }).strict()
