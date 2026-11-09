@@ -525,6 +525,12 @@ Exit criteria
 
 Requirements: NFR-003, NFR-004, NFR-014, NFR-016, acceptance criteria 1 to 24.
 
+**Status (revision 10 of the plan):** implemented and automated: security hardening and tests (`security-review.md`),
+performance pass (`performance.md`), display/keyboard/focus/high-contrast tests, Russian text tests, release workflow,
+documentation (`user-guide.ru.md`, `release-process.md`, `release-notes-template.md`, `acceptance.md`). Needs real
+Windows machines and the user's GitHub account (checklist section I): WhatsApp exchange, real scaling and contrast
+themes, SmartScreen screenshots, the acceptance run on clean Windows 10 and 11, and publishing 1.0.0.
+
 ## 4. Schedule overview
 
 | Phase | Name                              | Size | Depends on |

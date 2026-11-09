@@ -3,6 +3,7 @@ import type { StagedImage } from './assets'
 import type {
   AppInfo,
   AssociationInfo,
+  DocumentStatus,
   DocumentView,
   IpcResult,
   MenuCommand,
@@ -58,6 +59,8 @@ export interface BranchChatApi {
   openLink(url: string): Promise<IpcResult<boolean>>
   /** Subscribe to state changes of this window's discussion. Returns an unsubscribe function. */
   onDocumentChanged(callback: (view: DocumentView | null) => void): () => void
+  /** The save status changed (without any change to the discussion itself). */
+  onDocumentStatusChanged(callback: (status: DocumentStatus) => void): () => void
   onMenuCommand(callback: (command: MenuCommand) => void): () => void
   /** Absolute path of a file dropped onto the window. */
   getPathForFile(file: object): string

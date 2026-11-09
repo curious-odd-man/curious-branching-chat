@@ -30,10 +30,17 @@ export async function tempDir(prefix = 'bc-e2e-'): Promise<string> {
 
 /** Launches the built app with an isolated profile and all native dialogs stubbed. */
 export async function launchApp(
-  options: { userData?: string; files?: string[]; env?: Record<string, string> } = {}
+  options: {
+    userData?: string
+    files?: string[]
+    env?: Record<string, string>
+    /** Chromium switches, e.g. --force-device-scale-factor=1.5 */
+    electronArgs?: string[]
+  } = {}
 ): Promise<TestApp> {
   const userData = options.userData ?? (await tempDir('bc-profile-'))
   const args = [
+    ...(options.electronArgs ?? []),
     '.',
     ...(process.env['BRANCHCHAT_NO_SANDBOX'] ? ['--no-sandbox'] : []),
     ...(options.files ?? [])

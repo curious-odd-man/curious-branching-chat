@@ -52,6 +52,7 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
       'markThreadRead',
       'newDocument',
       'onDocumentChanged',
+      'onDocumentStatusChanged',
       'onMenuCommand',
       'openLink',
       'pickImage',

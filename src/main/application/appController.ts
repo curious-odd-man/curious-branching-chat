@@ -4,7 +4,13 @@ import { basename, resolve } from 'node:path'
 import type { DomainContext } from '@shared/domain'
 import { describeError, ru } from '@shared/i18n/ru'
 import type { StagedImage } from '@shared/types/assets'
-import { IPC, type DocumentView, type MenuCommand, type OpenOutcome } from '@shared/types/ipc'
+import {
+  IPC,
+  type DocumentStatus,
+  type DocumentView,
+  type MenuCommand,
+  type OpenOutcome
+} from '@shared/types/ipc'
 import { DocumentError } from '../document'
 import type { SettingsStore } from '../local-state/settings'
 import { DocumentSession } from './documentSession'
@@ -214,6 +220,7 @@ export class AppController {
   private bind(entry: WindowEntry, session: DocumentSession): void {
     entry.session = session
     session.onChange = () => this.push(entry)
+    session.onStatusChange = () => this.pushStatus(entry, session)
     this.push(entry)
     focusWindow(entry.win)
   }
@@ -222,6 +229,13 @@ export class AppController {
     if (entry.win.isDestroyed()) return
     this.updateTitle(entry)
     entry.win.webContents.send(IPC.documentChanged, this.viewOf(entry))
+  }
+
+  /** A save finished: only the status is sent, not the whole discussion (a large discussion is several MB). */
+  private pushStatus(entry: WindowEntry, session: DocumentSession): void {
+    if (entry.win.isDestroyed()) return
+    const status: DocumentStatus = { saving: session.saving, saveError: session.saveError }
+    entry.win.webContents.send(IPC.documentStatusChanged, status)
   }
 
   private updateTitle(entry: WindowEntry): void {

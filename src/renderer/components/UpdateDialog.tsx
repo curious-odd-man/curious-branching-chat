@@ -1,3 +1,4 @@
+import { Modal } from './Modal'
 import { describeError, ru } from '@shared/i18n/ru'
 import type { UpdateView } from '@shared/types/ipc'
 import { formatBytes, formatDate } from '../i18n/format'
@@ -18,13 +19,7 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
   const busy = phase === 'checking' || phase === 'downloading'
 
   return (
-    <div
-      className="overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="update-title"
-      onKeyDown={(e) => e.key === 'Escape' && close()}
-    >
+    <Modal labelledBy="update-title" onEscape={close}>
       <div className="dialog update" data-testid="update-dialog" data-phase={phase}>
         <h2 id="update-title">{info ? ru.update.available(info.version) : ru.update.title}</h2>
 
@@ -159,6 +154,6 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

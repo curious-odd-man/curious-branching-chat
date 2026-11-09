@@ -28,6 +28,12 @@ import type { SettingsStore } from '../local-state/settings'
 import type { UpdateService } from '../updates/updateService'
 import type { AssociationService } from '../windows/associationService'
 
+/** Only the application's own page may call the main process: the packaged `file:` page, or the dev server. */
+function isAppPage(url: string): boolean {
+  const dev = process.env['ELECTRON_RENDERER_URL']
+  return url.startsWith('file://') || (dev !== undefined && url.startsWith(dev))
+}
+
 function toError(err: unknown): { code: string; message: string } {
   if (err instanceof AppError || err instanceof DocumentError || err instanceof DomainError)
     return {
@@ -52,7 +58,7 @@ export function registerIpcHandlers(
   ): void {
     ipcMain.handle(channel, async (event, raw: unknown): Promise<IpcResult<R>> => {
       try {
-        if (event.senderFrame !== event.sender.mainFrame)
+        if (event.senderFrame !== event.sender.mainFrame || !isAppPage(event.senderFrame.url))
           throw new AppError('FORBIDDEN', 'Forbidden')
         const payload = schema.parse(raw)
         return { ok: true, data: await fn(controller.entryFor(event.sender), payload, event) }

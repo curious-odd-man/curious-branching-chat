@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { AppController } from './application/appController'
 import { installAssetProtocol, registerAssetScheme } from './application/assetProtocol'
@@ -59,6 +59,10 @@ if (!gotLock) {
     })
     installAssetProtocol(controller)
     applyGlobalSecurity()
+    // Spell checking uses the Windows spell checker (offline). Russian and English are requested; a language only works
+    // if it is installed in Windows (Settings > Time & language).
+    if (process.platform === 'win32')
+      session.defaultSession.setSpellCheckerLanguages(['ru', 'en-US'])
     const association = new AssociationService(
       createFileAssociation(__E2E_HOOKS__ ? e2eRegistry() : null),
       settings,

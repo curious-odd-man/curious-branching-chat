@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BranchChatApi } from '@shared/types/api'
 import {
   IPC,
+  type DocumentStatus,
   type DocumentView,
   type IpcResult,
   type MenuCommand,
@@ -52,6 +53,8 @@ const api: BranchChatApi = {
   setBranchStatus: (threadId, status) => invoke(IPC.branchSetStatus, { threadId, status }),
   setBranchTitle: (threadId, title) => invoke(IPC.branchSetTitle, { threadId, title }),
   onDocumentChanged: (callback) => subscribe<DocumentView | null>(IPC.documentChanged, callback),
+  onDocumentStatusChanged: (callback) =>
+    subscribe<DocumentStatus>(IPC.documentStatusChanged, callback),
   onMenuCommand: (callback) => subscribe<MenuCommand>(IPC.menuCommand, callback),
   getPathForFile: (file) => webUtils.getPathForFile(file as File)
 }

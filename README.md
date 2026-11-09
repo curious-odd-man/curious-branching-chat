@@ -5,6 +5,9 @@ discussion, shared through WhatsApp or any file-sharing tool.
 
 Stack: Electron + TypeScript, React, TipTap (from phase 3), electron-builder (NSIS), electron-updater (phase 8).
 Design documents are in [`docs/`](docs): requirements, ADR-001, and the implementation plan.
+Also there: [security review](docs/security-review.md), [performance results](docs/performance.md),
+[acceptance matrix](docs/acceptance.md), [release process](docs/release-process.md), the Russian
+[user guide](docs/user-guide.ru.md) and the Windows [test checklist](docs/windows-test-checklist.md).
 
 ## Commands
 
@@ -78,3 +81,28 @@ See `docs/implementation_plan.md`.
 - Phase 6 (images): done. Paste, drop and file chooser; inline display and larger view; placeholders; no size limit.
   181 unit tests and 52 Electron end-to-end tests.
 - Next: phase 7 (Windows integration: installer option for the `.branchchat` association).
+
+## Installing an unsigned build (SmartScreen)
+
+Releases are not code-signed yet. On first run Windows SmartScreen may show "Windows protected your PC": choose
+**More info**, then **Run anyway** (in Russian Windows: **Подробнее**, then **Выполнить в любом случае**). Verify the
+download
+first with `Get-FileHash .\BranchChat-Setup.exe -Algorithm SHA256` and compare with the value on the release page. Full
+steps in Russian: [`docs/user-guide.ru.md`](docs/user-guide.ru.md).
+
+## Releasing
+
+Releases are built by CI only: push a tag `vX.Y.Z` equal to `version` in `package.json` and
+`.github/workflows/release.yml`
+tests, packages the unsigned installer and publishes a stable GitHub Release with `latest.yml`, the blockmap and a
+SHA-256. Details and the one-time setup (real GitHub owner in `electron-builder.yml`, public repository, two-factor
+authentication) are in [`docs/release-process.md`](docs/release-process.md).
+
+## Notes for developers
+
+- `npm run build` makes the **release** build; `npm run build:e2e` makes the **test** build used by Playwright. They
+  write to the same `out/` folder: after packaging, run `npm run build:e2e` again before running the e2e tests (a
+  release
+  build ignores the isolated test profile and test dialogs).
+- Release builds must not contain test hooks (CI and the release workflow search for them).
+- Offline spell check uses the Windows spell checker (Russian and English); it needs the Russian language pack.

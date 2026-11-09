@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Modal } from './Modal'
 import { ru } from '@shared/i18n/ru'
 import type { AssociationInfo, SettingsView } from '@shared/types/ipc'
 
@@ -66,13 +67,7 @@ export function SettingsDialog({
   const canToggle = state === 'on' || state === 'off'
 
   return (
-    <div
-      className="overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="settings-title"
-      onKeyDown={(e) => e.key === 'Escape' && onClose()}
-    >
+    <Modal labelledBy="settings-title" onEscape={onClose}>
       <div className="dialog settings" data-testid="settings-dialog">
         <h2 id="settings-title">{ru.settings.title}</h2>
 
@@ -175,6 +170,6 @@ export function SettingsDialog({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

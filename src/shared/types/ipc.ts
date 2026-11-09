@@ -34,6 +34,8 @@ export const IPC = {
   branchSetTitle: 'branch:set-title',
   /** main -> renderer */
   documentChanged: 'document:changed',
+  /** main -> renderer: only the save status changed (a save finished); sent instead of the whole discussion. */
+  documentStatusChanged: 'document:status-changed',
   menuCommand: 'menu:command',
   updateChanged: 'update:changed'
 } as const
@@ -84,6 +86,12 @@ export interface DocumentView {
   /** True while a write is pending or running. */
   saving: boolean
   notices: string[]
+}
+
+/** The part of a DocumentView that changes when a save finishes. */
+export interface DocumentStatus {
+  saving: boolean
+  saveError: string | null
 }
 
 export type IpcResult<T> =

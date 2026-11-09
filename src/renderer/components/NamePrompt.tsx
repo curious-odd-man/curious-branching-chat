@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Modal } from './Modal'
 import { ru } from '@shared/i18n/ru'
 
 interface Props {
@@ -11,7 +12,7 @@ export function NamePrompt({ onSubmit, onCancel }: Props): React.JSX.Element {
   const [name, setName] = useState('')
   const valid = name.trim().length > 0
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="name-title">
+    <Modal labelledBy="name-title">
       <div className="dialog">
         <h2 id="name-title">{ru.nameDialog.title}</h2>
         <p>{ru.nameDialog.explanation}</p>
@@ -43,6 +44,6 @@ export function NamePrompt({ onSubmit, onCancel }: Props): React.JSX.Element {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

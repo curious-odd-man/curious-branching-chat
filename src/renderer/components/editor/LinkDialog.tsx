@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { normalizeLinkInput } from '@shared/validation'
+import { Modal } from '../Modal'
 import { ru } from '@shared/i18n/ru'
 
 interface Props {
@@ -37,7 +38,7 @@ export function LinkDialog({
   }
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="link-title">
+    <Modal labelledBy="link-title" restoreFocus={false}>
       <div className="dialog">
         <h2 id="link-title">{ru.linkDialog.title}</h2>
         <label>
@@ -81,6 +82,6 @@ export function LinkDialog({
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

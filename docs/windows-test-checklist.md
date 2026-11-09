@@ -92,3 +92,29 @@ Releases of a **public** repository.
 10. Pre-release and draft: publish 0.3.0 as a pre-release and another as a draft: neither is offered.
 11. Unsigned installer: SmartScreen may warn during a manual download; during an update the silent install is not
     interrupted by SmartScreen (record what you see).
+
+## I. Hardening and release (phase 9) — on a real Windows machine
+
+1. **WhatsApp exchange (criteria 3, 4, 9).** Person A creates a discussion with formatting, a picture and two branches,
+   sends the `.branchchat` file through WhatsApp as a document. Person B (another PC) downloads it, opens it, replies
+   in a branch, and sends it back. Person A opens the returned file: B's messages and read marks are there, the picture
+   shows, nothing is lost. Repeat with a file name that contains Russian letters and spaces. Record whether WhatsApp
+   changed the file name or extension (it must stay `.branchchat`; if WhatsApp renames it, note how).
+2. **Display scaling (NFR-003).** Windows Settings > Display > Scale: 100 %, 125 %, 150 %, 200 %. At each, open a
+   discussion with a branch, shrink the window to its smallest size: the message list, composer and Send button stay
+   visible; text is sharp; nothing is cut off. Move the window between two monitors with different scaling if
+   available.
+3. **High contrast.** Settings > Accessibility > Contrast themes (Aquatic, Desert, Dusk, Night sky). Unread messages,
+   the selected branch, the quote mark and focus remain recognizable without color; text stays readable.
+4. **Keyboard.** Using only the keyboard: open a file, move between branches (Tab), write and send (Ctrl+Enter),
+   open Settings (Файл > Настройки…), close it with Esc and see focus return to the message field.
+5. **Russian text.** Type text with ё/Ё and an emoji; save, close, reopen: unchanged. Spell check underlines a
+   deliberate mistake in Russian and offers corrections on right-click (needs the Russian language pack in Windows).
+6. **Performance on the oldest machine.** Open a discussion with 5,000+ messages and one with 300 pictures; note start
+   time and whether typing and scrolling stay smooth. Add the numbers to `performance.md`.
+7. **Release.** Follow `release-process.md` for a real `1.0.0` tag. The release page has the installer, `latest.yml`,
+   blockmap, SHA-256 file and the checksum in the text. Download the installer in a browser: SmartScreen warns; the
+   steps in `user-guide.ru.md` match what you see (take screenshots for the guide). `Get-FileHash` equals the
+   published value. Install, then update from 1.0.0 to 1.0.1 (section H).
+8. **Clean-machine install.** On a fresh Windows 10 and a fresh Windows 11 (no Node, no other runtimes), install from
+   the single exe and complete A, D and H.

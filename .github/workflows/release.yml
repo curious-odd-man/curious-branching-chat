@@ -1,0 +1,93 @@
+name: Release
+
+# A release is made only here, by CI, from a version tag (NFR-016, FR-119). Nothing is built on a personal computer.
+# Push a tag such as v1.0.0 whose number equals "version" in package.json.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: The tag must match the version in package.json and must be a stable version
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $version" >&2
+            exit 1
+          fi
+          case "$version" in
+            *-*) echo "Pre-release versions are not published (stable channel only)" >&2; exit 1 ;;
+          esac
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - name: End-to-end tests
+        run: npm run test:e2e
+      - name: Release build
+        run: npm run build
+      - name: The release build contains no test hooks
+        shell: bash
+        run: |
+          if grep -rEl "__dialogLog|__answers|__registry|__installRequests|InMemoryRegistry|BRANCHCHAT_E2E" out; then
+            echo "Test hooks found in the release build" >&2
+            exit 1
+          fi
+      - name: Package the Windows installer (unsigned)
+        run: npx electron-builder --win nsis --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: SHA-256 of the installer
+        id: hash
+        shell: bash
+        run: |
+          sum="$(sha256sum dist/BranchChat-Setup.exe | cut -d' ' -f1)"
+          echo "$sum  BranchChat-Setup.exe" > dist/BranchChat-Setup.exe.sha256
+          echo "sha256=$sum" >> "$GITHUB_OUTPUT"
+      - name: Write the release notes
+        shell: bash
+        run: |
+          {
+            echo "## Что нового"
+            echo
+            echo "Опишите изменения здесь (правьте текст релиза на GitHub после публикации, если нужно)."
+            echo
+            echo "## Установка"
+            echo
+            echo "Скачайте \`BranchChat-Setup.exe\` и запустите. Права администратора не нужны."
+            echo "Приложение не подписано: при первом запуске Windows может показать предупреждение SmartScreen."
+            echo "Нажмите «Подробнее», затем «Выполнить в любом случае». Подробности — в руководстве пользователя."
+            echo
+            echo "## Проверка файла"
+            echo
+            echo "SHA-256 установщика \`BranchChat-Setup.exe\`:"
+            echo
+            echo "\`${{ steps.hash.outputs.sha256 }}\`"
+            echo
+            echo "Проверить в PowerShell: \`Get-FileHash .\\BranchChat-Setup.exe -Algorithm SHA256\`"
+          } > release-notes.md
+      - name: Create the stable GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/BranchChat-Setup.exe \
+            dist/latest.yml \
+            dist/BranchChat-Setup.exe.blockmap \
+            dist/BranchChat-Setup.exe.sha256 \
+            --title "BranchChat ${GITHUB_REF_NAME#v}" \
+            --notes-file release-notes.md \
+            --verify-tag

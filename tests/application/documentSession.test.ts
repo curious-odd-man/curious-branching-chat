@@ -112,6 +112,7 @@ describe('DocumentSession', () => {
 
       let changes = 0
       s.onChange = () => void changes++
+      s.onStatusChange = () => void changes++
       s.appendMessage(anna, threadId, text('не сохранится сразу'))
       await s.flush()
       expect(s.saveError).toMatch(/Не удалось записать файл|Нет доступа/)

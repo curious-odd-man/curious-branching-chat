@@ -63,8 +63,10 @@ export interface SessionDeps {
  * `retrySave()` tries again (FR-008).
  */
 export class DocumentSession {
-  /** Called whenever the visible state changes (a change was made, or a save started or finished). */
+  /** Called whenever the discussion or the save state changes because of a change made by the person. */
   onChange: () => void = () => undefined
+  /** Called when only the save status changed (a write finished); the discussion itself is unchanged. */
+  onStatusChange: () => void = () => undefined
   notices: string[] = []
 
   private writeChain: Promise<void> = Promise.resolve()
@@ -351,7 +353,7 @@ export class DocumentSession {
       } finally {
         this.running = false
       }
-      this.onChange()
+      this.onStatusChange()
     })
   }
 }

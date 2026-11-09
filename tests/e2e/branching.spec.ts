@@ -482,6 +482,7 @@ test('each thread keeps its own unsent draft while moving between branches (FR-0
   await expect(composer(win)).toHaveText('черновик основной')
   await win.locator('[data-testid=panel-branch][data-thread-id=a]').click()
   await expect(composer(win)).toHaveText('черновик ветки')
+  await expect(composer(win)).toBeFocused() // focus returns to the field after the switch
 
   // sending in the branch does not touch the main thread's draft; closing still warns about it
   await win.keyboard.press('Control+Enter')

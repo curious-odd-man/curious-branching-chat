@@ -218,6 +218,10 @@ export const ru = {
     checkUpdates: 'Проверить обновления…',
     about: 'О программе'
   },
+  contextMenu: {
+    noSuggestions: 'Нет вариантов',
+    addToDictionary: 'Добавить в словарь'
+  },
   dialogs: {
     saveTitle: 'Новое обсуждение',
     openTitle: 'Открыть обсуждение',

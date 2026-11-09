@@ -1,4 +1,4 @@
-import { app, dialog, shell } from 'electron'
+import { app, dialog, Menu, shell } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ASKED_KEY, ASKED_VALUE } from '../windows/fileAssociation'
@@ -78,9 +78,15 @@ export function installE2eHooks(): void {
     __dialogLog: DialogLog
     __answers: Answers
     __openedLinks: string[]
+    __contextMenus: string[][]
     __registry: InMemoryRegistry
   }
   g.__openedLinks = []
+  g.__contextMenus = []
+  // Record popup menus (labels only) instead of showing them.
+  ;(Menu.prototype as unknown as { popup: () => void }).popup = function (this: Menu) {
+    g.__contextMenus.push(this.items.map((i) => (i.type === 'separator' ? '---' : i.label)))
+  }
   g.__dialogLog = []
   g.__answers = { save: [], open: [], box: [] }
   g.__registry = e2eRegistry()

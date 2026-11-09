@@ -1,3 +1,4 @@
+import { Modal } from './Modal'
 import { ru } from '@shared/i18n/ru'
 
 interface Props {
@@ -8,7 +9,7 @@ interface Props {
 /** Shown once per computer before the first change to the person's read state (FR-125). */
 export function ReadNotice({ onConfirm, onCancel }: Props): React.JSX.Element {
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="read-notice-title">
+    <Modal labelledBy="read-notice-title" onEscape={onCancel}>
       <div className="dialog" data-testid="read-notice">
         <h2 id="read-notice-title">{ru.readNotice.title}</h2>
         <p>{ru.readNotice.text}</p>
@@ -27,6 +28,6 @@ export function ReadNotice({ onConfirm, onCancel }: Props): React.JSX.Element {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 9)  
+**Status:** MVP requirements (revision 10)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -701,6 +701,13 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 10
+
+- Phase 9 (hardening and release) added no new product behavior. Clarifications: NFR-003 is verified for Windows
+  display scaling 100–200 %, the smallest window, keyboard use, focus handling and Windows high-contrast themes;
+  spell check uses the operating-system spell checker for Russian and English (no bundled dictionary); releases are
+  made only by the tag-triggered CI workflow and always include a SHA-256 (NFR-016, FR-119).
 
 ## Changes in revision 9
 

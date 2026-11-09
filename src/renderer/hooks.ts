@@ -5,12 +5,19 @@ import type { DocumentView, SettingsView, UpdateView } from '@shared/types/ipc'
 export function useDocumentView(): DocumentView | null | undefined {
   const [view, setView] = useState<DocumentView | null | undefined>(undefined)
   useEffect(() => {
-    const unsubscribe = window.branchchat.onDocumentChanged(setView)
+    const unsubscribeChanged = window.branchchat.onDocumentChanged(setView)
+    // A finished save changes only these two fields; the (possibly huge) discussion is not sent again.
+    const unsubscribeStatus = window.branchchat.onDocumentStatusChanged((status) =>
+      setView((current) => (current ? { ...current, ...status } : current))
+    )
     void window.branchchat.getDocumentState().then((r) => {
       // A push that arrived first is newer than this answer.
       setView((current) => (current !== undefined ? current : r.ok ? r.data : null))
     })
-    return unsubscribe
+    return () => {
+      unsubscribeChanged()
+      unsubscribeStatus()
+    }
   }, [])
   return view
 }
