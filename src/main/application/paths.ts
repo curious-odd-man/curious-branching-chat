@@ -5,6 +5,6 @@ import { resolve, win32 } from 'node:path'
  * either slash, so they are compared lower-cased with normalized separators.
  */
 export function pathKey(path: string, platform: NodeJS.Platform = process.platform): string {
-  if (platform === 'win32') return win32.resolve(path).toLowerCase()
-  return resolve(path)
+    if (platform === 'win32') return win32.resolve(path).toLowerCase()
+    return resolve(path)
 }

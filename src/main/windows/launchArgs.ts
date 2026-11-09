@@ -8,11 +8,12 @@ export { DISCUSSION_EXTENSION }
  * Validation that the file exists and is readable happens when it is opened (FR-118).
  */
 export function extractDiscussionPaths(argv: readonly string[]): string[] {
-  const paths: string[] = []
-  for (const raw of argv) {
-    const arg = raw.trim().replace(/^"(.*)"$/, '$1')
-    if (arg.startsWith('--') || arg.length === 0) continue
-    if (arg.toLowerCase().endsWith(DISCUSSION_EXTENSION) && !paths.includes(arg)) paths.push(arg)
-  }
-  return paths
+    const paths: string[] = []
+    for (const raw of argv) {
+        const arg = raw.trim().replace(/^"(.*)"$/, '$1')
+        if (arg.startsWith('--') || arg.length === 0) continue
+        if (arg.toLowerCase().endsWith(DISCUSSION_EXTENSION) && !paths.includes(arg))
+            paths.push(arg)
+    }
+    return paths
 }

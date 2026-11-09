@@ -8,49 +8,49 @@ import { findMessage, findThread } from './discussion'
  */
 
 function readSet(rs: ReadState, participantId: string): Set<string> {
-  return new Set(rs[participantId] ?? [])
+    return new Set(rs[participantId] ?? [])
 }
 
 export function isUnread(rs: ReadState, localId: string, message: Message): boolean {
-  if (message.authorId === localId) return false
-  return !(rs[localId] ?? []).includes(message.messageId)
+    if (message.authorId === localId) return false
+    return !(rs[localId] ?? []).includes(message.messageId)
 }
 
 /** Returns the same object if nothing changed, so callers can skip a save. */
 function addRead(rs: ReadState, localId: string, messages: Message[]): ReadState {
-  const already = readSet(rs, localId)
-  const toAdd = messages
-    .filter((m) => m.authorId !== localId && !already.has(m.messageId))
-    .map((m) => m.messageId)
-  if (toAdd.length === 0) return rs
-  return { ...rs, [localId]: [...(rs[localId] ?? []), ...toAdd] }
+    const already = readSet(rs, localId)
+    const toAdd = messages
+        .filter((m) => m.authorId !== localId && !already.has(m.messageId))
+        .map((m) => m.messageId)
+    if (toAdd.length === 0) return rs
+    return { ...rs, [localId]: [...(rs[localId] ?? []), ...toAdd] }
 }
 
 export function markMessageRead(
-  d: DiscussionData,
-  rs: ReadState,
-  localId: string,
-  messageId: string
+    d: DiscussionData,
+    rs: ReadState,
+    localId: string,
+    messageId: string
 ): ReadState {
-  return addRead(rs, localId, [findMessage(d, messageId).message])
+    return addRead(rs, localId, [findMessage(d, messageId).message])
 }
 
 /** Marks the thread's own messages as read (not inherited context, which belongs to the parent threads). */
 export function markThreadRead(
-  d: DiscussionData,
-  rs: ReadState,
-  localId: string,
-  threadId: string
+    d: DiscussionData,
+    rs: ReadState,
+    localId: string,
+    threadId: string
 ): ReadState {
-  return addRead(rs, localId, findThread(d, threadId).messages)
+    return addRead(rs, localId, findThread(d, threadId).messages)
 }
 
 export function markAllRead(d: DiscussionData, rs: ReadState, localId: string): ReadState {
-  return addRead(
-    rs,
-    localId,
-    d.threads.flatMap((t) => t.messages)
-  )
+    return addRead(
+        rs,
+        localId,
+        d.threads.flatMap((t) => t.messages)
+    )
 }
 
 /**
@@ -58,78 +58,80 @@ export function markAllRead(d: DiscussionData, rs: ReadState, localId: string): 
  * Call with the discussion as it was BEFORE the new message was appended.
  */
 export function readStateAfterSend(
-  dBeforeAppend: DiscussionData,
-  rs: ReadState,
-  localId: string,
-  threadId: string
+    dBeforeAppend: DiscussionData,
+    rs: ReadState,
+    localId: string,
+    threadId: string
 ): ReadState {
-  return markThreadRead(dBeforeAppend, rs, localId, threadId)
+    return markThreadRead(dBeforeAppend, rs, localId, threadId)
 }
 
 /** FR-112 (2): creating a branch from a message reads that source message. */
 export function readStateAfterBranch(
-  d: DiscussionData,
-  rs: ReadState,
-  localId: string,
-  sourceMessageId: string
+    d: DiscussionData,
+    rs: ReadState,
+    localId: string,
+    sourceMessageId: string
 ): ReadState {
-  return markMessageRead(d, rs, localId, sourceMessageId)
+    return markMessageRead(d, rs, localId, sourceMessageId)
 }
 
 export interface UnreadCounts {
-  own: number
-  /** Unread messages in descendant branches (drives the indicator on ancestors, FR-113). */
-  descendants: number
+    own: number
+    /** Unread messages in descendant branches (drives the indicator on ancestors, FR-113). */
+    descendants: number
 }
 
 export interface UnreadSummary {
-  byThread: Map<string, UnreadCounts>
-  total: number
+    byThread: Map<string, UnreadCounts>
+    total: number
 }
 
 export function unreadSummary(d: DiscussionData, rs: ReadState, localId: string): UnreadSummary {
-  const read = readSet(rs, localId)
-  const byThread = new Map<string, UnreadCounts>()
-  let total = 0
-  for (const t of d.threads) {
-    const own = t.messages.filter((m) => m.authorId !== localId && !read.has(m.messageId)).length
-    byThread.set(t.threadId, { own, descendants: 0 })
-    total += own
-  }
-  const parentOf = new Map(d.threads.map((t) => [t.threadId, t.parentThreadId]))
-  for (const t of d.threads) {
-    const own = byThread.get(t.threadId)?.own ?? 0
-    if (own === 0) continue
-    for (let p = parentOf.get(t.threadId); p !== undefined; p = parentOf.get(p)) {
-      const counts = byThread.get(p)
-      if (counts) counts.descendants += own
+    const read = readSet(rs, localId)
+    const byThread = new Map<string, UnreadCounts>()
+    let total = 0
+    for (const t of d.threads) {
+        const own = t.messages.filter(
+            (m) => m.authorId !== localId && !read.has(m.messageId)
+        ).length
+        byThread.set(t.threadId, { own, descendants: 0 })
+        total += own
     }
-  }
-  return { byThread, total }
+    const parentOf = new Map(d.threads.map((t) => [t.threadId, t.parentThreadId]))
+    for (const t of d.threads) {
+        const own = byThread.get(t.threadId)?.own ?? 0
+        if (own === 0) continue
+        for (let p = parentOf.get(t.threadId); p !== undefined; p = parentOf.get(p)) {
+            const counts = byThread.get(p)
+            if (counts) counts.descendants += own
+        }
+    }
+    return { byThread, total }
 }
 
 export type ReadStatus = 'none' | 'some' | 'all' | 'no-others'
 
 export interface WhoHasRead {
-  state: ReadStatus
-  /** Known participants other than the author who have read the message. */
-  readers: Participant[]
-  /** Known participants other than the author. */
-  others: Participant[]
+    state: ReadStatus
+    /** Known participants other than the author who have read the message. */
+    readers: Participant[]
+    /** Known participants other than the author. */
+    others: Participant[]
 }
 
 /** Read state as sets, for fast lookups when many messages are shown (build once per render). */
 export function buildReadSets(rs: ReadState): Map<string, Set<string>> {
-  return new Map(Object.entries(rs).map(([participantId, ids]) => [participantId, new Set(ids)]))
+    return new Map(Object.entries(rs).map(([participantId, ids]) => [participantId, new Set(ids)]))
 }
 
 /** True if `message` is unread for `localId`, using prebuilt sets. */
 export function isUnreadIn(
-  readSets: Map<string, Set<string>>,
-  localId: string,
-  message: Message
+    readSets: Map<string, Set<string>>,
+    localId: string,
+    message: Message
 ): boolean {
-  return message.authorId !== localId && !readSets.get(localId)?.has(message.messageId)
+    return message.authorId !== localId && !readSets.get(localId)?.has(message.messageId)
 }
 
 /**
@@ -137,24 +139,24 @@ export function isUnreadIn(
  * A person who never wrote to the file is not a known participant and does not count either way.
  */
 export function readStatusOf(
-  participants: readonly Participant[],
-  readSets: Map<string, Set<string>>,
-  message: Message
+    participants: readonly Participant[],
+    readSets: Map<string, Set<string>>,
+    message: Message
 ): WhoHasRead {
-  const others = participants.filter((p) => p.participantId !== message.authorId)
-  const readers = others.filter((p) => readSets.get(p.participantId)?.has(message.messageId))
-  const state: ReadStatus =
-    others.length === 0
-      ? 'no-others'
-      : readers.length === 0
-        ? 'none'
-        : readers.length === others.length
-          ? 'all'
-          : 'some'
-  return { state, readers, others }
+    const others = participants.filter((p) => p.participantId !== message.authorId)
+    const readers = others.filter((p) => readSets.get(p.participantId)?.has(message.messageId))
+    const state: ReadStatus =
+        others.length === 0
+            ? 'no-others'
+            : readers.length === 0
+              ? 'none'
+              : readers.length === others.length
+                ? 'all'
+                : 'some'
+    return { state, readers, others }
 }
 
 export function whoHasRead(d: DiscussionData, rs: ReadState, messageId: string): WhoHasRead {
-  const { message } = findMessage(d, messageId)
-  return readStatusOf(d.participants, buildReadSets(rs), message)
+    const { message } = findMessage(d, messageId)
+    return readStatusOf(d.participants, buildReadSets(rs), message)
 }

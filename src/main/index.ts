@@ -24,9 +24,9 @@ import { applyGlobalSecurity } from './windows/security'
 // Test builds only (`--mode e2e`): stub native dialogs and use an isolated profile (own settings and own
 // single-instance lock). Release builds contain none of this.
 if (__E2E_HOOKS__) {
-  installE2eHooks()
-  const userDataOverride = process.env['BRANCHCHAT_USER_DATA']
-  if (userDataOverride) app.setPath('userData', userDataOverride)
+    installE2eHooks()
+    const userDataOverride = process.env['BRANCHCHAT_USER_DATA']
+    if (userDataOverride) app.setPath('userData', userDataOverride)
 }
 
 // Windows groups the taskbar button and notifications under this ID; it matches the installer's appId.
@@ -39,82 +39,82 @@ registerAssetScheme()
 const gotLock = app.requestSingleInstanceLock()
 
 if (!gotLock) {
-  app.quit()
+    app.quit()
 } else {
-  let controller: AppController | null = null
-  const earlyPaths: string[] = extractDiscussionPaths(process.argv.slice(1))
+    let controller: AppController | null = null
+    const earlyPaths: string[] = extractDiscussionPaths(process.argv.slice(1))
 
-  app.on('second-instance', (_event, argv) => {
-    const paths = extractDiscussionPaths(argv.slice(1))
-    if (!controller) earlyPaths.push(...paths)
-    else void controller.openPaths(paths)
-  })
-
-  void app.whenReady().then(async () => {
-    const settings = new SettingsStore(app.getPath('userData'), randomUUID)
-    await settings.load()
-    const recent = new RecentFilesStore(app.getPath('userData'))
-    await recent.load()
-    controller = new AppController({
-      settings,
-      recent,
-      ui: electronUi,
-      ctx: systemContext,
-      appVersion: app.getVersion(),
-      createWindow: createMainWindow
+    app.on('second-instance', (_event, argv) => {
+        const paths = extractDiscussionPaths(argv.slice(1))
+        if (!controller) earlyPaths.push(...paths)
+        else void controller.openPaths(paths)
     })
-    installAssetProtocol(controller)
-    applyGlobalSecurity()
-    // Spell checking uses the Windows spell checker (offline). Russian and English are requested; a language only works
-    // if it is installed in Windows (Settings > Time & language).
-    if (process.platform === 'win32')
-      session.defaultSession.setSpellCheckerLanguages(['ru', 'en-US'])
-    const association = new AssociationService(
-      createFileAssociation(__E2E_HOOKS__ ? e2eRegistry() : null),
-      settings,
-      electronUi
-    )
-    // Updates (FR-093 to FR-107): a first check shortly after start, then every few hours, unless turned off.
-    const testUpdates = __E2E_HOOKS__ ? e2eUpdaterConfig() : null
-    const ctrl = controller
-    const updates = new UpdateService({
-      port: new ElectronUpdaterPort(testUpdates?.options),
-      currentVersion: app.getVersion(),
-      publish: (view) => ctrl.broadcast(IPC.updateChanged, view),
-      openLink: openExternalLink,
-      autoCheckEnabled: () => settings.get().autoUpdateCheck,
-      log: (message) => console.log(`[updates] ${message}`)
-    })
-    setTimeout(() => void updates.checkAutomatically(), testUpdates?.startupDelayMs ?? 20_000)
-    setInterval(
-      () => void updates.checkAutomatically(),
-      testUpdates?.intervalMs ?? 6 * 60 * 60 * 1000
-    )
-    registerIpcHandlers(controller, settings, recent, association, updates)
-    // The File > Open recent menu, the taskbar jump list and every window follow the recent files list.
-    const refreshRecent = async (): Promise<void> => {
-      const files = await describeRecent(recent.list())
-      Menu.setApplicationMenu(buildMenu(ctrl, updates, recent, files))
-      applyJumpList(files)
-      ctrl.broadcast(IPC.recentChanged, files)
-    }
-    recent.onChange(() => void refreshRecent())
-    await refreshRecent()
-    // Started without a file: reopen the most recent discussion if the person wants that and it still exists.
-    // A file given on the command line always wins (the last file is not opened as well).
-    let initialPaths = earlyPaths
-    const last = recent.list()[0]
-    if (initialPaths.length === 0 && settings.get().openLastFileOnStartup && last) {
-      const [view] = await describeRecent([last])
-      if (view?.exists) initialPaths = [last.path]
-    }
-    await controller.openPaths(initialPaths)
-    void association.offerAtStartup()
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) controller?.createWindow()
-    })
-  })
+    void app.whenReady().then(async () => {
+        const settings = new SettingsStore(app.getPath('userData'), randomUUID)
+        await settings.load()
+        const recent = new RecentFilesStore(app.getPath('userData'))
+        await recent.load()
+        controller = new AppController({
+            settings,
+            recent,
+            ui: electronUi,
+            ctx: systemContext,
+            appVersion: app.getVersion(),
+            createWindow: createMainWindow
+        })
+        installAssetProtocol(controller)
+        applyGlobalSecurity()
+        // Spell checking uses the Windows spell checker (offline). Russian and English are requested; a language only works
+        // if it is installed in Windows (Settings > Time & language).
+        if (process.platform === 'win32')
+            session.defaultSession.setSpellCheckerLanguages(['ru', 'en-US'])
+        const association = new AssociationService(
+            createFileAssociation(__E2E_HOOKS__ ? e2eRegistry() : null),
+            settings,
+            electronUi
+        )
+        // Updates (FR-093 to FR-107): a first check shortly after start, then every few hours, unless turned off.
+        const testUpdates = __E2E_HOOKS__ ? e2eUpdaterConfig() : null
+        const ctrl = controller
+        const updates = new UpdateService({
+            port: new ElectronUpdaterPort(testUpdates?.options),
+            currentVersion: app.getVersion(),
+            publish: (view) => ctrl.broadcast(IPC.updateChanged, view),
+            openLink: openExternalLink,
+            autoCheckEnabled: () => settings.get().autoUpdateCheck,
+            log: (message) => console.log(`[updates] ${message}`)
+        })
+        setTimeout(() => void updates.checkAutomatically(), testUpdates?.startupDelayMs ?? 20_000)
+        setInterval(
+            () => void updates.checkAutomatically(),
+            testUpdates?.intervalMs ?? 6 * 60 * 60 * 1000
+        )
+        registerIpcHandlers(controller, settings, recent, association, updates)
+        // The File > Open recent menu, the taskbar jump list and every window follow the recent files list.
+        const refreshRecent = async (): Promise<void> => {
+            const files = await describeRecent(recent.list())
+            Menu.setApplicationMenu(buildMenu(ctrl, updates, recent, files))
+            applyJumpList(files)
+            ctrl.broadcast(IPC.recentChanged, files)
+        }
+        recent.onChange(() => void refreshRecent())
+        await refreshRecent()
+        // Started without a file: reopen the most recent discussion if the person wants that and it still exists.
+        // A file given on the command line always wins (the last file is not opened as well).
+        let initialPaths = earlyPaths
+        const last = recent.list()[0]
+        if (initialPaths.length === 0 && settings.get().openLastFileOnStartup && last) {
+            const [view] = await describeRecent([last])
+            if (view?.exists) initialPaths = [last.path]
+        }
+        await controller.openPaths(initialPaths)
+        void association.offerAtStartup()
 
-  app.on('window-all-closed', () => app.quit())
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) controller?.createWindow()
+        })
+    })
+
+    app.on('window-all-closed', () => app.quit())
 }

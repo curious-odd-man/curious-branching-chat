@@ -10,20 +10,20 @@ export const MENU_RECENT_LIMIT = 20
  * works whether or not the .branchchat association is registered. Missing files are left out.
  */
 export function jumpListCategories(
-  files: readonly RecentFileView[],
-  execPath: string
+    files: readonly RecentFileView[],
+    execPath: string
 ): JumpListCategory[] {
-  const items = files
-    .filter((f) => f.exists)
-    .slice(0, MENU_RECENT_LIMIT)
-    .map((f) => ({
-      type: 'task' as const,
-      title: f.name,
-      description: f.path,
-      program: execPath,
-      args: `"${f.path}"`,
-      iconPath: execPath,
-      iconIndex: 0
-    }))
-  return items.length === 0 ? [] : [{ type: 'custom', name: ru.recent.jumpListCategory, items }]
+    const items = files
+        .filter((f) => f.exists)
+        .slice(0, MENU_RECENT_LIMIT)
+        .map((f) => ({
+            type: 'task' as const,
+            title: f.name,
+            description: f.path,
+            program: execPath,
+            args: `"${f.path}"`,
+            iconPath: execPath,
+            iconIndex: 0
+        }))
+    return items.length === 0 ? [] : [{ type: 'custom', name: ru.recent.jumpListCategory, items }]
 }
