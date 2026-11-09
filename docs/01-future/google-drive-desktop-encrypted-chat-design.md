@@ -791,11 +791,16 @@ Recommendation: (a), plus a Windows notification for key change requests only.
 
 ## 23. Tasks before the implementation plan
 
+The results below are **assumed**. Do the tests and correct the results before the release that adds sync.
+
 1. Test Google Drive for Desktop delete rights: in a personal My Drive folder shared with Editor rights, can account B
-   delete a file that account A created? Same test in a shared drive with "Content manager" rights. Record the result
-   here. (From Q-19.)
-2. Test that a folder marked "Available offline" in streaming mode also makes new files available offline.
-3. Test how a folder shared from another person's My Drive appears in Drive for Desktop (shortcut needed or not).
+   delete a file that account A created? Same test in a shared drive with "Content manager" rights. (From Q-19.)  
+   **Assumed result:** deletion is allowed in both setups. The fallback in D-19 ("record as processed") stays as a
+   safety rule.
+2. Test that a folder marked "Available offline" in streaming mode also makes new files available offline.  
+   **Assumed result:** yes.
+3. Test how a folder shared from another person's My Drive appears in Drive for Desktop (shortcut needed or not).  
+   **Assumed result:** it appears as a normal Windows drive and path. The wizard asks only for that path.
 
 ---
 
