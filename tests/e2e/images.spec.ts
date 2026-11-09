@@ -57,6 +57,23 @@ const savedThread = async (file: string) => (await readDiscussionFile(file)).dis
 const naturalWidth = (image: Locator): Promise<number> =>
     image.evaluate((el) => (el as HTMLImageElement).naturalWidth)
 
+/** Waits until the element has not moved or changed size for a short while. */
+async function expectLayoutSettled(locator: Locator): Promise<void> {
+    let previous = ''
+    let same = 0
+    await expect
+        .poll(
+            async () => {
+                const box = JSON.stringify(await locator.boundingBox())
+                same = box === previous ? same + 1 : 0
+                previous = box
+                return same
+            },
+            { intervals: [100] }
+        )
+        .toBeGreaterThanOrEqual(4)
+}
+
 type Pic = { data: Buffer; name: string; type: string }
 const png = (color: [number, number, number], size = 40, name = 'снимок.png'): Pic => ({
     data: makePng(size, size, color),
@@ -76,15 +93,13 @@ async function paste(win: Page, ...pics: Pic[]): Promise<void> {
                         type: it.type
                     })
                 )
-            document
-                .querySelector('[data-testid=composer]')!
-                .dispatchEvent(
-                    new ClipboardEvent('paste', {
-                        clipboardData: dt,
-                        bubbles: true,
-                        cancelable: true
-                    })
-                )
+            document.querySelector('[data-testid=composer]')!.dispatchEvent(
+                new ClipboardEvent('paste', {
+                    clipboardData: dt,
+                    bubbles: true,
+                    cancelable: true
+                })
+            )
         },
         pics.map((x) => ({ b64: x.data.toString('base64'), name: x.name, type: x.type }))
     )
@@ -434,6 +449,7 @@ test('pictures do not disturb text selection or branches: the quote around a pic
     const message = win.locator('[data-message-id=m1]')
     await expect.poll(() => naturalWidth(message.getByTestId('message-image'))).toBe(20)
 
+    await expectLayoutSettled(message) // the list re-measures after a picture loads; select only afterwards
     await selectText(message, 'до', 'после')
     await win.getByTestId('reply-to-this').click()
     await expect(win.getByTestId('branch-header')).toBeVisible()
