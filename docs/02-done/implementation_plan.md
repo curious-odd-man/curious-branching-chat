@@ -19,7 +19,7 @@
 | 6 — Images                                   | Done in code                                            | 181 unit tests and 52 Electron end-to-end tests (three consecutive full runs passed). Real clipboard paste, drop, file chooser, inline display, larger view, placeholders for missing/damaged data, a 20 MB picture sent and saved in about 1.4 s with typing unaffected. **Still to do on Windows:** paste from real Windows sources (Snipping Tool, browsers, Word), and drag from Explorer.                                                                                                                                                                                                                                                                                               |
 | 7 — Windows integration                      | Done in code; **needs a Windows check**                 | 202 unit tests and 59 Electron end-to-end tests. The installer script (with the new "Files" page) compiles with makensis. Association logic is unit-tested against an in-memory registry, and the `reg.exe` output parser is unit-tested; Settings and the first-start question are covered end to end with an in-memory registry. **Not run on Windows:** the installer page, real registry writes, double-click, icons in Explorer. Use `docs/windows-test-checklist.md`; CI also runs `scripts/installer-smoke.ps1` (marked `continue-on-error` until it has passed once).                                                                                                                |
 | 8 — Updates                                  | Done in code; **needs a real-release check on Windows** | 225 unit tests and 68 Electron end-to-end tests. The real electron-updater runs in the end-to-end tests against a local feed that looks like a GitHub release: found update with notes, date and size; download with progress; **a corrupted download is rejected and never becomes installable**; up to date; no downgrade; offline (manual check explains, automatic check stays silent); automatic checks off in Settings; no document or participant data in the requests. **Not run:** the installer replacing the running program on Windows, and a real GitHub Release (the owner in `electron-builder.yml` is still a placeholder). Use `docs/windows-test-checklist.md`, section H. |
-| 9                                            | Not started                                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 9       - Security                           | Done                                                    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 Implementation decisions made in phase 1:
 
@@ -249,23 +249,23 @@ Tasks
 - **Context resolution:** for a branch, return parent-thread messages up to and including the source message,
   recursively up to the main thread (requirements 4.5); exclude later parent messages and sibling branches.
 - **Read-state rules** (FR-108 to FR-112, FR-120):
-  - unread = authored by another participant and not in the local participant's read set;
-  - mark one, mark thread, mark all;
-  - sending a message in a thread reads all earlier messages in that thread;
-  - creating a branch reads the source message;
-  - only the local participant's entry is changed; other entries are preserved;
-  - query "who has read message M": known participants except the author whose entry contains M, with the states
-    read by all / some / none (FR-122 to FR-124).
+    - unread = authored by another participant and not in the local participant's read set;
+    - mark one, mark thread, mark all;
+    - sending a message in a thread reads all earlier messages in that thread;
+    - creating a branch reads the source message;
+    - only the local participant's entry is changed; other entries are preserved;
+    - query "who has read message M": known participants except the author whose entry contains M, with the states
+      read by all / some / none (FR-122 to FR-124).
 - **Schemas** in `shared/validation`: manifest, discussion, read state, rich-text content subset (ADR section 5.4),
   with `schemaVersion` and a migration framework (initially version 1 only, but the mechanism exists).
 - **Document module** in `main/document`:
-  - read a ZIP as streams; validate entries and schemas;
-  - write with a temporary file in the same folder and atomic replace, with retry and backoff on `EPERM`/`EBUSY`;
-  - copy unchanged entries through without recompression;
-  - do not keep the file handle open between operations;
-  - preserve unknown optional fields (FR-015);
-  - refuse to rewrite a file whose `schemaVersion` is newer than supported (FR-012) and report it clearly;
-  - image assets stored by content hash (deduplication), only PNG/JPEG/GIF/WebP (FR-116).
+    - read a ZIP as streams; validate entries and schemas;
+    - write with a temporary file in the same folder and atomic replace, with retry and backoff on `EPERM`/`EBUSY`;
+    - copy unchanged entries through without recompression;
+    - do not keep the file handle open between operations;
+    - preserve unknown optional fields (FR-015);
+    - refuse to rewrite a file whose `schemaVersion` is newer than supported (FR-012) and report it clearly;
+    - image assets stored by content hash (deduplication), only PNG/JPEG/GIF/WebP (FR-116).
 - **Fixtures:** a set of sample `.branchchat` files: minimal, with nested branches, with images, unknown fields, newer
   schema, truncated ZIP, wrong sizes, path traversal entry, malformed JSON, unknown rich-text nodes, missing asset.
 

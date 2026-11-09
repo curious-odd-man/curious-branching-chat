@@ -41,6 +41,6 @@ extraResources:
 # Updates come from GitHub Releases (stable only). Set the real owner before the first release.
 publish:
   - provider: github
-    owner: YOUR_GITHUB_USER
+    owner: curious-odd-man
     repo: branchchat
     releaseType: release

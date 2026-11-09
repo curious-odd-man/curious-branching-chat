@@ -5,9 +5,9 @@ discussion, shared through WhatsApp or any file-sharing tool.
 
 Stack: Electron + TypeScript, React, TipTap (from phase 3), electron-builder (NSIS), electron-updater (phase 8).
 Design documents are in [`docs/`](docs): requirements, ADR-001, and the implementation plan.
-Also there: [security review](docs/security-review.md), [performance results](docs/performance.md),
-[acceptance matrix](docs/acceptance.md), [release process](docs/release-process.md), the Russian
-[user guide](docs/user-guide.ru.md) and the Windows [test checklist](docs/windows-test-checklist.md).
+Also there: [security review](docs/02-done/security-review.md), [performance results](docs/02-done/performance.md),
+[acceptance matrix](docs/02-done/acceptance.md), [release process](docs/02-done/release-process.md), the Russian
+[user guide](docs/other/user-guide.ru.md) and the Windows [test checklist](docs/windows-test-checklist.md).
 
 ## Commands
 
@@ -68,7 +68,7 @@ Releases are not code-signed yet. On first run Windows SmartScreen may show "Win
 **More info**, then **Run anyway** (in Russian Windows: **Подробнее**, then **Выполнить в любом случае**). Verify the
 download
 first with `Get-FileHash .\BranchChat-Setup.exe -Algorithm SHA256` and compare with the value on the release page. Full
-steps in Russian: [`docs/user-guide.ru.md`](docs/user-guide.ru.md).
+steps in Russian: [`docs/user-guide.ru.md`](docs/other/user-guide.ru.md).
 
 ## Releasing
 
@@ -76,7 +76,7 @@ Releases are built by CI only: push a tag `vX.Y.Z` equal to `version` in `packag
 `.github/workflows/release.yml`
 tests, packages the unsigned installer and publishes a stable GitHub Release with `latest.yml`, the blockmap and a
 SHA-256. Details and the one-time setup (real GitHub owner in `electron-builder.yml`, public repository, two-factor
-authentication) are in [`docs/release-process.md`](docs/release-process.md).
+authentication) are in [`docs/release-process.md`](docs/02-done/release-process.md).
 
 ## Notes for developers
 

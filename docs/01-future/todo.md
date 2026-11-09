@@ -1,3 +1,2 @@
 - google drive sync
-- recent files. setting to always open latest file
 - multiple files support in same window

@@ -12,7 +12,7 @@ Releases are made **only by CI** (NFR-016, FR-119). Nothing is built or uploaded
 
 ## Making a release
 
-1. Update `version` in `package.json` (for example `1.0.0`; pre-release suffixes are refused). Commit to `main`.
+1. Update `version` in `package.json` (for example `1.0.0`; pre-release suffixes are refused). Commit to `master`.
 2. Wait for CI (`ci.yml`) to pass on that commit.
 3. `git tag v1.0.0 && git push origin v1.0.0`.
 4. `release.yml` checks that the tag equals the version, runs lint, typecheck, unit and end-to-end tests, builds,
