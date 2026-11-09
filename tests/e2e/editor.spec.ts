@@ -32,8 +32,19 @@ async function createDiscussion(t: TestApp, win: Page, file: string): Promise<vo
     await expect(win.getByTestId('composer')).toBeVisible()
 }
 const composer = (win: Page) => win.getByTestId('composer')
-const savedMessages = async (file: string) =>
-    (await readDiscussionFile(file)).discussion.threads[0]!.messages
+/** The messages in the file. A message appears on screen a moment before it is written, so wait for `count`. */
+async function savedMessages(file: string, count = 1) {
+    let messages: Awaited<
+        ReturnType<typeof readDiscussionFile>
+    >['discussion']['threads'][0]['messages'] = []
+    await expect
+        .poll(async () => {
+            messages = (await readDiscussionFile(file)).discussion.threads[0]!.messages
+            return messages.length
+        })
+        .toBeGreaterThanOrEqual(count)
+    return messages
+}
 
 /** Types text, then selects it again (so a toolbar command can be applied to it). */
 async function typeAndSelect(win: Page, text: string): Promise<void> {
@@ -171,7 +182,7 @@ test('bullet and numbered lists, nested with Tab and the indent buttons, round-t
     const numbered = win.getByTestId('message').nth(1)
     await expect(numbered.locator('ol > li')).toHaveCount(2)
 
-    const saved = await savedMessages(file)
+    const saved = await savedMessages(file, 2)
     expect(nodeTypes(saved[0]!.content)).toEqual(
         new Set(['doc', 'bulletList', 'listItem', 'paragraph', 'text'])
     )
@@ -289,9 +300,7 @@ test('markup typed or pasted into the editor can never become active content (NF
     await expect(pasted.locator('.rich strong')).toHaveText('d') // bold is supported, so it survives
     await expect(pasted).toContainText('код')
 
-    // the file is written a moment after the message appears (slower on some machines): wait for the second message
-    await expect.poll(async () => (await savedMessages(file)).length).toBe(2)
-    const saved = await savedMessages(file)
+    const saved = await savedMessages(file, 2)
     const allowed = new Set([
         'doc',
         'paragraph',
