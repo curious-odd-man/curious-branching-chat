@@ -1,999 +1,839 @@
-# Design: Private Group Chat with Replicated Conversation State
+# Design: Encrypted Synchronized BranchChat Discussions over a Shared Folder
 
-**Status:** Proposed  
-**Platform:** Windows desktop  
-**Transport model:** Provider-independent file transport; Google Drive for Desktop is optional  
+**Status:** Draft, revision 2 (aligned with the code; open questions in Section 21)  
+**Platform:** Windows 10 and Windows 11 (same as the MVP)  
+**Transport model:** A shared local folder that a sync product (for example Google Drive for Desktop) keeps in sync  
 **Backend:** None  
-**Google integration:** No Drive API, OAuth flow, or app-managed Google credentials
-
-## 1. Overview
-
-This document describes a Windows desktop chat application that exchanges messages through a provider-independent file
-transport. Google Drive for Desktop is an optional transport adapter, not a requirement. Other adapters may use another
-synchronization product, a user-selected shared folder, or a manually moved folder/package. The application must also be
-able to run without Google Drive installed.
-
-For a synchronized conversation, participants exchange immutable encrypted message files and a canonical
-conversation-state file called the **BranchChat file**. Each participant maintains a local copy of the BranchChat file.
-The BranchChat file retains the application's existing shared conversation structure. Do not impose byte-for-byte
-convergence as a new protocol requirement without first inspecting how the existing application updates and shares this
-file. It must never contain private keys.
-
-The application treats any synchronized file transport as **untrusted and eventually consistent**. It discovers incoming
-files using
-filesystem notifications plus periodic scans where available. It must not depend on a Google API, OAuth flow,
-app-managed Google credentials, or an application-operated backend.
-
-The design must support:
-
-- One-to-one conversations and group conversations.
-- A shared BranchChat file that preserves the existing application's format and can be exchanged between participants.
-- New participants joining by receiving the BranchChat file, completing key exchange, and obtaining access to the
-  selected transport location.
-- Rejoining with a newly generated identity after loss of private keys, subject to the history limitation described
-  below.
-- Operation without Google Drive, through another transport adapter or in local-only mode.
-
-A message can be delivered while its recipient is offline only if the chosen transport retains the encrypted file until
-the recipient reconnects. This behavior depends on the selected provider; local-only mode cannot deliver to another
-device. There is no guarantee of immediate delivery or a reliable way for a folder-based adapter to know that a locally
-written file has reached a remote provider.
-
-## 2. Goals and non-goals
-
-### Goals
-
-- Windows desktop application built with Electron, Node.js, and React.
-- One-to-one and multi-participant conversations.
-- No application-operated server or hosting cost.
-- No Google Drive API or OAuth integration.
-- Participants may manually create/share a root folder and configure its local path when using a folder-sync provider.
-- End-to-end encryption and sender authentication.
-- Offline recipient delivery after a message has synchronized to the provider.
-- At-least-once transport with idempotent processing and recovery from missed events, duplicates, and sync delays.
-- A transport abstraction that allows other file-synchronization implementations to be added later.
-- Preserve existing local conversation storage and image handling where practical.
-- Provide a first-run/create-chat wizard, invokable from the application's main menu, for one-to-one and group chat
-  setup, key generation, public-key exchange, and transport setup.
-- Do not support user message edits or deletions in v1.
-- Do not support leaving a conversation in v1.
-
-### Non-goals and limitations
-
-- No anonymity from Google or another synchronization provider. Providers can observe account relationships, folder
-  membership, file metadata, sizes, timestamps, access patterns, and approximate traffic volume.
-- No guarantee of immediate delivery.
-- No requirement to use Google Drive; remote exchange still requires some mutually accessible transport.
-- No reliable indication that a locally written file has reached the cloud.
-- No protection against a participant copying, exporting, photographing, or otherwise sharing plaintext.
-- No multi-device identity support in the initial implementation.
-- No user-initiated message edits/deletions or leave-chat operation in v1.
-- No forward secrecy in the initial cryptographic proposal.
-- No new generic attachment subsystem. Existing image handling is to remain unchanged; inspect the current application
-  code before changing it.
-
-## 3. Architecture
-
-Separate the application into domain logic and transport implementations.
-
-### 3.1 Application components
-
-1. **React renderer:** conversation UI only.
-2. **Electron main process:** application lifecycle, filesystem access through the transport adapter, IPC validation,
-   and coordination.
-3. **Conversation/domain layer:** participants, conversations, message events, ordering, delivery/read state, and local
-   persistence.
-4. **Cryptography module:** identity keys, signing, encryption, decryption, and verification. Run in the main process or
-   a dedicated utility process, not in the renderer.
-5. **Existing conversation storage:** continue using the current application's local storage model where possible.
-   Inspect the repository before deciding whether and how to migrate it.
-6. **Local transport-state database:** SQLite is a proposed option for outbox state, processed event IDs, receipts, and
-   retry state. This database is local and must never be placed in the shared folder.
-7. **BranchChat state manager:** validates, reads, writes, and reconciles the canonical shared BranchChat file. It
-   separates shared conversation state from machine-local state.
-8. **Transport abstraction:** a provider-independent interface for writing, reading, listing, watching, and deleting
-   transport files.
-9. **Optional transport adapters:** Google Drive for Desktop is one adapter; other adapters and local-only mode must not
-   require Google components.
-
-### 3.2 Data flow
-
-```text
-Chat UI
-  |
-  v
-Conversation/domain layer
-  |  create event, determine recipients
-  v
-Cryptography layer
-  |  sign event; encrypt separately for each recipient
-  v
-Transport abstraction
-  |
-  +--> Generic local-folder adapter
-  +--> Optional Google Drive for Desktop adapter
-  +--> Future transport adapter(s)
-  +--> Local-only mode (no remote exchange)
-```
-
-For each recipient, the transport adapter writes an independently encrypted copy to that recipient's inbox. The
-recipient processes and deletes only its own inbox copy. This avoids one group participant deleting a shared message
-file before the other participants have received it.
-
-## 3.3 BranchChat file and shared state
-
-BranchChat is the existing conversation file/document and should remain as close as practical to the application's
-current format. Do not replace it with a newly invented manifest or redesign its schema before inspecting the existing
-application code.
-
-The current format information supplied for this design includes:
-
-- A read-state object keyed by message/thread identifiers, with participant identifiers as values.
-- A manifest with `format`, `schemaVersion`, `documentId`, `createdAt`, and `generator` fields.
-- A discussion containing `title`, `participants`, `threads`, and `messages`.
-
-The examples and field names above are illustrative of the current format supplied for this design; inspect the code
-before treating them as a complete schema or changing serialization.
-
-Requirements:
-
-- Preserve existing fields, semantics, and compatibility wherever practical.
-- Keep private keys and other secrets out of the BranchChat file.
-- Do not add machine-specific local paths or local UI preferences unless the existing format already requires them.
-- Do not assume that BranchChat is an administrator-signed, single-writer manifest.
-- Participants are equal after the chat is initiated. Any participant may share their local BranchChat file with the
-  other participants.
-- The file may be updated through the existing application's normal behavior or manually shared between users.
-- The application must tolerate receiving an updated file and must not silently destroy local data when replacing or
-  importing it.
-
-The exact update, conflict, and stale-copy behavior must follow the existing application's behavior where possible.
-Remaining decisions are listed in Section 22.
-
-## 4. Participants, conversations, and membership
-
-### 4.1 Shared root
-
-Each synchronized conversation has one transport root/location. All participants must have sufficient permissions to
-create and delete their own transport files and the protocol files assigned to them. The application creates a
-participant-specific directory for each member.
-
-The root folder is a transport location, not an authority for identity. A person gaining access to the folder must not
-automatically be trusted as a valid participant. Google Drive is optional; the same logical layout and transport
-contract must be usable with another provider.
-
-### 4.2 Participant identity
-
-Each participant has:
-
-- A stable application-level participant ID.
-- An Ed25519 signing public/private key pair.
-- A Curve25519 encryption public/private key pair.
-- A key fingerprint for display/identification during bootstrap.
-
-For the initial version, use one identity and one device per participant. Device linking and multi-device identity are
-outside the initial scope.
-
-### 4.3 Membership and invitations
-
-For v1, access to the shared folder is sufficient to make a discovered public-key bundle eligible for consideration
-during bootstrap. Folder access is not a cryptographic proof of a person's identity. The initiator must be able to
-discard/reject a discovered participant public key during bootstrap.
-
-Invitations are encrypted to the invitee's public encryption key. The design does not require an additional independent
-delivery channel or additional invitation confidentiality layer.
-
-The BranchChat file remains the existing conversation file. Its current format includes a manifest, read state, and
-discussion data; see Section 3.3. Preserve the current format as closely as possible and inspect the implementation
-before
-changing it.
-
-The initiator starts the conversation and performs the initial setup. After initiation, participants are equal: there is
-no administrator role or permanent single-writer authority. Any participant may share an updated local BranchChat file.
-Participants cannot remove other participants in v1, and participants cannot leave a conversation in v1.
-
-A participant may be added after the conversation is active. The exact mechanics for authorizing, publishing, and
-adopting a membership update are listed as open questions in Section 22.
-
-## 4.4 Create-chat and onboarding wizard
-
-The application must provide a guided wizard, accessible from the main menu (for example, **Chat → New chat / Set up
-chat**). It must support both one-to-one and group conversations.
-
-The wizard should guide the initiator through:
-
-1. Choosing one-to-one or group chat.
-2. Creating or selecting the conversation identity and generating signing/encryption key pairs when needed.
-3. Showing the public keys and a copyable key bundle for the manual bootstrap process.
-4. Explaining that private keys remain on the user's device and must never be uploaded or sent to other participants.
-5. Selecting a transport: Google Drive for Desktop (optional), another configured transport adapter, or local-only mode.
-6. If using a shared folder, explaining how to create/share the folder in the provider's own UI, grant appropriate
-   permissions, and select the synchronized local folder.
-7. Displaying the participant onboarding steps and waiting for the required public keys/invitations.
-8. Reviewing the candidate public keys (with an option to discard a candidate) and showing the roster before the chat
-   becomes active.
-
-A participant joining an existing chat should have a corresponding **Join chat from invitation** flow. It should
-validate the invitation and BranchChat file, configure/access the selected
-transport, and then import the conversation metadata. The wizard must not claim that Google Drive is required.
-
-The wizard should explain key backup/loss consequences in plain language. It should not upload private keys or make
-cryptographic choices invisible to the user.
-
-## 4.5 V1 membership constraints
-
-- The initiator performs initial chat creation and onboarding; after that, all participants are equal.
-- There is no administrator role and no permanent single-writer authority for BranchChat updates.
-- Any participant may share their local BranchChat file with the other participants.
-- Participants cannot leave a conversation in v1.
-- Participants cannot remove other participants in v1.
-- New participants may be added after the chat is active.
-- A participant who loses private keys may generate a new identity and receive a new invitation containing the current
-  chat state. A returning participant retains their existing participant ID; a genuinely new participant receives a new
-  participant ID. The key-replacement and historical-message implications still need to be specified; see Section 22.
-
-## 5. Shared-folder layout
-
-Use participant-specific inboxes and receipt directories. Each sender writes a separate encrypted event copy into each
-intended recipient's inbox.
-
-The sender writes message files to the inbox of each other participant in the current BranchChat roster. A participant
-writes its own receipt files in the inbox directory of a sender. A recipient deletes a message file from its own inbox
-after it has successfully processed and persisted that event locally and has written the corresponding delivery receipt.
-
-The sender processes receipt files and deletes each receipt file after it has been safely recorded locally. This
-transport cleanup does not delete the message from any participant's local chat history. The sender retains its local
-outbox copy according to local storage policy.
-
-Use opaque IDs and generic filenames. Do not put message text, contact names, private keys, plaintext, local databases,
-logs, or decrypted image data in the shared folder.
-
-**Permissions requirement:** the folder-sharing configuration must allow each participant to create and delete files in
-the shared root. Verify this with the actual Google Drive sharing configuration used by the application. If participants
-cannot write to each other's inbox paths, this layout will not work without changing the folder structure or
-permissions.
-
-## 6. Event model and serialization
-
-Treat message events as append-only and immutable. V1 does not support editing or deleting a sent message. Transport
-housekeeping may still delete already-processed inbox and receipt files; this is protocol cleanup, not a user-visible
-message deletion.
-
-For a group message, the logical event has one event ID and one recipient-specific encrypted transport envelope per
-recipient. The plaintext event can be the same for all recipients; the encrypted envelope is generated separately for
-each recipient and includes that recipient's ID.
-
-Initial event types:
-
-- `message.sent`
-- `receipt.delivered`
-- `receipt.read`
-- `branchchat.state.updated` (or a separately defined signed BranchChat update record)
-
-There are no `message.edited` or `message.deleted` events in v1.
-
-Use random unique event IDs and per-sender logical sequence numbers. Do not rely on filesystem timestamps, provider
-timestamps, or file arrival order to establish message order. Ordering within a conversation should be based on
-persisted event metadata and a defined tie-breaking rule for concurrent senders.
-
-## 7. Cryptography
-
-### 7.1 Recommended initial construction
-
-For the initial implementation, use **libsodium sealed boxes for recipient-specific encryption, plus Ed25519 signatures
-for sender authentication**.
-
-Candidate dependency:
-
-```bash
-npm install chokidar libsodium-wrappers-sumo
-```
-
-Use separate key pairs for signing and encryption:
-
-- Ed25519 key pair for signing.
-- Curve25519 key pair for sealed-box encryption.
-
-For each recipient:
-
-1. Serialize the logical event using the canonical format.
-2. Sign the serialized event with the sender's Ed25519 private key.
-3. Include the signature and signed event in the plaintext envelope.
-4. Encrypt that envelope to the recipient's Curve25519 public key using libsodium's sealed-box construction.
-5. Write the resulting recipient-specific ciphertext to that recipient's inbox.
-
-The recipient decrypts with its Curve25519 private key, then verifies the sender's Ed25519 signature using the
-sender public key accepted during bootstrap. The signature must cover all security-relevant event fields, including
-protocol version,
-event ID, conversation ID, membership version, sender ID, recipient ID, sequence number, event type, and payload.
-
-This approach is straightforward for small groups because the sender creates one encrypted copy per recipient. Its cost
-grows linearly with the number of recipients and message size. It avoids inventing a custom group-key protocol.
-
-Use the exact libsodium API and key formats documented by the library. Add protocol test vectors and negative tests. Do
-not treat successful decryption as proof of sender identity; verify the signature separately.
-
-### 7.2 Limitations
-
-Sealed boxes do not provide forward secrecy against later compromise of a recipient's long-term private encryption key.
-Forward secrecy is explicitly **not required for v1**. Document this limitation rather than introducing a custom
-ratchet.
-
-Participant removal is not supported in v1.
-
-### 7.3 Key storage and lifecycle
-
-- Keep private keys out of the renderer.
-- Protect local private keys using Windows DPAPI or an appropriate Windows secure key-storage mechanism.
-- Restrict access to key material and application data.
-- Never log keys, plaintext, or decrypted payloads.
-- No key backup/recovery workflow is required for the initial version. If private keys are lost, the participant must
-  generate a new identity and be onboarded again. This permits rejoining and receiving future messages after the
-  BranchChat state and membership are updated, but the new identity cannot decrypt old messages encrypted to the lost
-  public key. Previously stored local history may remain readable only if the old local data/key material still exists.
-- Device-loss revocation/replacement is not in the initial scope. Membership changes can exclude the old identity from
-  future messages, but cannot invalidate old content or keys already copied.
-
-Signatures and encryption do not by themselves prevent replay. Track processed event IDs, sender sequence state,
-conversation ID, and membership version locally.
-
-## 8. Outgoing message flow
-
-1. User creates a message.
-2. Conversation layer determines the current recipient set from the verified BranchChat file.
-3. Main process validates the request and creates a unique event ID and sender sequence number.
-4. Serialize the logical event canonically.
-5. Sign the event with the sender's signing key.
-6. For each recipient, create a sealed-box encrypted envelope using that recipient's public encryption key.
-7. Save the logical event and recipient-specific outgoing envelopes in the local outbox/state database.
-8. Write each envelope to a temporary file in local tmp directory.
-9. Flush and close each file, then rename/move it to its final `.bcmsg` filename at the recepient inbox location.
-10. Mark the local transport write as complete for that recipient.
-11. Wait for signed delivery/read receipts from recipients.
-
-Atomic local rename/move reduces the chance of observing a partial local write. It does not guarantee atomic publication
-by
-the synchronization provider or immediate availability to recipients.
-
-If writing to some recipient inboxes succeeds and others fail, retain per-recipient state and retry only the missing
-writes. Do not generate a new logical event ID for a retry.
-
-## 9. Incoming message flow and recipient cleanup
-
-For each incoming `.bcmsg` file:
-
-1. Transport adapter reports a possible filesystem change or a full scan discovers the file.
-2. Wait briefly for the file to become stable.
-3. Validate envelope structure and size limits.
-4. If incomplete or temporarily unavailable, defer and retry.
-5. Decrypt using the local recipient encryption private key.
-6. Verify the sender signature using the verified sender public key.
-7. Verify conversation ID, membership version, sender ID, recipient ID, event ID, and sequence/replay state.
-8. Persist the event in local conversation storage and update local transport state.
-9. Write a signed/encrypted `receipt.delivered` event into senders inbox directory.
-10. Delete the processed message file from that recipient's inbox.
-11. If the conversation is open and the message has actually been presented to the user according to the UI's read
-    rules, write a `receipt.read` event.
-
-Persist the message before writing the receipt and deleting the inbox file. If the app crashes after persistence but
-before the receipt or deletion, a later scan must detect the duplicate, avoid creating a second visible message, and
-complete the missing receipt/cleanup steps.
-
-A recipient deletes only its own inbox copy. It must never delete another participant's inbox copy.
-
-## 10. Delivery and read receipts
-
-### 10.1 Receipt content
-
-A receipt should include:
-
-- Original event ID.
-- Conversation ID.
-- Receipt sender/participant ID.
-- Receipt type: `delivered` or `read`.
-- Membership version.
-- Timestamp or logical receipt sequence.
-
-Receipts must be signed by the participant generating them and encrypted to the original sender. The sender verifies the
-signature and records the receipt locally before deleting the receipt transport file.
-
-### 10.2 Checkmark semantics
-
-Use WhatsApp-like visual semantics, with an explicit distinction between local transport write and recipient
-confirmation:
-
-- **One grey checkmark — Sent:** the app successfully committed the encrypted message file to the local transport
-  adapter. This does not prove that Google Drive has uploaded it or that any recipient can see it.
-- **Two grey checkmarks — Delivered:** the recipient's app has verified and persisted the message locally and sent a
-  valid delivery receipt.
-- **Green checkmarks — Read:** the recipient's app has sent a valid read receipt after the message was actually
-  displayed under the app's read-state rules.
-
-Because the app has no server-side visibility into Google Drive synchronization, the one-grey-check state is only a
-local handoff confirmation. The UI should not imply cloud upload completion.
-
-### 10.3 Group receipt state
-
-For group messages, delivery and read status are per participant. The aggregate status should not claim that everyone
-has received or read the message until receipts have arrived from all intended recipients in the applicable membership
-version.
-
-Provide a details view such as:
-
-- Delivered: 2 of 3 participants.
-- Read: 1 of 3 participants.
-
-The message can display the aggregate checkmark state, but users must be able to inspect which participants have
-delivered/read it. If participant removal is added in a later version, historical recipient sets must remain tied to the
-membership version associated with each message.
-
-## 11. Filesystem watching and recovery
-
-Use Chokidar in the Google Drive folder adapter for prompt notification:
-
-```js
-const chokidar = require("chokidar");
-
-const watcher = chokidar.watch(incomingDirectory, {
-    ignoreInitial: true,
-    awaitWriteFinish: {
-        stabilityThreshold: 1500,
-        pollInterval: 200
-    }
-});
-
-watcher.on("add", filePath => queueIncomingFile(filePath));
-watcher.on("change", filePath => queueIncomingFile(filePath));
-```
-
-This is illustrative. Production code must handle watcher errors, directory replacement, permission changes, shutdown,
-and queue backpressure.
-
-**Filesystem notifications are an optimization, not the source of truth.** Perform full scans:
-
-- At application startup.
-- When the shared folder becomes available again.
-- After watcher errors or folder reconfiguration.
-- Periodically while running.
-- On user request.
-
-Scan for unprocessed message and receipt files and queue them for validation. Maintain a local index to reduce repeated
-work, but periodically reconcile it against the directory.
-
-Ignore temporary suffixes such as `.tmp`. Enforce file-size limits before reading. Retry likely incomplete files.
-Quarantine permanently invalid files locally, not in the shared folder. Record safe diagnostic codes without plaintext.
-
-### 11.1 Duplicate and conflict handling
-
-A synchronization provider may duplicate files, reorder their arrival, or create conflict copies. Do not assume
-filenames alone are sufficient for deduplication. Validate the envelope and deduplicate by authenticated event ID plus
-recipient ID.
-
-A recipient may receive the same logical event more than once because the sender retries after not seeing a receipt.
-Duplicate processing must not create a second visible message; it should complete any missing receipt and cleanup steps.
-
-## 12. Transport abstraction and future providers
-
-Chat/domain logic must not depend directly on Google Drive, Chokidar, or a specific local folder layout. Define a
-provider-independent transport interface and implement Google Drive for Desktop as the first adapter.
-
-Conceptual TypeScript interface:
-
-```ts
-type TransportEntry = {
-    path: string;
-    size?: number;
-    modifiedAt?: number;
-};
-
-type TransportChange = {
-    path: string;
-    kind: "created" | "changed" | "deleted";
-};
-
-interface FileSyncTransport {
-    initialize(config: unknown): Promise<void>;
-
-    start(onChange: (change: TransportChange) => void): Promise<void>;
-
-    stop(): Promise<void>;
-
-    list(relativeDirectory: string): Promise<TransportEntry[]>;
-
-    read(relativePath: string): Promise<Uint8Array>;
-
-    writeAtomic(relativePath: string, data: Uint8Array): Promise<void>;
-
-    delete(relativePath: string): Promise<void>;
-}
-```
-
-The final interface may differ, but it must express the operations the domain layer needs without exposing
-provider-specific APIs.
-
-### 12.1 Transport contract
-
-Every adapter must document and meet these semantic expectations, or explicitly report where it cannot:
-
-- Files may arrive late, more than once, or out of order.
-- Change notifications may be missed; listing/scanning must be available for reconciliation.
-- A successful local write does not necessarily mean remote delivery.
-- Files are immutable after publication; updates are new files/events.
-- Reads may temporarily fail while a file is being synchronized.
-- Deletes may propagate asynchronously.
-- The adapter must prevent path traversal and restrict operations to the configured conversation root.
-- The adapter must expose errors without leaking message plaintext or cryptographic secrets.
-
-The chat layer owns event IDs, encryption, signatures, retries, deduplication, receipts, membership, and delivery/read
-state. The adapter owns file movement, local observation, and provider-specific behavior.
-
-### 12.2 Initial Google Drive for Desktop adapter
-
-The generic folder adapter operates on a user-selected local folder and can be used with any synchronization product
-that exposes a local folder. The optional Google Drive for Desktop adapter uses the same implementation pattern. It
-uses:
-
-- Node filesystem operations for reads and writes.
-- Atomic temporary-file writes followed by rename where supported.
-- Chokidar for local change notifications.
-- Startup and periodic full scans.
-- No Google API calls, OAuth tokens, or direct Google account access.
-
-Future adapters may use other file synchronization products or a different file-transfer mechanism, provided they
-implement the same transport contract. Do not allow Google-specific assumptions to leak into the conversation or
-cryptography layers.
-
-## 13. Google Drive for Desktop setup and supported configuration
-
-### 13.1 Streaming versus mirroring (Google Drive adapter only)
-
-Google Drive for Desktop has two principal ways to expose **My Drive** files:
-
-- **Streaming:** files are primarily stored in the cloud and appear in a virtual drive on the computer. Files use local
-  storage when accessed or explicitly made available offline. In streaming mode, offline files generally require Drive
-  for Desktop to be running and the account to remain connected.
-- **Mirroring:** a full local copy of My Drive files is kept on the computer as well as in the cloud. Files are
-  available offline by default, but use local disk space.
-
-Google's documentation explains the differences and how to make streamed files/folders available offline:
-
-- [Stream and mirror files with Drive for desktop](https://support.google.com/drive/answer/13401938)
-- [Manage Drive for desktop and open files/folders offline](https://support.google.com/drive/answer/16631477)
-
-A shared folder's exact location and offline behavior can depend on how it is shared and exposed in the participant's
-Drive. Do not assume every shared folder can be mirrored as part of My Drive. In streaming mode, users may need to mark
-the conversation folder as **Available offline**. Confirm that this setting applies to the shared folder and to new
-files subsequently added to it.
-
-### 13.2 Recommended initial configuration
-
-For the first implementation:
-
-1. Support the current stable Google Drive for Desktop release for Windows, rather than pinning the application to a
-   hard-coded old version.
-2. Recommend streaming mode with the conversation root folder explicitly marked **Available offline**, if that option is
-   available for the shared folder.
-3. If the user's shared-folder configuration supports mirroring and the folder is actually mirrored locally, that can
-   also be supported after testing.
-4. Require the user to verify that the folder is visible and writable in Windows File Explorer.
-5. On setup, perform a write/read/delete test using a temporary test file in a dedicated application test directory. Do
-   not use a real message file for this test.
-6. Warn that streamed offline content may not be accessible if Drive for Desktop is closed or the account is
-   disconnected.
-7. Revalidate the folder path and access on application startup.
-
-Do not promise offline availability based solely on the folder appearing in File Explorer. The application should test
-actual read/write behavior and continue to show delivery as pending until recipient receipts arrive.
-
-### 13.3 Version policy and testing
-
-Do not hard-code a specific Drive for Desktop version number into the protocol. Google updates the client independently
-of this application. Support the current stable Windows release and test the application's transport adapter against:
-
-- The current stable release at the time of each application release.
-- The previous release where practical.
-- Streaming with the conversation folder marked available offline.
-- Streaming without offline pinning, to confirm that the application handles unavailable files safely.
-- Mirrored My Drive, only where the shared-folder configuration supports it.
-- Drive paused, signed out, disconnected, restarted, and updated.
-
-If Google changes local mount behavior or shared-folder support, update the adapter and setup guidance rather than
-changing the chat/domain protocol.
-
-## 14. Offline behavior and status
-
-| Situation                             | Expected behavior                                                                                          |
-|---------------------------------------|------------------------------------------------------------------------------------------------------------|
-| Sender and recipient online           | Delivery follows provider synchronization and recipient processing.                                        |
-| Sender online, recipient offline      | After the recipient-specific file reaches the provider, it waits until the recipient reconnects and syncs. |
-| Sender offline before synchronization | The outgoing file remains local until the sender reconnects.                                               |
-| Both offline                          | No transfer occurs.                                                                                        |
-| Provider sync paused/unavailable      | Messages remain pending; delivery is not confirmed.                                                        |
-| Shared-folder permission revoked      | Synchronization may stop; report a transport/permission problem.                                           |
-| Recipient processes a message         | Recipient writes a receipt and deletes only its own inbox copy.                                            |
-
-The application cannot reliably know that an outgoing file reached Google's servers. Do not equate “written to local
-folder” with “uploaded” or “delivered.”
-
-## 15. Local persistence
-
-Use the existing local conversation storage for visible conversation data where practical. The repository was not
-included with this document, so the exact current storage format must be established by inspecting the application code
-before implementation. Do not invent a migration or replace the existing format without that inspection.
-
-A separate local SQLite database is a proposed option for transport state:
-
-- `outgoing_events` — event ID, recipient ID, local envelope/path, creation time, retry state.
-- `processed_events` — event ID, sender, recipient, sequence, local persistence status.
-- `receipts` — event ID, participant ID, delivered/read status, local processing state.
-- `peer_state` — verified public keys, fingerprints, last accepted sequence.
-- `membership_state` — verified manifest version and participant roster.
-- `scan_state` — last successful scan and reconciliation metadata.
-
-Never sync this SQLite database through the file transport. Do not place a live database in the shared folder. Use
-transactions for local state transitions and make processing idempotent.
-
-## 16. Images and attachments
-
-Do not introduce a new generic attachment system in this revision. The requirement is that existing image handling does
-not change.
-
-Before implementation, inspect the current code to determine how images are stored, displayed, and referenced. Preserve
-that behavior. If existing image data is already stored outside the conversation message text, ensure that the relevant
-references remain valid across participants; do not assume that local-only image paths will work on another
-participant's computer. Any change to image transport must be designed as a separate requirement rather than silently
-added here.
-
-No new attachment retention policy or attachment-size policy is defined by this document.
-
-## 17. Message immutability and transport-file cleanup
-
-V1 does not support user-visible message edits or deletions. Once a message is sent, its content is immutable in the
-conversation history. Do not implement edit controls, delete controls, edit events, or deletion tombstones.
-
-This restriction does not prohibit protocol-level cleanup of transport files:
-
-- A recipient deletes its own message transport file after successful local persistence and after writing the delivery
-  receipt.
-- The sender deletes a receipt transport file after validating and persisting it locally.
-- The sender retains its local outbox copy according to local storage policy.
-- Do not delete another participant's inbox file.
-- Cleanup must be scoped to the participant's own inbox or receipt files and must be safe under delayed synchronization.
-- There is no age-based retention policy specified for local conversation history.
-
-Transport cleanup is not a user-visible message deletion and must not remove the message from local conversation
-history. Because transport deletes may propagate asynchronously, a sender may not see a receipt before the corresponding
-inbox deletion becomes visible. Keep the local outbox copy and retry safely when a valid receipt has not arrived.
-Recipient event-ID deduplication ensures that a re-delivered event does not create a duplicate visible message.
-
-## 18. Electron security boundaries
-
-Recommended settings:
-
-```js
-const webPreferences = {
-    contextIsolation: true,
-    nodeIntegration: false,
-    sandbox: true,
-    preload: path.join(__dirname, "preload.js")
-};
-```
-
-Also:
-
-- Use a restrictive Content Security Policy.
-- Expose only narrow, typed IPC methods through preload.
-- Validate every IPC argument in the main process.
-- Keep filesystem access, cryptography, and private keys in the main or utility process.
-- Do not expose arbitrary filesystem APIs to the renderer.
-- Do not load remote content into privileged windows.
-- Treat all synchronized files as untrusted input.
-- Enforce limits on file size, nesting depth, string length, and payload structure.
-- Prevent path traversal and restrict transport paths to the configured conversation root.
-- Keep logs free of plaintext, private keys, and sensitive metadata.
-
-## 19. Threat model and privacy
-
-### Protected against, assuming sound cryptography and secure endpoints
-
-- A synchronization provider reading plaintext message contents from encrypted event files.
-- Unauthorized modification of an event without detection.
-- Forged messages from an identity whose signing key has not been compromised.
-- Accidental duplicate delivery creating duplicate visible messages.
-
-### Not protected against
-
-- Malware or an attacker controlling a participant's endpoint.
-- A participant intentionally sharing plaintext.
-- Private-key compromise.
-- Traffic analysis and metadata observation by Google or another provider.
-- Deletion, withholding, delay, or corruption of files by the provider or a participant with folder access.
-- Denial of service through quota exhaustion, permission changes, or sync suspension.
-- Forward-secrecy failures; forward secrecy is not part of v1.
-- A removed participant retaining messages or files already received.
-
-Encryption protects message contents, not all metadata. Providers may still see account/folder relationships,
-participant folder structure, file sizes, timestamps, and synchronization patterns.
-
-## 20. Error handling and user experience
-
-Provide clear status and recovery guidance for:
-
-- Shared root folder missing, unavailable, read-only, or not writable.
-- Drive for Desktop unavailable, paused, signed out, or disconnected (where detectable).
-- Shared folder not available offline.
-- Permission revoked or folder removed.
-- Unknown participant or fingerprint mismatch.
-- Invalid signature or malformed envelope.
-- Repeated incomplete-file retries.
-- Local storage failure.
-- Participant membership changes.
-- Partial send success (some group recipients' files written, others pending).
-
-Provide a manual **Rescan shared folder** action. Temporary synchronization problems should not be treated as data loss.
-
-## 21. Chat initiation and participant onboarding
-
-The proposed folder-assisted initiation sequence is:
-
-1. **Initiator creates and shares the transport folder.** The initiator creates a folder using the selected
-   synchronization provider and shares it with intended participants using that provider's normal UI. This step is
-   optional when using manual file exchange or local-only mode.
-2. **Participants prepare public keys.** Each participant generates their identity keys locally. Users exchange or place
-   only public signing/encryption keys and participant identifiers where the onboarding flow instructs them. Private
-   keys never leave the participant's device. Users perform these steps manually; the application guides them.
-3. **Initiator creates a new chat.** The initiator opens the BranchChat wizard, selects **New chat**, chooses one-to-one
-   or group, and selects/configures the chosen transport.
-4. **Initiator reviews candidate public keys.** The application presents discovered/submitted public-key bundles. For
-   v1, shared-folder access is sufficient to consider a key during bootstrap, but the initiator must be able to discard
-   an unwanted candidate.
-5. **Initiator creates invitations.** Each invitation is encrypted to its invitee's public encryption key. No separate
-   invitation delivery channel is required by the current decision.
-6. **Participants accept invitations.** Each participant uses **Join chat from invitation**, configures or selects the
-   transport, and imports the invitation and current BranchChat file.
-7. **Participants obtain the current BranchChat file.** The initiator shares the file for initial setup. After
-   initiation, all participants are equal and any participant may share their local updated BranchChat file.
-8. **Chat becomes ready.** The conversation becomes active when every intended participant can read the messages.
-   The application should show which participants are able to access/read the conversation data, subject to the existing
-   read-state model.
-
-The application guides users through manual folder/key preparation and manual BranchChat file sharing when required.
-It must not upload private keys. The remaining protocol details are listed in Section 22.
-
-## 22. Open questions requiring decisions
-
-The following points are not fully determined by the decisions recorded so far. They must be resolved against the
-existing application code before implementation; do not invent a replacement BranchChat protocol to fill these gaps.
-
-1. **Exact BranchChat schema and compatibility.** The existing format should be preserved as closely as possible and
-   reviewed when the application code is available. The currently supplied format information includes read state, a
-   manifest (`format`, `schemaVersion`, `documentId`, `createdAt`, `generator`), and discussion data (`title`,
-   `participants`, `threads`, `messages`). Which exact fields and update semantics are authoritative in the current
-   code, and which version-compatibility rules must the new implementation preserve?
-
-2. **Rejoining with a replaced key pair.** A returning participant keeps their existing participant ID but has new
-   signing/encryption keys; a genuinely new participant receives a new ID. How is the new public key bound to the
-   existing participant ID and accepted by other participants? How should the returning participant's inability to
-   decrypt old envelopes addressed to the lost key be represented in the UI?
-
-3. **Invitation authenticity and replay handling.** Invitations are encrypted to the invitee's public key and no extra
-   protection/channel is required. Is the existing message-signature mechanism also used to authenticate invitations?
-   What minimum replay/duplicate handling is required by the current application format?
-
-4. **Adding participants after activation.** Any participant may share their local BranchChat file and participants are
-   equal after initiation. Does any participant have authority to add a new participant by issuing/sharing an
-   invitation, or must the addition be initiated through a particular flow? How do existing participants learn that the
-   new roster is accepted?
-
-5. **BranchChat file divergence and update conflicts.** Multi-writer/admin authority is not part of the intended model.
-   The expected behavior is the existing application's normal behavior or manually sharing a BranchChat file. What
-   should the application do if two participants independently update their local copies before either receives the
-   other's copy: accept the latest manually shared file, require user selection, merge supported fields, or reject one?
-   Define this only after inspecting the existing update behavior.
-
-6. **Meaning of the activation condition.** The conversation becomes active as soon as every participant can read the
-   messages. Does this mean every invited participant has successfully imported the current BranchChat file and can
-   access the shared message location, or is another existing application state the definitive signal?
-
-7. **Immutable metadata versus participant additions.** Conversation metadata and participant/display-name changes are
-   not supported after creation, while adding a participant after activation is supported. Confirm exactly which fields
-   are immutable and how the supported participant-addition operation changes the roster without allowing other metadata
-   edits.
-
-8. **Read receipt policy.** Read receipts are mandatory. Confirm whether the existing application already defines when a
-   message is considered read (for example, visible in an open conversation) and whether any existing per-user
-   read-state behavior needs to be preserved. V1 should not expose a disable-read-receipts setting unless the existing
-   product behavior requires it.
-
-9. **Manual file exchange and local-only mode.** The intended non-Google options are the generic local-folder adapter
-   and local-only/manual operation. The existing behavior is described as updating only the BranchChat file and then
-   sharing that file manually between users. Confirm whether this is the complete manual exchange workflow, including
-   how message events and updated files are transferred, or whether it applies only to conversation-state updates.
-
-10. **Participant bootstrap details.** Users perform folder sharing and public-key exchange manually, guided by the app.
-    Confirm the exact public-key bundle format and where users place or select it during bootstrap after the current
-    implementation has been inspected.
-
-## 23. Decisions and implementation notes
-
-The following requirements are treated as settled for this revision. Remaining questions are listed in Section 22.
-
-1. **BranchChat file:** preserve the existing format as closely as possible. Inspect the application code before
-   changing
-   the schema or serialization. Current supplied format details are summarized in Section 3.3.
-2. **Initial participant trust:** for v1, access to the shared folder is sufficient to consider a discovered public key
-   during bootstrap. The initiator must be able to discard/reject a candidate public key.
-3. **Invitations:** encrypt each invitation to the invitee's public encryption key. No separate delivery channel or
-   additional confidentiality layer is required by the current decision.
-4. **Participant authority:** the initiator performs initial setup. After that, participants are equal; there is no
-   administrator role or permanent single-writer authority. Any participant may share their local BranchChat file.
-5. **Membership:** participants cannot leave or remove other participants in v1. A participant may be added after the
-   conversation is active.
-6. **Rejoining:** a returning participant retains their existing participant ID; a genuinely new participant receives a
-   new ID. A new invitation contains the current chat state. Replaced-key binding and historical ciphertext limitations
-   remain subject to Section 22.
-7. **Transport choices:** v1 includes the generic local-folder adapter and local-only/manual operation. Google Drive for
-   Desktop is an optional use of the local-folder adapter, not a required integration. No other named provider is in v1.
-8. **Manual setup:** users manually create/share folders and exchange the required files/keys; the application guides
-   them through the process.
-9. **Activation:** the conversation becomes active when every participant can read the messages.
-10. **Metadata:** conversation metadata and participant/display-name changes are not supported after creation, subject
-    to
-    the participant-addition behavior described in Section 22.
-11. **Read receipts:** read receipts are mandatory in v1.
-12. **Cryptographic construction:** use libsodium sealed boxes for a separate encrypted copy to each recipient, with
-    Ed25519 signatures for sender authentication. Review the exact implementation and add protocol test vectors before
-    production.
-13. **Forward secrecy:** not required for v1. Document the limitation of static recipient encryption keys.
-14. **Key backup/recovery:** no private-key recovery workflow is required for v1. A user who loses private keys
-    generates
-    a new key pair and rejoins through a new invitation. The new key cannot decrypt historical messages addressed to the
-    lost key unless the existing application has retained usable local history/key material.
-15. **Existing conversation storage:** inspect the current application code and preserve the existing format where
-    practical. Do not assume a migration or replacement format.
-16. **Attachments and retention:** no new attachment or attachment-retention system. Existing image handling remains
-    unchanged. No age-based retention policy is introduced for local conversation history.
-17. **Google Drive for Desktop configuration:** support the current stable Windows release. Prefer streaming with the
-    shared conversation folder marked Available offline, if supported for that folder; support mirroring only where the
-    shared folder is actually mirrored and tested. See Section 13.
-18. **Delivery/read UI:** use one grey checkmark for local transport write, two grey checkmarks for recipient
-    persistence/delivery, and green checkmarks for read receipts. The local sent state does not confirm cloud upload.
-    For
-    groups, show per-participant counts/details.
-19. **Transport-file cleanup:** each recipient deletes its own inbox message file after processing and writing a
-    delivery
-    receipt. The sender deletes receipt files after processing them. This is transport cleanup only; v1 has no message
-    edit/delete feature. See Section 17.
-20. **Group conversations:** use the existing shared conversation root and participant-specific inboxes/receipt areas.
-    Sender writes one recipient-specific encrypted copy to each other participant.
-21. **Future transports:** use the provider-independent `FileSyncTransport` abstraction in Section 12. Google Drive for
-    Desktop is an optional adapter.
-
-## 24. Testing plan
-
-### Functional tests
-
-- Verify that importing/sharing an updated BranchChat file preserves the existing format and does not corrupt local
-  conversation data.
-- Complete the main-menu wizard for both one-to-one and group chat creation.
-- Complete the join-from-invitation wizard on a clean participant installation.
-- Verify a user can lose the old private keys, generate a new identity, receive a new invitation, and receive future
-  messages; verify the new identity cannot decrypt old ciphertext.
-- Verify no leave-chat, message-edit, or message-delete controls/actions exist in v1.
-- Verify the app can start and use local-only mode without Google Drive installed.
-- Verify a non-Google transport adapter can be configured without changing conversation/domain logic.
-- Pair two clean Windows installations and exchange messages in both directions.
-- Create a group with at least three participants.
-- Verify each recipient receives its own encrypted copy.
-- Verify a participant cannot decrypt another participant's envelope.
-- Verify signatures, sender identity, membership version, and recipient checks.
-- Verify delivery and read receipts, including partial group delivery.
-- Verify a recipient deletes only its own inbox copy.
-- Verify duplicate files/retries do not create duplicate visible messages.
-- Verify participant addition behavior; verify that participant removal is not offered or supported in v1.
-
-### Offline and synchronization tests
-
-- Recipient offline while sender sends.
-- One group member offline while other members receive the same group message.
-- Sender offline before a file synchronizes.
-- All participants offline.
-- Pause/restart/re-authenticate Drive for Desktop.
-- Streaming with conversation folder marked available offline.
-- Streaming without offline pinning.
-- Mirroring where supported for the shared folder.
-- Folder unavailable or path/drive letter changed.
-- Permission revoked and restored.
-- Delayed, reordered, duplicated, and conflict-copy files.
-
-### Reliability tests
-
-- Terminate the app during a file write.
-- Terminate after persisting an incoming message but before writing a receipt.
-- Terminate after writing a receipt but before deleting the inbox file.
-- Terminate after deleting the inbox file but before updating local state.
-- Partial group send where only some recipient writes succeed.
-- Miss watcher events and verify full scans recover.
-- Restart Windows and verify startup reconciliation.
-- Verify cleanup does not delete another participant's inbox files.
-
-### Security tests
-
-- Modify ciphertext or signed metadata and verify rejection.
-- Replay old events.
-- Inject malformed and oversized files.
-- Test path traversal and hostile filenames/payloads.
-- Test unknown keys and rejected candidate public keys during bootstrap.
-- Verify private keys and plaintext never appear in shared folders or logs.
-- Verify participant removal is not supported in v1.
-
-## 25. Implementation milestones
-
-### Milestone 1 — Inspect current application and define interfaces
-
-- Inspect the existing BranchChat file schema and preserve its format and behavior wherever practical.
-- Define the invitation format and the bootstrap flow, including how the initiator rejects unwanted discovered public
-  keys.
-- Define rejoin behavior when a participant has a new key pair but retains their participant ID.
-- Inspect existing conversation storage and image handling.
-- Identify where domain logic currently lives.
-- Define participant, conversation, event, receipt, and membership models.
-- Define the provider-independent transport interface.
-- Define the shared-root layout and path validation rules.
-
-### Milestone 2 — Initial file transport
-
-- Implement a generic local-folder transport adapter that does not depend on Google Drive.
-- Implement Google Drive for Desktop as an optional adapter.
-- Add folder selection and configuration.
-- Implement atomic file writes, reads, listing, and scoped deletion.
-- Implement Chokidar notifications and startup/periodic scans.
-- Add local transport-state persistence.
-- Test with non-sensitive dummy events.
-
-### Milestone 3 — Identity and cryptography
-
-- Implement the existing BranchChat file import/share behavior and encrypted invitations.
-- Implement Ed25519 signing and Curve25519 sealed-box encryption using libsodium.
-- Implement protected local key storage.
-- Implement the guided manual public-key exchange and candidate-key review flow.
-- Implement recipient-specific encrypted envelopes.
-- Add protocol versioning, canonical serialization, and test vectors.
-
-### Milestone 4 — Multi-participant reliable messaging
-
-- Implement participant addition and propagation of updated BranchChat files.
-- Implement per-recipient outbox writes.
-- Implement incoming processing, deduplication, and recipient-owned cleanup.
-- Implement authenticated delivered/read receipts.
-- Implement aggregate group status and per-participant details.
-- Add crash recovery and partial-send retry behavior.
-
-### Milestone 5 — Product integration and release
-
-- Build the main-menu create-chat/join-chat wizard for one-to-one and group conversations, including key-generation
-  guidance.
-- Integrate with existing conversation storage without changing image handling.
-- Add checkmark states and group receipt details.
-- Test supported Drive for Desktop configurations.
-- Run failure-injection and security tests.
-- Document setup, limitations, and recovery after key loss.
-- Keep provider-specific behavior inside the Google Drive adapter.
+**Google integration:** None. No Drive API, no OAuth, no Google credentials in the application.
 
 ---
 
-## Appendix A — Important implementation cautions
+## 0. How to use this document
 
-- Google Drive for Desktop is a general file-synchronization client, not a messaging transport protocol. Its timing and
-  local-folder behavior are not guaranteed to match chat requirements.
-- Test shared-folder behavior on real Windows installations before committing to this architecture.
-- Never infer cloud upload completion from local file existence.
-- Never rely exclusively on filesystem watcher events.
-- Never modify an event file after publishing it.
-- Never treat folder membership as sender authentication.
-- Never store private keys or plaintext in the shared folder.
-- Never synchronize the live SQLite database.
-- Never let one recipient delete another recipient's inbox file.
-- Never couple conversation logic directly to Google Drive or Chokidar.
-- Never invent a cryptographic protocol; use the selected libsodium constructions as documented and obtain a security
-  review before handling sensitive conversations.
+- Section 2 records facts from the current code. These facts are the baseline for this design.
+- Section 3 lists the conflicts between revision 1 of this design and the current code.
+- Sections 4 to 19 give the proposed design. Text marked **[Pending Q-nn]** depends on an answer.
+- Section 21 contains all open questions. Each question has context, options, a recommendation, and an
+  **Answer:** line. Write your answer on that line.
+- Do not start the implementation plan until all questions in Section 21 have answers.
+
+---
+
+## 1. Overview
+
+BranchChat today stores one discussion in one `.branchchat` file. Users exchange the full file manually (for example
+through WhatsApp). The application does not merge copies.
+
+This feature adds a second way to share a discussion: a **synchronized discussion**. In a synchronized discussion:
+
+- Each participant keeps a local `.branchchat` file, as today.
+- Each local change becomes an **event**. The application signs the event and encrypts it separately for each other
+  participant.
+- The application writes the encrypted events into a shared folder. A sync product (for example Google Drive for
+  Desktop) moves the files between computers. The application does not know which sync product it is.
+- Each participant applies the incoming events to its local `.branchchat` file.
+
+The sync product is untrusted and eventually consistent. Files can arrive late, more than once, or in a different
+order. The sync product must not see message content.
+
+Discussions that are not synchronized continue to work exactly as today.
+
+---
+
+## 2. Current application facts (from the code)
+
+### 2.1 Document file (`src/main/document/`, `src/shared/validation/schemas.ts`)
+
+A `.branchchat` file is a ZIP with these entries:
+
+| Entry                          | Content                                                                                        |
+|--------------------------------|------------------------------------------------------------------------------------------------|
+| `manifest.json`                | `format` = `"branchchat"`, `schemaVersion` = `1`, `documentId`, `createdAt`, `generator?`      |
+| `discussion.json`              | `title`, `createdAt`, `updatedAt`, `participants[]`, `threads[]` (messages inside), `assets[]` |
+| `readstate.json`               | `participantId` → list of `messageId` that the participant has read                            |
+| `assets/images/<sha256>.<ext>` | Image bytes (PNG, JPEG, GIF, WebP), stored without compression                                 |
+
+- `participants[]`: `participantId`, `displayName`.
+- `threads[]`: `threadId`, `parentThreadId?`, `sourceMessageId?`, `quoteText?`, `selectionStart?`, `selectionEnd?`,
+  `title?`, `status` (`open` | `closed`), `createdAt`, `createdBy`, `messages[]`. One thread is the main thread.
+- `messages[]`: `messageId`, `threadId`, `sequence`, `authorId`, `authorDisplayName`, `createdAt`, `content`
+  (rich-text JSON subset, never HTML), `assetReferences[]`.
+- `assets[]`: `assetId` (= SHA-256), `path`, `mediaType`, `size`, `sha256`.
+- All objects keep unknown fields (`passthrough`). Unknown ZIP entries are copied through on save.
+- A file with a newer `schemaVersion` is refused, never rewritten. Migrations exist as a mechanism, but none are
+  defined yet.
+
+Note: revision 1 of this design said that read state is "keyed by message, with participant identifiers as values".
+That is not correct. Read state is keyed by participant, with message IDs as values.
+
+### 2.2 Integrity rules (`src/shared/validation/integrity.ts`)
+
+The application refuses to load or save a file that breaks these rules:
+
+- Exactly one main thread. No cycles in the thread hierarchy.
+- `message.sequence` must equal the index of the message in its thread (0, 1, 2, …).
+- Every message author and every thread creator must be in `participants[]`.
+- A branch must have `sourceMessageId` and `quoteText`. The source message must be in the parent thread.
+- Every image in a message must be in `assetReferences` and in `assets[]`.
+
+### 2.3 Changes a user can make (`src/main/application/documentSession.ts`)
+
+| Change                                  | Effect in the file                                                                             |
+|-----------------------------------------|------------------------------------------------------------------------------------------------|
+| Send a message (with or without images) | New message at the end of the thread; new assets; read state of sender                         |
+| Create a branch ("Reply to this")       | New thread; source message becomes read for the creator                                        |
+| Close or reopen a branch                | `thread.status` changes. Any participant can do it. Main thread cannot close                   |
+| Set or remove a branch title            | `thread.title` changes. Any participant can do it                                              |
+| Mark a message / thread / all as read   | Local participant's entry in `readstate.json` grows                                            |
+| First write by a participant            | Participant is added to `participants[]`                                                       |
+| Display name changed in Settings        | On the next write, `participants[].displayName` changes; old messages keep `authorDisplayName` |
+
+- The discussion title is set from the file name at creation. The UI cannot change it.
+- Messages cannot be edited or deleted. Branches cannot be deleted.
+- A closed branch refuses new messages (`THREAD_CLOSED`).
+- Read state only grows. A message becomes read only by an explicit action, by sending in the same thread, or by
+  creating a branch from it. Viewing a message never marks it read (FR-112).
+- Each message shows who has read it, with three states: all, some, none (FR-122, FR-123). "Known participants" are
+  the participants in `participants[]`.
+
+### 2.4 Saving and windows
+
+- Each change rewrites the full ZIP with an atomic replace. Writes are coalesced. There is no Save command.
+- The application does not watch the file. If another program changes the file while it is open, the next save
+  overwrites that change.
+- One window shows one file. If two files with the same `documentId` are open, the application shows a warning
+  (FR-117). It does not merge.
+- The application has a single instance. It quits when the last window closes. There is no tray icon and no
+  background work.
+
+### 2.5 Local state (`src/main/local-state/settings.ts`)
+
+- `settings.json` in the user's application data folder: `participantId` (random, created once), `displayName`,
+  and UI flags.
+- If `settings.json` is lost or corrupt, the person gets a new `participantId` (accepted in FR-020).
+- There are no keys and no other local databases.
+
+### 2.6 Other constraints
+
+- UI language is Russian.
+- NFR-015: no artificial limits on message length, image size, or file size.
+- Electron already uses `contextIsolation: true`, `sandbox: true`, a narrow preload API, and zod validation of IPC.
+- Lint rule: `src/shared/` must not import Electron, React, or Node built-ins.
+- Current dependencies do not include Chokidar, libsodium, or SQLite.
+- Out of scope in the MVP requirements: real-time sync, cloud storage, merging copies, cryptographic identity. This
+  feature changes these decisions. The requirements document must get a new revision.
+
+---
+
+## 3. Conflicts between revision 1 and the current code
+
+| #   | Revision 1 assumption                                                 | Current code                                                                                                | Question   |
+|-----|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------|------------|
+| C1  | Events are encrypted; the BranchChat file is shared                   | The file contains the full history in plain text. Sharing it through the sync folder removes the encryption | Q-01       |
+| C2  | Only `message.sent` events                                            | Six kinds of change exist (Section 2.3)                                                                     | Q-04       |
+| C3  | Order by event metadata and a tie-break rule                          | `sequence` must equal the local index. Concurrent messages give a different order on each computer          | Q-05       |
+| C4  | Message is read when it is displayed; receipt goes to the sender only | Read only by explicit action; read state is visible to all participants                                     | Q-08       |
+| C5  | Sent / delivered checkmarks                                           | No such state exists. No place to store it                                                                  | Q-09       |
+| C6  | Image handling stays unchanged                                        | Images are inside the ZIP. Other participants cannot get them without a new transfer                        | Q-10       |
+| C7  | Enforce file-size limits                                              | NFR-015: no artificial limits. Sealed boxes need the full payload in memory                                 | Q-10       |
+| C8  | No display-name change after creation                                 | Settings lets the user change the name (FR-024, FR-138)                                                     | Q-12       |
+| C9  | Roster comes from invitations                                         | A participant appears only after the first write (FR-022, FR-124)                                           | Q-13       |
+| C10 | Per-conversation identity; returning user keeps participant ID        | One `participantId` per Windows user. Losing settings loses the ID                                          | Q-14, Q-15 |
+| C11 | Incoming files are processed continuously                             | The app quits when the last window closes                                                                   | Q-16       |
+| C12 | Incoming changes update the conversation                              | An open session does not accept external changes                                                            | Section 9  |
+| C13 | Any participant may share their BranchChat file                       | Merging copies is out of scope; FR-117 only warns                                                           | Q-06       |
+| C14 | Remote messages always apply                                          | A closed branch refuses messages; a branch needs its source message first                                   | Q-07       |
+| C15 | SQLite for local transport state                                      | No native modules. Local state uses JSON with atomic writes                                                 | Q-17       |
+| C16 | Preserve the format                                                   | New fields may need `schemaVersion` 2. Old app versions refuse version 2 files                              | Q-03       |
+| C17 | A recipient deletes files in its inbox                                | The files belong to the sender's Google account. Delete rights must be verified                             | Q-19       |
+| C18 | Google Drive adapter, generic folder adapter, local-only mode         | "Local-only + manual file exchange" is the existing behavior. Google Drive adds nothing beyond a folder     | Q-18       |
+| C19 | Menu "Chat → New chat"                                                | The menu has File, Edit, Help                                                                               | Q-20       |
+
+---
+
+## 4. Goals and non-goals
+
+### Goals
+
+- Synchronized discussions between two or more participants, through a shared folder.
+- No server, no hosting cost, no Google API.
+- End-to-end encryption and sender authentication for every event.
+- Delivery to an offline participant after the sync product has moved the file.
+- At-least-once delivery, idempotent processing, recovery from missed events, duplicates, and sync delays.
+- All existing features work in a synchronized discussion: branches, nested branches, branch status and title, rich
+  text, images, read state, "who has read" indicator, unread counts.
+- Discussions that are not synchronized work exactly as today.
+- A guided wizard to create a synchronized discussion and to join one.
+
+### Non-goals and limitations
+
+- No anonymity from the sync provider. The provider can see accounts, folder membership, file sizes, times, and
+  traffic volume.
+- No guarantee of immediate delivery. No way to know that a local file has reached the cloud.
+- No protection against a participant who copies or shares plain text.
+- No multi-device identity.
+- No message edit or delete (same as today). No branch delete (same as today).
+- No leave and no remove participant in v1.
+- No forward secrecy in v1.
+- No new attachment types. Only the existing image types.
+
+---
+
+## 5. Architecture (mapped to the code)
+
+| Component                   | Location (proposed)                       | Notes                                                                               |
+|-----------------------------|-------------------------------------------|-------------------------------------------------------------------------------------|
+| Event model and apply rules | `src/shared/sync/`                        | Pure TypeScript. Applies an event to `DocumentContents`. Testable without Electron  |
+| Existing domain             | `src/shared/domain/`                      | Reused. Local changes still go through the existing functions                       |
+| Document file               | `src/main/document/`                      | Reused. Schema changes only if Q-03 allows them                                     |
+| Document session            | `src/main/application/documentSession.ts` | Extended: emits an event for each local change; accepts remote events               |
+| Sync service                | `src/main/sync/`                          | Outbox, inbox processing, receipts, scans, retries                                  |
+| Cryptography                | `src/main/crypto/`                        | libsodium. Runs in the main process or a utility process. Never in the renderer     |
+| Key store                   | `src/main/crypto/keyStore.ts`             | Private keys protected with Electron `safeStorage` (DPAPI on Windows)               |
+| Transport                   | `src/main/transport/`                     | `FolderTransport`: one implementation for any sync product that exposes a folder    |
+| Local sync state            | User data folder, per discussion          | Never in the shared folder. Format depends on Q-17                                  |
+| Sync registry               | User data folder                          | List of synchronized discussions: `documentId`, local file path, shared folder path |
+| Wizard UI                   | `src/renderer/components/sync/`           | Russian strings in `src/shared/i18n/ru.ts`                                          |
+
+Data flow for a local change:
+
+```text
+Renderer action (send, branch, status, title, mark read)
+  -> IPC (validated)
+  -> DocumentSession: existing domain function changes DocumentContents; file is saved as today
+  -> Sync service: builds the event from the change
+  -> Crypto: sign once; encrypt once per other participant
+  -> FolderTransport: write one file into each recipient's inbox
+```
+
+Data flow for an incoming event:
+
+```text
+FolderTransport (watch + scan) -> Sync service: read, size check
+  -> Crypto: decrypt, verify signature
+  -> Replay and membership checks
+  -> src/shared/sync apply rules -> DocumentSession (open window) or document file (no window)
+  -> Delivery receipt to the sender -> delete own inbox file
+```
+
+---
+
+## 6. BranchChat file in a synchronized discussion
+
+### 6.1 Role of the file **[Pending Q-01, Q-02]**
+
+Proposal:
+
+- The local `.branchchat` file is the local, materialized view of the discussion. It stays in plain text, as today.
+- The local file must not be in the shared folder. The wizard checks this and refuses a path inside the shared folder.
+- Only encrypted files go into the shared folder.
+- The conversation ID is the existing `manifest.documentId`.
+
+### 6.2 New data in the file **[Pending Q-03, Q-13]**
+
+A synchronized discussion needs this shared data:
+
+- Sync marker: the discussion is synchronized (so the app knows to emit events).
+- Member roster: `participantId`, display name, Ed25519 public signing key, X25519 public encryption key, key
+  fingerprint, and the participant who added the member.
+- Ordering data per message and per branch-status/title change (Q-05).
+
+Option A: put this data in new optional fields. `passthrough` keeps them. Old app versions open the file but ignore
+the sync data. No `schemaVersion` change.
+
+Option B: put this data in a new ZIP entry `sync.json`. Old versions copy the entry through unchanged.
+
+Option C: increase `schemaVersion` to 2. Old versions refuse the file.
+
+Private keys, local paths, and local sync state are never stored in the file.
+
+---
+
+## 7. Participants, identity, and membership
+
+### 7.1 Identity **[Pending Q-14, Q-15]**
+
+Proposal:
+
+- One identity per Windows user (per installation), bound to the existing `participantId` in `settings.json`.
+- The identity has an Ed25519 signing key pair and an X25519 encryption key pair.
+- The fingerprint is a short hash of both public keys, shown in groups of characters.
+- Private keys are stored with `safeStorage` in the user data folder. They are never logged, never sent to the
+  renderer, never written to a discussion file or the shared folder.
+
+### 7.2 Membership rules (v1)
+
+- The initiator creates the synchronized discussion and adds the first members.
+- After that, all participants are equal. There is no administrator.
+- New members can join after the discussion is active. **[Pending Q-13]** decides who can add a member.
+- Nobody can leave. Nobody can remove another participant.
+- Folder access alone does not make a person a member. A person becomes a member only when an existing member
+  accepts that person's public key.
+
+### 7.3 Key loss and rejoin **[Pending Q-15]**
+
+- No key backup in v1.
+- A person who loses the private keys creates a new identity and joins again by invitation.
+- Old events encrypted to the old key cannot be decrypted with the new key. The local `.branchchat` file still shows
+  old messages, because the file is plain text.
+- If the person also lost the local `.branchchat` file, the invitation must carry the full current discussion
+  (Section 11).
+
+---
+
+## 8. Events
+
+### 8.1 Event types **[Pending Q-04]**
+
+One event type for each change in Section 2.3:
+
+| Event               | Payload                                                                                  |
+|---------------------|------------------------------------------------------------------------------------------|
+| `message.sent`      | Full message (as in `discussion.json`, without `sequence`), plus new image assets (Q-10) |
+| `branch.created`    | Full thread without messages                                                             |
+| `branch.status.set` | `threadId`, `status`                                                                     |
+| `branch.title.set`  | `threadId`, `title` (empty = remove)                                                     |
+| `readstate.added`   | List of `messageId` that the sender has now read                                         |
+| `member.added`      | Roster entry of the new member (Q-13)                                                    |
+| `profile.updated`   | New display name (only if Q-12 allows name changes)                                      |
+| `receipt.delivered` | Original event ID (transport only, not stored in the file)                               |
+
+There are no edit or delete events.
+
+### 8.2 Envelope fields
+
+Every event has: protocol version, event ID (random), conversation ID (`documentId`), sender ID, per-sender sequence
+number (1, 2, 3, … with no gaps), logical clock (Lamport), event type, payload, creation time (display only).
+
+Each recipient copy also has the recipient ID. The signature covers all of these fields.
+
+### 8.3 Ordering **[Pending Q-05]**
+
+The current rule is "append order in the local file". With concurrent senders, each computer can get a different
+order. Q-05 decides between:
+
+- **Arrival order:** each computer appends messages in the order it receives them. Simple. Copies show a different
+  order.
+- **Deterministic order:** each message carries a Lamport clock. All computers sort by (clock, author ID, message
+  ID). Copies converge. A late message from an offline participant can appear above messages that the reader has
+  already seen.
+
+In both options, the app recomputes `sequence` so the integrity rule (sequence = index) stays true.
+
+### 8.4 Dependencies **[Pending Q-07]**
+
+An event can depend on data that has not arrived yet. Examples: a message in a branch that does not exist yet; a
+branch whose source message has not arrived. Proposal: keep the event in a local pending queue. Apply it when the
+dependency arrives. Do not send the delivery receipt until the event is applied.
+
+### 8.5 Concurrent changes **[Pending Q-06, Q-07]**
+
+| Data          | Merge rule (proposal)                               |
+|---------------|-----------------------------------------------------|
+| Messages      | Union by `messageId`. Messages are immutable        |
+| Branches      | Union by `threadId`                                 |
+| Branch status | Last writer wins by (Lamport clock, participant ID) |
+| Branch title  | Last writer wins by (Lamport clock, participant ID) |
+| Read state    | Union per participant (read state only grows)       |
+| Assets        | Union by SHA-256                                    |
+| Roster        | Union by `participantId` (Q-13)                     |
+
+A message for a branch that is closed on the receiving computer: see Q-07.
+
+---
+
+## 9. Changes to the document session
+
+- A session for a synchronized discussion must accept remote events while the window is open. The window updates
+  through the existing `documentChanged` message.
+- Remote events go through the same write queue as local changes, so a local save never overwrites a remote change.
+- If no window shows the discussion, the sync service applies events directly to the file. **[Pending Q-16]**
+- Unread highlighting, the window-title count, and the side-panel counts work on remote messages without change.
+- FR-117 (two copies with the same `documentId`) stays. For a synchronized discussion, the sync service writes only
+  to the file path in the sync registry.
+
+---
+
+## 10. Cryptography
+
+### 10.1 Construction
+
+- libsodium (`libsodium-wrappers-sumo` or `libsodium-wrappers`; select during the plan).
+- Sign the canonical serialization of the event with Ed25519.
+- Put the event and the signature in a plain envelope. Encrypt the envelope for each recipient with
+  `crypto_box_seal` (sealed box) to the recipient's X25519 public key.
+- The recipient decrypts, then verifies the signature with the sender's public key from the roster.
+- Successful decryption is not proof of the sender. Always verify the signature.
+- Canonical serialization: define one rule (for example sorted keys, UTF-8, no spaces) and add test vectors.
+
+### 10.2 Limits
+
+- No forward secrecy. If a long-term private key leaks, all events encrypted to it can be decrypted.
+- Sealed boxes need the full payload in memory. Large images make this expensive. **[Pending Q-10]**
+- Replay protection: track processed event IDs and the per-sender sequence number locally.
+
+---
+
+## 11. Invitations and onboarding
+
+### 11.1 Public-key bundle
+
+A bundle contains: `participantId`, display name, public signing key, public encryption key, fingerprint, protocol
+version. It is not secret. **[Pending Q-21]** decides how users exchange it.
+
+### 11.2 Invitation
+
+- An invitation is encrypted to the invitee's public encryption key and signed by the inviting member.
+- It contains: the conversation ID, the roster with public keys, and the current discussion (the full
+  `DocumentContents` plus image assets).
+- The invitee checks the signature and the fingerprint of the inviting member, creates a local `.branchchat` file
+  from the invitation, and starts sync.
+
+### 11.3 Create-discussion wizard **[Pending Q-20]**
+
+Steps:
+
+1. Explain what a synchronized discussion is and what the sync provider can still see.
+2. Create the identity if it does not exist. Show the fingerprint. Explain that private keys stay on this computer
+   and that key loss means rejoining.
+3. Select or create the local `.branchchat` file (outside the shared folder). An existing discussion can become
+   synchronized. **[Pending Q-02]**
+4. Explain how to create and share a folder in the sync product (for example Google Drive for Desktop), and how to
+   make it available offline.
+5. Select the local path of the shared folder. Run a write, read, and delete test in a test subfolder.
+6. Publish own public-key bundle. Collect the bundles of the other people.
+7. Review each candidate: name and fingerprint. Accept or discard.
+8. Send invitations. Show the roster and the state of each invitee.
+
+### 11.4 Join wizard
+
+1. Create the identity if it does not exist. Publish the public-key bundle.
+2. Select the local path of the shared folder. Run the folder test.
+3. Wait for the invitation. Check the inviter's fingerprint.
+4. Select where to save the local `.branchchat` file.
+5. Import the discussion and start sync.
+
+### 11.5 Activation **[Pending Q-22]**
+
+Proposal: the discussion is active for a member when that member has imported the invitation. The initiator sees
+each invitee as "invited", "joined" (delivery receipt for the invitation received), or "not reachable".
+
+---
+
+## 12. Shared-folder layout **[Pending Q-19]**
+
+```text
+<shared root>/
+  branchchat-sync.json            protocol version and conversation ID only (no names, no content)
+  keys/<participantId>.bckey      public-key bundles
+  inbox/<participantId>/          one folder per member
+    <eventId>.bcmsg               encrypted event for this member
+    <eventId>.bcrcpt              encrypted receipt for this member
+    <invitationId>.bcinv          encrypted invitation for this member
+  .test/<random>.tmp              folder test, deleted after the test
+```
+
+- File names use random IDs only.
+- Never write plain text, private keys, local databases, logs, or decrypted images into the shared folder.
+- A sender writes into the inbox of each other member. A recipient deletes only files in its own inbox.
+- Write a file under a temporary name in the same folder, then rename it. Ignore `.tmp` files.
+
+---
+
+## 13. Outgoing flow
+
+1. The user makes a change. The existing domain function changes the local discussion. The file is saved as today.
+2. The sync service builds the event and assigns the event ID and the next sender sequence number.
+3. The crypto module signs the event once and encrypts it once per recipient.
+4. The sync service records the event and each recipient copy in the local outbox.
+5. The transport writes each copy with temp-file-then-rename into the recipient's inbox.
+6. The sync service marks each recipient copy as "written".
+7. On partial failure, retry only the missing copies. Never create a new event ID for a retry.
+8. If no delivery receipt arrives after a time, write the same copy again. **[Pending Q-09]**
+
+---
+
+## 14. Incoming flow
+
+1. A watcher event or a scan finds a file in the own inbox.
+2. Wait until the file size is stable. Check the size limit (Q-10).
+3. Decrypt. Verify the signature. Check conversation ID, recipient ID, sender in roster, event ID, and sequence.
+4. If the event was already applied: skip step 5.
+5. Apply the event (Section 8). If a dependency is missing, put the event in the pending queue and stop here.
+6. Save the local file and the local sync state.
+7. Write `receipt.delivered` into the sender's inbox.
+8. Delete the processed file from the own inbox.
+9. After a crash between steps 6 and 8, the next scan finds the file, sees the event as applied, and completes
+   steps 7 and 8.
+
+Invalid files: move a record to a local quarantine list (not in the shared folder). Do not delete another member's
+files. Log only safe error codes.
+
+---
+
+## 15. Delivery and read state
+
+### 15.1 Delivery **[Pending Q-09]**
+
+Proposal: delivery state is local to the sender. It is stored in the local sync state, not in the `.branchchat` file.
+
+| Mark            | Meaning                                                                     |
+|-----------------|-----------------------------------------------------------------------------|
+| One grey check  | The encrypted file is written to the local shared folder for all recipients |
+| Two grey checks | All recipients sent a valid delivery receipt                                |
+| Read (see 15.2) | All recipients have the message in their read state                         |
+
+The one grey check does not mean that the file reached the cloud.
+
+### 15.2 Read **[Pending Q-08]**
+
+Proposal: keep the existing read model. Do not add a "read on display" rule.
+
+- When the local read state grows, the app sends `readstate.added` to all members, not only to the author.
+- The existing "who has read" indicator (FR-122, FR-123) then works across computers.
+- The existing three-state indicator is the read mark. A separate green checkmark is not added. Q-08 decides.
+
+### 15.3 Group details
+
+The message details show, per member: written, delivered, read.
+
+---
+
+## 16. Watching and scanning
+
+- Use `fs.watch` or Chokidar for fast notice. **[Pending Q-17]** (dependency choice).
+- Watch events are an optimization only. Do full scans: at start, when the folder becomes available again, after
+  watcher errors, periodically, and on user request ("Проверить папку" action).
+- Handle duplicates and sync-product conflict copies (for example `name (1).bcmsg`). Deduplicate by authenticated
+  event ID plus recipient ID, never by file name.
+
+---
+
+## 17. Local sync state **[Pending Q-17]**
+
+Per synchronized discussion, in the user data folder:
+
+- Outbox: event ID, recipient ID, written / delivered / read, retry time.
+- Processed events: event ID, sender, sender sequence.
+- Pending queue: events that wait for a dependency.
+- Peer state: last sender sequence, roster version.
+- Quarantine list and last scan time.
+
+Global sync registry: `documentId`, local file path, shared folder path.
+
+Never put this state in the shared folder. Never sync a live database.
+
+---
+
+## 18. Google Drive for Desktop (guidance only)
+
+The application treats Google Drive for Desktop as one sync product that exposes a folder. It has no Drive-specific
+code, unless Q-18 decides otherwise.
+
+The wizard and the user guide must explain:
+
+- Drive for Desktop has two modes: streaming and mirroring.
+  [Stream and mirror files](https://support.google.com/drive/answer/13401938),
+  [Open files offline](https://support.google.com/drive/answer/16631477).
+- In streaming mode, mark the shared folder "Available offline". Verify that this also applies to new files.
+- A folder shared from another person's My Drive may need a shortcut in your own My Drive before it appears locally.
+  Verify this during testing.
+- Streamed files can be unavailable when Drive for Desktop is closed or signed out.
+- The folder path and access are checked again at each start.
+
+Test matrix: current stable Drive for Desktop on Windows; streaming with offline pinning; streaming without pinning;
+mirroring; Drive paused, signed out, restarted, updated; permission removed and restored.
+
+---
+
+## 19. Security
+
+- Keep the existing Electron settings (context isolation, sandbox, narrow preload, CSP, IPC validation).
+- Crypto, keys, and file access stay in the main process or a utility process.
+- Treat every file in the shared folder as untrusted. Validate events with zod schemas, as `.branchchat` files are
+  validated today.
+- Restrict all transport paths to the configured shared root. Refuse path traversal and links.
+- Never log keys, plain text, or decrypted payloads.
+- Get a security review of the crypto code before release.
+
+Protected: sync provider reading content; changed events; forged events from a member whose key is not compromised;
+duplicate messages from duplicate files.
+
+Not protected: compromised endpoint; participant who shares plain text; leaked private key; metadata analysis; files
+deleted, held back, or damaged by the provider or by a person with folder access; quota or permission denial of
+service.
+
+---
+
+## 20. Testing plan
+
+### Functional
+
+- Create, join, and use a synchronized discussion with 2 and with 3 participants.
+- Each event type in Section 8.1 reaches all members and gives the same result on each computer (as Q-05 defines).
+- Branch, nested branch, branch close/reopen, branch title, images, read state, and "who has read" work across
+  computers.
+- A non-synchronized discussion behaves exactly as before. Existing unit and e2e tests pass.
+- Old app version opens (or refuses, per Q-03) a file from a synchronized discussion without damage.
+- Key loss: new identity, new invitation, future messages arrive; old ciphertext cannot be decrypted.
+- No leave, remove, edit, or delete controls exist.
+
+### Offline and sync
+
+- Recipient offline; one group member offline; sender offline before sync; all offline.
+- Drive paused, restarted, signed out; folder unavailable; drive letter changed; permission removed and restored.
+- Delayed, reordered, duplicated, and conflict-copy files.
+- Concurrent messages in the same thread; concurrent branch status changes; a message to a branch closed by another
+  member.
+
+### Reliability
+
+- Stop the app during a write; after apply but before receipt; after receipt but before delete.
+- Partial group send. Missed watcher events. Windows restart.
+
+### Security
+
+- Changed ciphertext, changed signed fields, replayed events, unknown sender, discarded candidate key.
+- Malformed and very large files. Hostile file names and path traversal.
+- No private key or plain text in the shared folder or logs.
+
+---
+
+## 21. Open questions
+
+Write your answer after **Answer:**. A recommendation is only a proposal.
+
+### A. BranchChat file and format
+
+**Q-01. Where does the plain-text `.branchchat` file live in a synchronized discussion?**  
+The file contains the full history in plain text. If it is in the shared folder, or if users share it through the sync
+product, the encryption has no value.  
+Options: (a) Local only, outside the shared folder; the app refuses a path inside it. (b) Allowed in the shared
+folder; encryption protects only the event files. (c) Encrypt the full `.branchchat` file at rest.  
+Recommendation: (a).  
+**Answer:** Local only, outside the shared folder.(a).
+
+**Q-02. Can an existing (non-synchronized) discussion become synchronized?**  
+Options: (a) Yes; the wizard converts it, and the full history goes to members inside the invitations. (b) No; only
+new discussions can be synchronized.  
+Recommendation: (a).  
+**Answer:** (a)
+
+**Q-03. How do we store the new shared data (sync marker, roster, public keys, ordering data)?**  
+Options: (A) New optional fields, no version change; old app versions open the file and can still add messages, but
+those changes are not sent as events. (B) New ZIP entry `sync.json`, no version change; same effect as (A).
+(C) `schemaVersion` 2; old versions refuse the file.  
+Recommendation: (C). It prevents an old version from silently changing a synchronized file. The release must ship
+before users create synchronized discussions.  
+**Answer:** (c)
+
+### B. Events and merging
+
+**Q-04. Must all six kinds of change (Section 2.3) be synchronized?**  
+Revision 1 had only `message.sent`. Without the others, branches, branch status, titles, and read state differ on each
+computer.  
+Recommendation: yes, all of them.  
+**Answer:** yes, all of them
+
+**Q-05. Message order in a thread when two people write at the same time.**  
+Options: (a) Arrival order on each computer (copies can differ). (b) Deterministic order by Lamport clock (copies
+converge; a late message can appear above messages that the reader already saw, and stays highlighted as unread).  
+Recommendation: (b).  
+**Answer:** (b)
+
+**Q-06. Manual file sharing in a synchronized discussion.**  
+Revision 1 said that any participant may share the local file. Today the app does not merge copies (FR-117 warns
+only).  
+Options: (a) Not supported for synchronized discussions; the invitation carries the state. (b) Add "Import copy":
+merge by IDs (Section 8.5 rules). (c) Replace the local file with the received file.  
+Recommendation: (a) for v1. Invitations already cover "send the current state to a person".  
+**Answer:** Since users still can opt out of Google Drive sync - i.e. use the old way of sharing file manually it only
+makes sense if this thing also works for synchronized discussion. No merge required. Opening such a file behaves same as
+previously. The shared file in that case does not become syncrhonized automatically. It is detached. the only way to
+share file with google syncrhonization is to use invitation.
+
+**Q-07. A remote message arrives for a branch that is closed on this computer.**  
+Today a closed branch refuses new messages.  
+Options: (a) Accept the message; the branch stays closed. (b) Accept the message and reopen the branch. (c) Refuse
+the message (it is then lost for this member).  
+Also: branch status and title use "last writer wins" (Section 8.5). Do you agree?  
+Recommendation: (a), and yes to "last writer wins".  
+**Answer:** (a)
+
+### C. Receipts and status
+
+**Q-08. Read status: keep the existing model?**  
+Today: read only by explicit action or reply (FR-112); read state is visible to all members (FR-122). Revision 1:
+read when displayed; receipt to the author only; green checkmarks.  
+Options: (a) Keep the existing model; send read-state changes to all members; the existing three-state indicator is the
+read mark. (b) Add green checkmarks next to the existing indicator, with the existing read rules. (c) Change the read
+rule to "read when displayed".  
+Recommendation: (a).  
+**Answer:** (a)
+
+**Q-09. Sent and delivered marks.**  
+Options: (a) Add one grey check (written) and two grey checks (delivered by all), stored only on the sender's
+computer. (b) Do not add them in v1.  
+Also: how long before an unconfirmed copy is written again? Recommendation: at each start and each 30 minutes.  
+Recommendation: (a).  
+**Answer:** (a). Also - unconfirmed copy is written again - at each start and each 30 minutes provided there is any other activity from same recepient in that timeframe. If no such activity - do not retry.
+
+### D. Images and limits
+
+**Q-10. How do images reach other members, and is there a size limit?**  
+Images are in the ZIP today. Other members need the bytes. NFR-015 says "no limits". Sealed boxes need the full
+payload in memory; one very large file per recipient is slow to sync.  
+Options: (a) Image bytes inside the `message.sent` event, no limit. (b) Image bytes inside the event, with a limit per
+event (for example 25 MB) for synchronized discussions only. (c) Separate encrypted asset files, split into chunks,
+no limit.  
+Recommendation: (b) for v1.  
+**Answer:** Image is sent separately - as a separate event. User sees placeholder during download - i.e. message.sent event hold information about the upcoming image. No size limit.
+
+**Q-11. Size limit for event files in general (protection against hostile files).**  
+Recommendation: refuse any shared-folder file larger than the image limit in Q-10 plus 1 MB.  
+**Answer:** 30mb, configurable in settings.
+
+### E. Participants and identity
+
+**Q-12. Display-name change in a synchronized discussion.**  
+Settings allows a name change today (FR-138). Revision 1 said "no display-name change after creation".  
+Options: (a) Allowed; send `profile.updated`; old messages keep the old name (as today). (b) Not allowed for
+synchronized discussions.  
+Recommendation: (a).  
+**Answer:** (a)
+
+**Q-13. Who can add a new member after the discussion is active, and how do others accept the new member?**  
+Options: (a) Any member can invite; others accept the new member automatically because a valid member signed
+`member.added`. (b) Any member can invite; each other member must confirm the new member's fingerprint. (c) Only the
+initiator can invite.  
+Also: are invited members shown in the "who has read" indicator before their first write? Today a person is shown
+only after the first write (FR-124).  
+Recommendation: (a), and yes, show members from the roster.  
+**Answer:** (a)
+
+**Q-14. One identity per computer user, or one identity per discussion?**  
+Today there is one `participantId` per Windows user.  
+Options: (a) One key pair per Windows user, bound to the existing `participantId`. (b) A new key pair for each
+discussion.  
+Recommendation: (a).  
+**Answer:** (a)
+
+**Q-15. Rejoin after key loss: how does the person keep the same participant ID?**  
+If `settings.json` is lost, the `participantId` is also lost (FR-020). Revision 1 says that a returning participant
+keeps the ID.  
+Options: (a) The person gets a new participant ID and appears as a new member (simple; old messages show the old
+identity). (b) A member re-invites the person with the old participant ID; members accept the new keys for that ID
+after a fingerprint check. (c) Add an export of the participant ID (not the keys) in Settings.  
+Recommendation: (a) for v1.  
+**Answer:** (b)
+
+### F. Application behavior
+
+**Q-16. Must sync run when no discussion window is open?**  
+Today the app quits when the last window closes.  
+Options: (a) Sync only for discussions that are open in a window. (b) Sync all registered discussions while any
+window is open. (c) Keep the app running in the notification area (tray) after the last window closes, with an option
+to start with Windows.  
+Recommendation: (b) for v1; (c) later.  
+**Answer:** (c)
+
+**Q-17. Dependencies for local state and file watching.**  
+Options for local state: (a) JSON files with the existing atomic write. (b) SQLite (native module; needs a rebuild
+for Electron and more packaging work).  
+Options for watching: (a) Node `fs.watch` plus scans. (b) Chokidar.  
+Recommendation: JSON and Chokidar.  
+**Answer:** JSON and Chokidar
+
+**Q-18. Transport options in v1.**  
+"Local-only mode with manual file exchange" is the existing behavior of non-synchronized discussions. A Google Drive
+adapter would contain the same code as a folder adapter.  
+Proposal: v1 has one transport, "shared folder". Google Drive for Desktop is covered by wizard text and tests only. No
+separate local-only sync mode.  
+**Answer:** as proposed
+
+**Q-19. Which Google Drive sharing setup is the target?**  
+In a folder in a personal My Drive, an editor may not be able to delete files that another account owns. Then the
+recipient cannot delete its inbox files. In a shared drive (Google Workspace), members with "Content manager" can
+delete.  
+Options: (a) Personal My Drive folder shared with Editor rights. (b) Shared drive. (c) Both.  
+If deletion is not possible: (i) the recipient leaves the file and records it as processed; the sender deletes its own
+files after the delivery receipt arrives; (ii) other.  
+Recommendation: (c), with (i) as the cleanup rule, because the owner of a file can always delete it. Verify with a
+test before the plan.  
+**Answer:** as recommended
+
+**Q-20. Menu location and names of the wizards.**  
+The menu has File, Edit, Help. Proposal: File > "Новое общее обсуждение…", File > "Присоединиться к обсуждению…", and
+for an open discussion File > "Сделать обсуждение общим…".  
+**Answer:** ok
+
+**Q-21. How do people exchange public-key bundles before the invitation?**  
+Options: (a) Through the shared folder only (`keys/`); the initiator checks fingerprints by phone or in person.
+(b) Also as a file or text that users copy (for example through WhatsApp). (c) Both.  
+Recommendation: (c).  
+**Answer:** (c)
+
+**Q-22. When is the discussion "active"?**  
+Revision 1: "when every participant can read the messages".  
+Options: (a) Active for each member as soon as that member has imported the invitation; others can already write.
+(b) Nobody can write until all invited people have joined.  
+Recommendation: (a).  
+**Answer:** (a)
+
+**Q-23. Delivery of messages written before a person joined.**  
+With option (a) of Q-22, messages can be written after an invitation is created but before the invitee joins.  
+Proposal: the invitee is in the roster from the invitation; senders already write copies to the invitee's inbox. The
+invitee processes them after the import. Do you agree?  
+**Answer:** ok
+
+---
+
+## 22. Settled decisions (from revision 1, still valid)
+
+1. No server, no Google API, no OAuth.
+2. libsodium sealed boxes per recipient plus Ed25519 signatures. Test vectors and a security review before release.
+3. No forward secrecy in v1. Document the limit.
+4. No key backup in v1.
+5. No leave, no remove, no edit, no delete in v1.
+6. After creation, all participants are equal. No administrator.
+7. Folder access is not identity. The initiator can discard a candidate key.
+8. Invitations are encrypted to the invitee's public key. No extra channel is needed for confidentiality.
+9. Each recipient deletes only files in its own inbox (subject to Q-19).
+10. The transport is behind an interface. Conversation logic does not depend on Google Drive or on the watcher library.
+11. No new attachment types.
+
+---
+
+## 23. Milestones (draft; final plan after the answers)
+
+1. **Requirements and format.** New revision of `requirements.md` and ADR. Event schemas (zod). Format change per Q-03.
+2. **Pure sync core (`src/shared/sync/`).** Apply rules, ordering, merge rules, dependency queue. Unit tests only.
+3. **Crypto and keys.** libsodium, `safeStorage` key store, canonical serialization, test vectors.
+4. **Folder transport and sync service.** Temp-then-rename writes, watch and scan, outbox, receipts, cleanup, local
+   state, crash recovery.
+5. **Session integration.** Events from local changes; remote events into open sessions and closed files.
+6. **Wizards and UI.** Create, join, convert; roster; delivery marks; per-member details; Russian strings.
+7. **Hardening.** Failure injection, security tests, Drive for Desktop test matrix, user guide (Russian), security
+   review.
+
+---
+
+## Appendix A. Cautions
+
+- Google Drive for Desktop is a file sync client, not a messaging system. Its timing is not guaranteed.
+- Never assume that a local file has reached the cloud.
+- Never depend only on watcher events.
+- Never change an event file after it is written.
+- Never treat folder membership as authentication.
+- Never put private keys, plain text, or local state in the shared folder.
+- Never delete a file in another member's inbox.
+- Never invent a cryptographic protocol. Use the libsodium constructions as documented.
+
+## Changes in revision 2
+
+- Added the facts from the current code (Section 2) and the list of conflicts (Section 3).
+- Corrected the description of the read state and of the file format.
+- Added events for all existing changes, ordering, dependency, and merge rules.
+- Mapped components to the code structure. Removed the separate Google Drive adapter and local-only mode (pending
+  Q-18).
+- Moved all open questions to Section 21, with options and recommendations.
