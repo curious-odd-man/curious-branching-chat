@@ -8,16 +8,17 @@
 
 ## Progress
 
-| Phase                                        | Status       | Notes                                                                                                                                                                                                                                                                                                                                                                                          |
-|----------------------------------------------|--------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 0 — Foundation and packaging skeleton        | Done in code | Scaffold, secure Electron shell, lint boundaries, CI, installer config. Electron smoke tests pass (3). **Still to do on Windows:** install the CI-built `BranchChat-Setup.exe` on clean Windows 10 and 11 machines.                                                                                                                                                                            |
-| 1 — Domain model and document format         | Done         | 73 unit tests: schemas, context resolution, read-state rules, ZIP read/write, atomic save, malicious fixtures, 5,000 messages with large images.                                                                                                                                                                                                                                               |
-| 2 — Application shell and document lifecycle | Done in code | 90 unit tests and 15 Electron end-to-end tests (run on Linux under a virtual display). **Still to do on Windows:** try the flows with real Windows dialogs, paths, and the installed app.                                                                                                                                                                                                      |
-| 3 — Chat UI and rich-text editor             | Done in code | 123 unit tests and 23 Electron end-to-end tests. 5,000-message discussion: opens in about 1 s, 17 rows in the page, a sent message is visible in about 30 ms (measured on Linux under a virtual display). **Still to do on Windows:** try real keyboard layouts, clipboard pastes from Word and browsers, and Russian spell checking.                                                          |
-| 4 — Branching                                | Done in code | 150 unit tests and 33 Electron end-to-end tests. Selections across bold/italic/link, list items, heading+paragraph and paragraphs; three-level nesting; reopening the file restores structure, context and highlights. **Still to do on Windows:** real mouse selection feel and the "Reply to this" button position on high-DPI screens.                                                      |
-| 5 — Unread messages                          | Done in code | 157 unit tests and 40 Electron end-to-end tests (three consecutive full runs passed). Includes the two-person exchange: A writes, B reads and replies, A opens the returned file. **Still to do on Windows:** check the look of unread highlighting and the read marks in both light and dark system themes.                                                                                   |
-| 6 — Images                                   | Done in code | 181 unit tests and 52 Electron end-to-end tests (three consecutive full runs passed). Real clipboard paste, drop, file chooser, inline display, larger view, placeholders for missing/damaged data, a 20 MB picture sent and saved in about 1.4 s with typing unaffected. **Still to do on Windows:** paste from real Windows sources (Snipping Tool, browsers, Word), and drag from Explorer. |
-| 7–9                                          | Not started  |                                                                                                                                                                                                                                                                                                                                                                                                |
+| Phase                                        | Status                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+|----------------------------------------------|-----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0 — Foundation and packaging skeleton        | Done in code                            | Scaffold, secure Electron shell, lint boundaries, CI, installer config. Electron smoke tests pass (3). **Still to do on Windows:** install the CI-built `BranchChat-Setup.exe` on clean Windows 10 and 11 machines.                                                                                                                                                                                                                                                                                                                                                           |
+| 1 — Domain model and document format         | Done                                    | 73 unit tests: schemas, context resolution, read-state rules, ZIP read/write, atomic save, malicious fixtures, 5,000 messages with large images.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 2 — Application shell and document lifecycle | Done in code                            | 90 unit tests and 15 Electron end-to-end tests (run on Linux under a virtual display). **Still to do on Windows:** try the flows with real Windows dialogs, paths, and the installed app.                                                                                                                                                                                                                                                                                                                                                                                     |
+| 3 — Chat UI and rich-text editor             | Done in code                            | 123 unit tests and 23 Electron end-to-end tests. 5,000-message discussion: opens in about 1 s, 17 rows in the page, a sent message is visible in about 30 ms (measured on Linux under a virtual display). **Still to do on Windows:** try real keyboard layouts, clipboard pastes from Word and browsers, and Russian spell checking.                                                                                                                                                                                                                                         |
+| 4 — Branching                                | Done in code                            | 150 unit tests and 33 Electron end-to-end tests. Selections across bold/italic/link, list items, heading+paragraph and paragraphs; three-level nesting; reopening the file restores structure, context and highlights. **Still to do on Windows:** real mouse selection feel and the "Reply to this" button position on high-DPI screens.                                                                                                                                                                                                                                     |
+| 5 — Unread messages                          | Done in code                            | 157 unit tests and 40 Electron end-to-end tests (three consecutive full runs passed). Includes the two-person exchange: A writes, B reads and replies, A opens the returned file. **Still to do on Windows:** check the look of unread highlighting and the read marks in both light and dark system themes.                                                                                                                                                                                                                                                                  |
+| 6 — Images                                   | Done in code                            | 181 unit tests and 52 Electron end-to-end tests (three consecutive full runs passed). Real clipboard paste, drop, file chooser, inline display, larger view, placeholders for missing/damaged data, a 20 MB picture sent and saved in about 1.4 s with typing unaffected. **Still to do on Windows:** paste from real Windows sources (Snipping Tool, browsers, Word), and drag from Explorer.                                                                                                                                                                                |
+| 7 — Windows integration                      | Done in code; **needs a Windows check** | 202 unit tests and 59 Electron end-to-end tests. The installer script (with the new "Files" page) compiles with makensis. Association logic is unit-tested against an in-memory registry, and the `reg.exe` output parser is unit-tested; Settings and the first-start question are covered end to end with an in-memory registry. **Not run on Windows:** the installer page, real registry writes, double-click, icons in Explorer. Use `docs/windows-test-checklist.md`; CI also runs `scripts/installer-smoke.ps1` (marked `continue-on-error` until it has passed once). |
+| 8–9                                          | Not started                             |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Implementation decisions made in phase 1:
 
@@ -134,6 +135,25 @@ application:
   actually changes. The same wait was added in one unread test. Both groups of tests also passed under heavy CPU load on
   Linux.
 
+Implementation decisions made in phase 7:
+
+- The association is **not** done with electron-builder's `fileAssociations`, which registers silently. A custom NSIS
+  include adds a "Файлы обсуждений" page with a checkbox (ticked by default; say if you would rather have it unticked)
+  and writes the keys under HKCU only when ticked and when no other program holds `.branchchat`. Silent installs and
+  updates never change it; the uninstaller removes it unless it is the first step of an update (`isUpdated`).
+- The app does the same through `reg.exe` (no native dependency): Settings can switch it on or off, and a first-start
+  question is asked once, only if the installer did not ask and the type is free. Another program's claim, including a
+  choice made in Windows' own "Open with", is never overridden.
+- Added File > Settings… (Ctrl+,): participant name (new name applies to new messages only) and the association.
+- New icons (a blue rounded square with a branch; a page with a folded corner and a branch) are generated by
+  `scripts/make-icons.mjs`; the files are committed. They are first drafts: replace `build/icon.ico` and
+  `build/document.ico` with your own artwork at any time.
+- The installer was compiled on Linux by giving electron-builder a stand-in for Wine; that checks the script's syntax
+  and page order (it reports 4 installer pages), not its behavior.
+- `app.setAppUserModelId('app.branchchat.desktop')` is set on Windows for taskbar grouping.
+- Stale-path case not handled: if the program is moved after registering, the registered command still points to the old
+  path until the association is switched off and on in Settings.
+
 ---
 
 ## 1. Approach
@@ -212,23 +232,23 @@ Tasks
 - **Context resolution:** for a branch, return parent-thread messages up to and including the source message,
   recursively up to the main thread (requirements 4.5); exclude later parent messages and sibling branches.
 - **Read-state rules** (FR-108 to FR-112, FR-120):
-  - unread = authored by another participant and not in the local participant's read set;
-  - mark one, mark thread, mark all;
-  - sending a message in a thread reads all earlier messages in that thread;
-  - creating a branch reads the source message;
-  - only the local participant's entry is changed; other entries are preserved;
-  - query "who has read message M": known participants except the author whose entry contains M, with the states
-    read by all / some / none (FR-122 to FR-124).
+    - unread = authored by another participant and not in the local participant's read set;
+    - mark one, mark thread, mark all;
+    - sending a message in a thread reads all earlier messages in that thread;
+    - creating a branch reads the source message;
+    - only the local participant's entry is changed; other entries are preserved;
+    - query "who has read message M": known participants except the author whose entry contains M, with the states
+      read by all / some / none (FR-122 to FR-124).
 - **Schemas** in `shared/validation`: manifest, discussion, read state, rich-text content subset (ADR section 5.4),
   with `schemaVersion` and a migration framework (initially version 1 only, but the mechanism exists).
 - **Document module** in `main/document`:
-  - read a ZIP as streams; validate entries and schemas;
-  - write with a temporary file in the same folder and atomic replace, with retry and backoff on `EPERM`/`EBUSY`;
-  - copy unchanged entries through without recompression;
-  - do not keep the file handle open between operations;
-  - preserve unknown optional fields (FR-015);
-  - refuse to rewrite a file whose `schemaVersion` is newer than supported (FR-012) and report it clearly;
-  - image assets stored by content hash (deduplication), only PNG/JPEG/GIF/WebP (FR-116).
+    - read a ZIP as streams; validate entries and schemas;
+    - write with a temporary file in the same folder and atomic replace, with retry and backoff on `EPERM`/`EBUSY`;
+    - copy unchanged entries through without recompression;
+    - do not keep the file handle open between operations;
+    - preserve unknown optional fields (FR-015);
+    - refuse to rewrite a file whose `schemaVersion` is newer than supported (FR-012) and report it clearly;
+    - image assets stored by content hash (deduplication), only PNG/JPEG/GIF/WebP (FR-116).
 - **Fixtures:** a set of sample `.branchchat` files: minimal, with nested branches, with images, unknown fields, newer
   schema, truncated ZIP, wrong sizes, path traversal entry, malformed JSON, unknown rich-text nodes, missing asset.
 

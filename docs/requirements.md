@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 7)  
+**Status:** MVP requirements (revision 8)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -368,6 +368,22 @@ Proposed internal structure:
 - **FR-092.** Drag-and-drop opening should be supported where practical.
 - **FR-118.** An invalid, missing, or inaccessible file path passed by Windows at launch must produce a clear error
   message and must not crash the application.
+- **FR-134.** The installer has a "Файлы обсуждений" page with a checkbox "Открывать файлы .branchchat в BranchChat",
+  ticked by default, that explains what it does and that it can be undone. The association is registered only if the
+  box is ticked, for the current user only (no administrator rights).
+- **FR-135.** Silent installs and automatic updates never show that page and never change the association: an update
+  keeps whatever the person chose. Uninstalling removes the association, but not when it is only the first step of an
+  update.
+- **FR-136.** On first start the application asks, once, whether `.branchchat` files should open in BranchChat. It does
+  not ask if the installer already asked, if the file type is already associated (with BranchChat or another program),
+  or after any earlier answer. Any answer is remembered.
+- **FR-137.** Explorer shows `.branchchat` files with the BranchChat document icon and the type name
+  "Обсуждение BranchChat".
+- **FR-138.** Settings (File > Settings…) shows whether the association is on, and switches it on or off. Switching it
+  on
+  is refused, with an explanation, if another program holds the file type or the person chose another program in
+  Windows; BranchChat never takes the type over (FR-090). Settings also lets the person change their name; the new name
+  applies to new messages only (FR-024).
 
 ### 5.9. Application updates
 
@@ -408,8 +424,8 @@ file when it is exchanged.
   the
   messages of that thread itself, not the inherited context shown in a branch (those belong to their own threads).
 - **FR-112.** A message also becomes read for the local participant in exactly these two cases, in addition to FR-111:
-  1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
-  2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
+    1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
+    2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
 
   Scrolling, opening a thread, or viewing a message never marks it read.
 - **FR-113.** The side panel must show the number of unread messages for each branch, and must show an indicator on a
@@ -673,6 +689,11 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 8
+
+- Windows integration (phase 7): the installer page and its rules (FR-134, FR-135), the first-start question
+  (FR-136), icon and type name (FR-137), and Settings (FR-138).
 
 ## Changes in revision 7
 

@@ -19,6 +19,8 @@ export interface Ui {
     message: string,
     detail?: string
   ): Promise<void>
+  /** Asks once whether .branchchat files should open in BranchChat (FR-136). Resolves true for yes. */
+  confirmAssociation(parent: BrowserWindow | undefined): Promise<boolean>
   /** Resolves true if the user chose to close anyway. */
   confirmClose(parent: BrowserWindow | undefined, problems: CloseProblems): Promise<boolean>
 }
@@ -77,6 +79,20 @@ export const electronUi: Ui = {
       buttons: ['OK'],
       noLink: true
     })
+  },
+
+  async confirmAssociation(parent) {
+    const result = await messageBox(parent, {
+      type: 'question',
+      title: ru.association.askTitle,
+      message: ru.association.askTitle,
+      detail: ru.association.askText,
+      buttons: [ru.association.askYes, ru.association.askNo],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true
+    })
+    return result.response === 0
   },
 
   async confirmClose(parent, problems) {

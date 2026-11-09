@@ -6,9 +6,11 @@ import { systemContext } from './application/clock'
 import { createMainWindow } from './application/mainWindow'
 import { installMenu } from './application/menu'
 import { electronUi } from './application/ui'
-import { installE2eHooks } from './e2e/hooks'
+import { e2eRegistry, installE2eHooks } from './e2e/hooks'
 import { registerIpcHandlers } from './ipc/handlers'
 import { SettingsStore } from './local-state/settings'
+import { AssociationService } from './windows/associationService'
+import { createFileAssociation } from './windows/createAssociation'
 import { extractDiscussionPaths } from './windows/launchArgs'
 import { applyGlobalSecurity } from './windows/security'
 
@@ -19,6 +21,9 @@ if (__E2E_HOOKS__) {
   const userDataOverride = process.env['BRANCHCHAT_USER_DATA']
   if (userDataOverride) app.setPath('userData', userDataOverride)
 }
+
+// Windows groups the taskbar button and notifications under this ID; it matches the installer's appId.
+if (process.platform === 'win32') app.setAppUserModelId('app.branchchat.desktop')
 
 // The scheme used to show embedded images must be registered before the app is ready.
 registerAssetScheme()
@@ -50,9 +55,15 @@ if (!gotLock) {
     })
     installAssetProtocol(controller)
     applyGlobalSecurity()
-    registerIpcHandlers(controller, settings)
+    const association = new AssociationService(
+      createFileAssociation(__E2E_HOOKS__ ? e2eRegistry() : null),
+      settings,
+      electronUi
+    )
+    registerIpcHandlers(controller, settings, association)
     installMenu(controller)
     await controller.openPaths(earlyPaths)
+    void association.offerAtStartup()
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) controller?.createWindow()

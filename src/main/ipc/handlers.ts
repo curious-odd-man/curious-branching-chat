@@ -12,6 +12,7 @@ import {
   noPayloadSchema,
   openLinkSchema,
   openPathSchema,
+  setAssociationSchema,
   setNameSchema,
   stageImageSchema,
   setStatusSchema,
@@ -23,6 +24,7 @@ import type { ReadAction } from '../application/documentSession'
 import { DocumentError } from '../document'
 import { openExternalLink } from '../windows/security'
 import type { SettingsStore } from '../local-state/settings'
+import type { AssociationService } from '../windows/associationService'
 
 function toError(err: unknown): { code: string; message: string } {
   if (err instanceof AppError || err instanceof DocumentError || err instanceof DomainError)
@@ -35,7 +37,11 @@ function toError(err: unknown): { code: string; message: string } {
 }
 
 /** Every channel validates its payload and its sender; the renderer is never trusted. */
-export function registerIpcHandlers(controller: AppController, settings: SettingsStore): void {
+export function registerIpcHandlers(
+  controller: AppController,
+  settings: SettingsStore,
+  association: AssociationService
+): void {
   function handle<P, R>(
     channel: string,
     schema: ZodType<P>,
@@ -61,6 +67,9 @@ export function registerIpcHandlers(controller: AppController, settings: Setting
   handle(IPC.appInfo, noPayloadSchema, () => ({ name: app.getName(), version: app.getVersion() }))
   handle(IPC.settingsGet, noPayloadSchema, () => settings.get())
   handle(IPC.settingsSetName, setNameSchema, (_e, p) => settings.setDisplayName(p.displayName))
+
+  handle(IPC.associationGet, noPayloadSchema, () => association.info())
+  handle(IPC.associationSet, setAssociationSchema, (_e, p) => association.set(p.enabled))
 
   handle(IPC.documentNew, noPayloadSchema, (entry) => controller.newDocument(entry))
   handle(IPC.documentOpenDialog, noPayloadSchema, (entry) => controller.openWithDialog(entry))

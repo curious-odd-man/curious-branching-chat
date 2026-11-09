@@ -2,6 +2,7 @@ import type { RichDoc } from '../validation/richText'
 import type { StagedImage } from './assets'
 import type {
   AppInfo,
+  AssociationInfo,
   DocumentView,
   IpcResult,
   MenuCommand,
@@ -30,6 +31,9 @@ export interface BranchChatApi {
   markAllRead(): Promise<IpcResult<null>>
   /** The person has seen the notice that read status is visible to other participants (FR-125). */
   acknowledgeReadNotice(): Promise<IpcResult<SettingsView>>
+  getAssociation(): Promise<IpcResult<AssociationInfo>>
+  /** Turns the .branchchat file association on or off. Refused if another program holds the type (FR-090). */
+  setAssociation(enabled: boolean): Promise<IpcResult<AssociationInfo>>
   /** "Reply to this": creates a branch from a selected passage; resolves with the new branch's ID. */
   createBranch(
     sourceMessageId: string,

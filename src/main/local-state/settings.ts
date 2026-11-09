@@ -9,7 +9,9 @@ const settingsSchema = z
     participantId: z.string().min(1),
     displayName: z.string().min(1).optional(),
     /** The person has seen that read status is stored in the file and visible to others (FR-125). */
-    readNoticeAcknowledged: z.boolean().optional()
+    readNoticeAcknowledged: z.boolean().optional(),
+    /** The question about the .branchchat file association has been settled (FR-136). */
+    associationAsked: z.boolean().optional()
   })
   .passthrough()
 type Settings = z.infer<typeof settingsSchema>
@@ -56,7 +58,8 @@ export class SettingsStore {
     return {
       participantId: this.data.participantId,
       displayName: this.data.displayName ?? null,
-      readNoticeAcknowledged: this.data.readNoticeAcknowledged ?? false
+      readNoticeAcknowledged: this.data.readNoticeAcknowledged ?? false,
+      associationAsked: this.data.associationAsked ?? false
     }
   }
 
@@ -72,6 +75,14 @@ export class SettingsStore {
   async acknowledgeReadNotice(): Promise<SettingsView> {
     if (!this.data) throw new Error('SettingsStore.load() has not been called')
     this.data = { ...this.data, readNoticeAcknowledged: true }
+    await this.persist()
+    return this.get()
+  }
+
+  async markAssociationAsked(): Promise<SettingsView> {
+    if (!this.data) throw new Error('SettingsStore.load() has not been called')
+    if (this.data.associationAsked) return this.get()
+    this.data = { ...this.data, associationAsked: true }
     await this.persist()
     return this.get()
   }

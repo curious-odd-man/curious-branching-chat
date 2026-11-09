@@ -27,6 +27,10 @@ jobs:
         run: npx electron-builder --win nsis --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Installer smoke test (silent install, update, uninstall, file association rules)
+        # Not yet proven on a real runner; make it blocking by removing continue-on-error once it has passed.
+        continue-on-error: true
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/installer-smoke.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: BranchChat-installer

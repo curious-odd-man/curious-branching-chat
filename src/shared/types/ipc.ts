@@ -17,6 +17,8 @@ export const IPC = {
   readMarkThread: 'read:mark-thread',
   readMarkAll: 'read:mark-all',
   settingsAckReadNotice: 'settings:ack-read-notice',
+  associationGet: 'association:get',
+  associationSet: 'association:set',
   imageStage: 'image:stage',
   imagePick: 'image:pick',
   branchCreate: 'branch:create',
@@ -37,6 +39,21 @@ export interface SettingsView {
   displayName: string | null
   /** The one-time notice about visible read status has been shown (FR-125). */
   readNoticeAcknowledged: boolean
+  /** The question about opening .branchchat files in BranchChat has been settled (installer or app, FR-136). */
+  associationAsked: boolean
+}
+
+/**
+ * Whether double-clicking a `.branchchat` file opens BranchChat.
+ * - `on`: registered for BranchChat
+ * - `off`: not registered, and free to register
+ * - `other-app`: another program holds the type, or the person chose another program in Windows (never taken over)
+ * - `unsupported`: not a Windows installation of BranchChat (development run, other platform)
+ */
+export type AssociationState = 'on' | 'off' | 'other-app' | 'unsupported'
+
+export interface AssociationInfo {
+  state: AssociationState
 }
 
 /** Everything a window needs to show its discussion. */
@@ -68,4 +85,4 @@ export interface OpenOutcome {
   errorCode?: string
 }
 
-export type MenuCommand = 'new' | 'open'
+export type MenuCommand = 'new' | 'open' | 'settings'

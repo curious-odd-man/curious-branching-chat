@@ -17,6 +17,8 @@ export interface TestApp {
   /** Answer the next dialogs: save/open paths, and message-box button indexes (0 = first button). */
   answer(answers: { save?: string[]; open?: string[]; box?: number[] }): Promise<void>
   dialogs(): Promise<DialogLogEntry[]>
+  /** What the (in-memory) test registry holds: key -> value name ('' = default) -> value. */
+  registry(): Promise<Record<string, Record<string, string>>>
   /** Wait until the app has this many windows and return them. */
   windows(count: number): Promise<Page[]>
   close(): Promise<void>
@@ -28,7 +30,7 @@ export async function tempDir(prefix = 'bc-e2e-'): Promise<string> {
 
 /** Launches the built app with an isolated profile and all native dialogs stubbed. */
 export async function launchApp(
-  options: { userData?: string; files?: string[] } = {}
+  options: { userData?: string; files?: string[]; env?: Record<string, string> } = {}
 ): Promise<TestApp> {
   const userData = options.userData ?? (await tempDir('bc-profile-'))
   const args = [
@@ -40,6 +42,7 @@ export async function launchApp(
     args,
     env: {
       ...(process.env as Record<string, string>),
+      ...(options.env ?? {}),
       BRANCHCHAT_USER_DATA: userData
     }
   })
@@ -57,6 +60,14 @@ export async function launchApp(
       }, answers),
     dialogs: () =>
       app.evaluate(() => (globalThis as unknown as { __dialogLog: DialogLogEntry[] }).__dialogLog),
+    registry: () =>
+      app.evaluate(() =>
+        (
+          globalThis as unknown as {
+            __registry: { dump(): Record<string, Record<string, string>> }
+          }
+        ).__registry.dump()
+      ),
     windows: async (count) => {
       const deadline = Date.now() + 10_000
       while (Date.now() < deadline) {

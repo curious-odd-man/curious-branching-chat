@@ -6,6 +6,7 @@ import type { IpcResult } from '@shared/types/ipc'
 import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
 import { ReadNotice } from './components/ReadNotice'
+import { SettingsDialog } from './components/SettingsDialog'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
 import { useDocumentView, useSettings } from './hooks'
 
@@ -20,6 +21,7 @@ export function App(): React.JSX.Element {
   const [nav, setNav] = useState<{ documentId: string; threadId: string; focus?: string } | null>(
     null
   )
+  const [showSettings, setShowSettings] = useState(false)
   const [readNotice, setReadNotice] = useState<{ retry: () => void } | null>(null)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
@@ -51,6 +53,7 @@ export function App(): React.JSX.Element {
     () =>
       api.onMenuCommand((command) => {
         if (command === 'new') startNew()
+        else if (command === 'settings') setShowSettings(true)
         else openDialog()
       }),
     [api, startNew, openDialog]
@@ -169,6 +172,16 @@ export function App(): React.JSX.Element {
           }
           onSetTitle={(threadId, title) => void api.setBranchTitle(threadId, title).then(report)}
           onRetrySave={() => void api.retrySave().then(report)}
+        />
+      )}
+      {showSettings && (
+        <SettingsDialog
+          settings={settings}
+          onNameSaved={(s) => {
+            setSettings(s)
+            settingsRef.current = s
+          }}
+          onClose={() => setShowSettings(false)}
         />
       )}
       {pending && <NamePrompt onSubmit={submitName} onCancel={() => setPending(null)} />}

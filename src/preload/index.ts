@@ -30,6 +30,8 @@ const api: BranchChatApi = {
   markThreadRead: (threadId) => invoke(IPC.readMarkThread, { threadId }),
   markAllRead: () => invoke(IPC.readMarkAll),
   acknowledgeReadNotice: () => invoke(IPC.settingsAckReadNotice),
+  getAssociation: () => invoke(IPC.associationGet),
+  setAssociation: (enabled) => invoke(IPC.associationSet, { enabled }),
   createBranch: (sourceMessageId, selectionStart, selectionEnd) =>
     invoke(IPC.branchCreate, { sourceMessageId, selectionStart, selectionEnd }),
   setBranchStatus: (threadId, status) => invoke(IPC.branchSetStatus, { threadId, status }),

@@ -327,6 +327,42 @@ button:disabled {
   padding: 0.4rem;
 }
 
+.dialog.settings {
+  width: min(30rem, 92vw);
+}
+.dialog.settings section {
+  margin: 0.8rem 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+.dialog.settings section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.dialog.settings h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+.dialog label.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.4rem 0;
+}
+.dialog label.check input {
+  display: inline-block;
+  width: auto;
+  margin: 0;
+}
+.dialog .ok {
+  align-self: center;
+  margin-right: auto;
+  color: color-mix(in srgb, CanvasText 70%, green);
+}
+.dialog .error-text {
+  color: #b3261e;
+}
+
 /* ---- branches ---------------------------------------------------------------------------------------------- */
 .workspace {
   display: flex;

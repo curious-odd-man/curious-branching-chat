@@ -15,12 +15,14 @@ describe('SettingsStore', () => {
       expect(a.get()).toEqual({
         participantId: 'id-1',
         displayName: null,
-        readNoticeAcknowledged: false
+        readNoticeAcknowledged: false,
+        associationAsked: false
       })
       expect(await a.setDisplayName('  Анна  ')).toEqual({
         participantId: 'id-1',
         displayName: 'Анна',
-        readNoticeAcknowledged: false
+        readNoticeAcknowledged: false,
+        associationAsked: false
       })
 
       const b = new SettingsStore(dir, () => `id-${++n}`) // e.g. next application start
@@ -28,7 +30,8 @@ describe('SettingsStore', () => {
       expect(b.get()).toEqual({
         participantId: 'id-1',
         displayName: 'Анна',
-        readNoticeAcknowledged: false
+        readNoticeAcknowledged: false,
+        associationAsked: false
       })
     })
   })
@@ -104,6 +107,18 @@ describe('plainTextToRichDoc', () => {
         { type: 'paragraph' },
         { type: 'paragraph', content: [{ type: 'text', text: 'мир' }] }
       ]
+    })
+  })
+
+  it('remembers that the file association question was asked', async () => {
+    await withTempDir(async (dir) => {
+      const a = new SettingsStore(dir, () => 'id-1')
+      await a.load()
+      expect(a.get().associationAsked).toBe(false)
+      expect((await a.markAssociationAsked()).associationAsked).toBe(true)
+      const b = new SettingsStore(dir, () => 'id-2')
+      await b.load()
+      expect(b.get().associationAsked).toBe(true)
     })
   })
 })

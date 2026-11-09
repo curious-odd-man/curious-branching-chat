@@ -18,6 +18,12 @@ export function installMenu(controller: AppController): void {
           click: () => controller.sendMenuCommand('open')
         },
         { type: 'separator' },
+        {
+          label: ru.menu.settings,
+          accelerator: 'CmdOrCtrl+,',
+          click: () => controller.sendMenuCommand('settings')
+        },
+        { type: 'separator' },
         { label: ru.menu.closeWindow, role: 'close' },
         { label: ru.menu.exit, accelerator: 'Alt+F4', click: () => app.quit() }
       ]
