@@ -12,8 +12,11 @@ import {
     noPayloadSchema,
     openLinkSchema,
     openPathSchema,
+    recentPathSchema,
     setAssociationSchema,
     setAutoUpdateSchema,
+    setOpenLastSchema,
+    setRecentLimitSchema,
     setNameSchema,
     stageImageSchema,
     setStatusSchema,
@@ -24,6 +27,8 @@ import { AppError } from '../application/errors'
 import type { ReadAction } from '../application/documentSession'
 import { DocumentError } from '../document'
 import { openExternalLink } from '../windows/security'
+import { describeRecent } from '../application/recentView'
+import type { RecentFilesStore } from '../local-state/recentFiles'
 import type { SettingsStore } from '../local-state/settings'
 import type { UpdateService } from '../updates/updateService'
 import type { AssociationService } from '../windows/associationService'
@@ -48,6 +53,7 @@ function toError(err: unknown): { code: string; message: string } {
 export function registerIpcHandlers(
     controller: AppController,
     settings: SettingsStore,
+    recent: RecentFilesStore,
     association: AssociationService,
     updates: UpdateService
 ): void {
@@ -90,6 +96,23 @@ export function registerIpcHandlers(
     handle(IPC.settingsSetAutoUpdate, setAutoUpdateSchema, (_e, p) =>
         settings.setAutoUpdateCheck(p.enabled)
     )
+    handle(IPC.settingsSetRecentLimit, setRecentLimitSchema, async (_e, p) => {
+        const updated = await settings.setRecentFilesLimit(p.limit)
+        await recent.trim(p.limit)
+        return updated
+    })
+    handle(IPC.settingsSetOpenLast, setOpenLastSchema, (_e, p) =>
+        settings.setOpenLastFileOnStartup(p.enabled)
+    )
+    handle(IPC.recentGet, noPayloadSchema, () => describeRecent(recent.list()))
+    handle(IPC.recentRemove, recentPathSchema, async (_e, p) => {
+        await recent.remove(p.path)
+        return null
+    })
+    handle(IPC.recentClear, noPayloadSchema, async () => {
+        await recent.clear()
+        return null
+    })
     handle(IPC.updateGetState, noPayloadSchema, () => updates.get())
     // The work continues in the background; progress and results arrive as state changes (FR-095).
     handle(IPC.updateCheck, noPayloadSchema, () => {

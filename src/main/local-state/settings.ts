@@ -13,10 +13,15 @@ const settingsSchema = z
         /** The question about the .branchchat file association has been settled (FR-136). */
         associationAsked: z.boolean().optional(),
         /** Background update checks (FR-097); on unless the person turned them off. */
-        autoUpdateCheck: z.boolean().optional()
+        autoUpdateCheck: z.boolean().optional(),
+        /** Number of recent files kept; 0 = no list. */
+        recentFilesLimit: z.number().int().nonnegative().optional(),
+        openLastFileOnStartup: z.boolean().optional()
     })
     .passthrough()
 type Settings = z.infer<typeof settingsSchema>
+
+export const DEFAULT_RECENT_FILES_LIMIT = 10
 
 /**
  * Local, per-Windows-user settings (NFR-017): the participant ID (generated once, FR-020) and display name (FR-017).
@@ -64,7 +69,9 @@ export class SettingsStore {
             displayName: this.data.displayName ?? null,
             readNoticeAcknowledged: this.data.readNoticeAcknowledged ?? false,
             associationAsked: this.data.associationAsked ?? false,
-            autoUpdateCheck: this.data.autoUpdateCheck ?? true
+            autoUpdateCheck: this.data.autoUpdateCheck ?? true,
+            recentFilesLimit: this.data.recentFilesLimit ?? DEFAULT_RECENT_FILES_LIMIT,
+            openLastFileOnStartup: this.data.openLastFileOnStartup ?? true
         }
     }
 
@@ -95,6 +102,21 @@ export class SettingsStore {
     async setAutoUpdateCheck(enabled: boolean): Promise<SettingsView> {
         if (!this.data) throw new Error('SettingsStore.load() has not been called')
         this.data = { ...this.data, autoUpdateCheck: enabled }
+        await this.persist()
+        return this.get()
+    }
+
+    async setRecentFilesLimit(limit: number): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        if (!Number.isInteger(limit) || limit < 0) throw new Error('invalid recent files limit')
+        this.data = { ...this.data, recentFilesLimit: limit }
+        await this.persist()
+        return this.get()
+    }
+
+    async setOpenLastFileOnStartup(enabled: boolean): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        this.data = { ...this.data, openLastFileOnStartup: enabled }
         await this.persist()
         return this.get()
     }

@@ -29,6 +29,10 @@ export function SettingsDialog({
     const [nameMessage, setNameMessage] = useState<string | null>(null)
     const [association, setAssociation] = useState<AssociationInfo | null>(null)
     const [error, setError] = useState<string | null>(null)
+    // Shown right away while the change is written (a controlled checkbox would flip back until the answer arrives).
+    const [openLast, setOpenLast] = useState(settings?.openLastFileOnStartup ?? true)
+    // The recent files limit is typed as text and applied when the field loses focus or Enter is pressed.
+    const [limitText, setLimitText] = useState(String(settings?.recentFilesLimit ?? 10))
     // The value being applied, shown right away while the change is written.
     const [requested, setRequested] = useState<boolean | null>(null)
 
@@ -47,6 +51,19 @@ export function SettingsDialog({
             } else setError(r.error.message)
         })
     }, [api, name, onNameSaved])
+
+    const applyLimit = (): void => {
+        const value = Number(limitText)
+        if (limitText.trim() === '' || !Number.isInteger(value) || value < 0) {
+            setLimitText(String(settings?.recentFilesLimit ?? 10)) // not a whole number: keep the old value
+            return
+        }
+        if (value === settings?.recentFilesLimit) return
+        void api.setRecentFilesLimit(value).then((r) => {
+            if (r.ok) onSettingsChanged(r.data)
+            else setError(r.error.message)
+        })
+    }
 
     const toggle = (enabled: boolean): void => {
         setRequested(enabled)
@@ -126,6 +143,44 @@ export function SettingsDialog({
                             {stateText[state]}
                         </p>
                     )}
+                </section>
+
+                <section>
+                    <h3>{ru.settings.startupHeading}</h3>
+                    <label className="check">
+                        <input
+                            type="checkbox"
+                            data-testid="settings-open-last"
+                            checked={openLast}
+                            onChange={(e) => {
+                                const enabled = e.target.checked
+                                setOpenLast(enabled)
+                                void api.setOpenLastFileOnStartup(enabled).then((r) => {
+                                    if (r.ok) onSettingsChanged(r.data)
+                                    else {
+                                        setOpenLast(!enabled)
+                                        setError(r.error.message)
+                                    }
+                                })
+                            }}
+                        />
+                        <span>{ru.settings.openLastFile}</span>
+                    </label>
+                    <p className="hint">{ru.settings.openLastFileHint}</p>
+                    <label>
+                        {ru.settings.recentLimitLabel}
+                        <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            data-testid="settings-recent-limit"
+                            value={limitText}
+                            onChange={(e) => setLimitText(e.target.value)}
+                            onBlur={applyLimit}
+                            onKeyDown={(e) => e.key === 'Enter' && applyLimit()}
+                        />
+                    </label>
+                    <p className="hint">{ru.settings.recentLimitHint}</p>
                 </section>
 
                 <section>

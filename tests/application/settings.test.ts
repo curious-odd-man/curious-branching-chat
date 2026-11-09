@@ -17,14 +17,18 @@ describe('SettingsStore', () => {
                 displayName: null,
                 readNoticeAcknowledged: false,
                 associationAsked: false,
-                autoUpdateCheck: true
+                autoUpdateCheck: true,
+                recentFilesLimit: 10,
+                openLastFileOnStartup: true
             })
             expect(await a.setDisplayName('  Анна  ')).toEqual({
                 participantId: 'id-1',
                 displayName: 'Анна',
                 readNoticeAcknowledged: false,
                 associationAsked: false,
-                autoUpdateCheck: true
+                autoUpdateCheck: true,
+                recentFilesLimit: 10,
+                openLastFileOnStartup: true
             })
 
             const b = new SettingsStore(dir, () => `id-${++n}`) // e.g. next application start
@@ -34,7 +38,9 @@ describe('SettingsStore', () => {
                 displayName: 'Анна',
                 readNoticeAcknowledged: false,
                 associationAsked: false,
-                autoUpdateCheck: true
+                autoUpdateCheck: true,
+                recentFilesLimit: 10,
+                openLastFileOnStartup: true
             })
         })
     })

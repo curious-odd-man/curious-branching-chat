@@ -118,3 +118,21 @@ Releases of a **public** repository.
    published value. Install, then update from 1.0.0 to 1.0.1 (section H).
 8. **Clean-machine install.** On a fresh Windows 10 and a fresh Windows 11 (no Node, no other runtimes), install from
    the single exe and complete A, D and H.
+
+## J. Recent discussions and startup
+
+1. Open three discussions in turn, close BranchChat, start it from the Start menu: the most recent discussion opens by
+   itself (one window). Settings > turn "Открывать последнее обсуждение при запуске" off, restart: the start screen
+   shows
+   the list, newest first.
+2. Move one listed file to another folder: it is greyed out with "файл не найден"; clicking it shows the message; ✕
+   removes it. If the most recent file is the missing one, startup shows the start screen.
+3. File > Открыть недавние shows the files (the missing one disabled) and opens the chosen one.
+4. Right-click the BranchChat taskbar icon: category "Недавние" lists the files; choosing one opens it (also when
+   BranchChat is not running, also when the `.branchchat` association is switched off). A missing file is not listed.
+5. Double-click a `.branchchat` file in Explorer while "open last file" is on: only that file opens, not the last one
+   too.
+6. Settings > recent files number: set 2, the list shrinks to 2 and the menu and jump list follow; set 0, the list is
+   gone; type -1 or 1.5, the old value comes back.
+7. Update from the previous version: the option is on without any action (FR-148), the list is empty until files are
+   opened.

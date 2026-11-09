@@ -1,3 +1,4 @@
+import { CURRENT_VERSION, NEWER_VERSION, OLDER_VERSION } from './helpers/version'
 import { expect, test, type Page } from '@playwright/test'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -59,13 +60,13 @@ const openedLinks = (app: TestApp): Promise<string[]> =>
     app.app.evaluate(() => (globalThis as unknown as { __openedLinks: string[] }).__openedLinks)
 
 test('manual check finds a newer release, shows its details, downloads, verifies and installs on request (FR-096 to FR-100)', async () => {
-    const { app, win } = await start({ version: '0.2.0' })
+    const { app, win } = await start({ version: NEWER_VERSION })
     await checkManually(app)
 
     const dialog = win.getByTestId('update-dialog')
     await expect(dialog).toHaveAttribute('data-phase', 'available')
-    await expect(dialog).toContainText('Доступна версия 0.2.0')
-    await expect(dialog).toContainText('Сейчас установлена версия 0.1.0')
+    await expect(dialog).toContainText(`Доступна версия ${NEWER_VERSION}`)
+    await expect(dialog).toContainText(`Сейчас установлена версия ${CURRENT_VERSION}`)
     await expect(win.getByTestId('update-date')).toContainText('2026')
     await expect(win.getByTestId('update-size')).toHaveText('300 КБ')
     // Notes arrive as HTML from GitHub and are shown as plain text.
@@ -88,26 +89,26 @@ test('manual check finds a newer release, shows its details, downloads, verifies
 })
 
 test('"Later" keeps the dialog away; a banner offers the details again', async () => {
-    const { app, win } = await start({ version: '0.2.0' })
+    const { app, win } = await start({ version: NEWER_VERSION })
     await checkManually(app)
     await win.getByTestId('update-later').click()
     await expect(win.getByTestId('update-dialog')).toHaveCount(0)
-    await expect(win.getByTestId('update-banner')).toContainText('0.2.0')
+    await expect(win.getByTestId('update-banner')).toContainText(NEWER_VERSION)
     await win.getByTestId('update-banner-details').click()
     await expect(win.getByTestId('update-dialog')).toHaveAttribute('data-phase', 'available')
 })
 
 test('the release page opens in the browser from the dialog (FR-099)', async () => {
-    const { app, win } = await start({ version: '0.2.0' })
+    const { app, win } = await start({ version: NEWER_VERSION })
     await checkManually(app)
     await win.getByTestId('update-open-page').click()
     await expect
         .poll(() => openedLinks(app))
-        .toContain('https://github.com/test-owner/branchchat/releases/tag/v0.2.0')
+        .toContain(`https://github.com/test-owner/branchchat/releases/tag/v${NEWER_VERSION}`)
 })
 
 test('a corrupted download is rejected: reported, never installable, and the app keeps working (FR-102, FR-105)', async () => {
-    const { app, win } = await start({ version: '0.2.0', corrupt: true })
+    const { app, win } = await start({ version: NEWER_VERSION, corrupt: true })
     await checkManually(app)
     await win.getByTestId('update-download').click()
 
@@ -123,11 +124,11 @@ test('a corrupted download is rejected: reported, never installable, and the app
 })
 
 test('the current version, and older versions, are reported as up to date; no downgrade (FR-094)', async () => {
-    for (const version of ['0.1.0', '0.0.9']) {
+    for (const version of [CURRENT_VERSION, OLDER_VERSION]) {
         const { app, win } = await start({ version })
         await checkManually(app)
         await expect(win.getByTestId('update-up-to-date')).toContainText(
-            'Установлена последняя версия (0.1.0)'
+            `Установлена последняя версия (${CURRENT_VERSION})`
         )
         await win.getByTestId('update-close').click()
         await t?.close()
@@ -139,7 +140,7 @@ test('the current version, and older versions, are reported as up to date; no do
 
 test('offline: a manual check explains the problem, an automatic check stays silent (FR-105)', async () => {
     // Manual
-    const dead = await startFeed({ version: '0.2.0' })
+    const dead = await startFeed({ version: NEWER_VERSION })
     const deadUrl = dead.url
     await dead.close() // nothing listens on this address any more
     t = await launchApp({
@@ -160,9 +161,12 @@ test('offline: a manual check explains the problem, an automatic check stays sil
 })
 
 test('the automatic check at startup shows only a banner, no dialog (FR-095)', async () => {
-    const { win } = await start({ version: '0.2.0' }, { BRANCHCHAT_E2E_UPDATE_STARTUP_MS: '300' })
+    const { win } = await start(
+        { version: NEWER_VERSION },
+        { BRANCHCHAT_E2E_UPDATE_STARTUP_MS: '300' }
+    )
     await expect(win.getByTestId('update-banner')).toContainText(
-        'Доступно обновление BranchChat 0.2.0'
+        `Доступно обновление BranchChat ${NEWER_VERSION}`
     )
     await expect(win.getByTestId('update-dialog')).toHaveCount(0)
     await win.getByRole('button', { name: 'Скрыть' }).click()
@@ -172,7 +176,7 @@ test('the automatic check at startup shows only a banner, no dialog (FR-095)', a
 test('automatic checks can be switched off in Settings and stay off (FR-097)', async () => {
     const userData = await tempDir('bc-profile-')
     const { app, win } = await start(
-        { version: '0.2.0' },
+        { version: NEWER_VERSION },
         { BRANCHCHAT_E2E_UPDATE_STARTUP_MS: '60000' },
         userData
     )
@@ -221,7 +225,7 @@ test('update requests carry nothing about documents or people (NFR-008)', async 
             displayName: 'СекретноеИмяУчастника'
         })
     )
-    const { app, win } = await start({ version: '0.2.0' }, {}, userData)
+    const { app, win } = await start({ version: NEWER_VERSION }, {}, userData)
     await checkManually(app)
     await win.getByTestId('update-download').click()
     await expect(win.getByTestId('update-dialog')).toHaveAttribute('data-phase', 'ready')

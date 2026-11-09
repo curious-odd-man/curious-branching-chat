@@ -80,17 +80,17 @@ association and updates (section 4). One installer `.exe` that the user download
 Electron provides Chromium for rendering and Node.js for the main process, connected through controlled IPC.
 
 - **Strengths:**
-  - Nearly everything is written in TypeScript; no Rust, no Java.
-  - Mature web editor ecosystem (TipTap/ProseMirror).
-  - Main-process access to the filesystem for ZIP handling and atomic saves, without Spring Boot.
-  - `app.requestSingleInstanceLock()` and the `second-instance` event provide a standard way to pass an opened file to
-    the running instance.
-  - Established packaging (electron-builder) and updater (electron-updater) with a GitHub Releases provider.
+    - Nearly everything is written in TypeScript; no Rust, no Java.
+    - Mature web editor ecosystem (TipTap/ProseMirror).
+    - Main-process access to the filesystem for ZIP handling and atomic saves, without Spring Boot.
+    - `app.requestSingleInstanceLock()` and the `second-instance` event provide a standard way to pass an opened file to
+      the running instance.
+    - Established packaging (electron-builder) and updater (electron-updater) with a GitHub Releases provider.
 - **Weaknesses:**
-  - Larger installer and higher memory use than Tauri or JavaFX.
-  - Security-sensitive process model; needs strict configuration (section 7).
-  - The Electron/Chromium runtime must be kept up to date.
-  - The portable single-EXE target is a poor fit for association and updates (section 4).
+    - Larger installer and higher memory use than Tauri or JavaFX.
+    - Security-sensitive process model; needs strict configuration (section 7).
+    - The Electron/Chromium runtime must be kept up to date.
+    - The portable single-EXE target is a poor fit for association and updates (section 4).
 
 ### Qualitative comparison
 

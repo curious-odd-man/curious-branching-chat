@@ -1,9 +1,17 @@
 import { app, dialog, Menu, type MenuItemConstructorOptions } from 'electron'
 import { ru } from '@shared/i18n/ru'
+import type { RecentFileView } from '@shared/types/ipc'
+import type { RecentFilesStore } from '../local-state/recentFiles'
 import type { UpdateService } from '../updates/updateService'
+import { recentSubmenu } from './recentMenu'
 import type { AppController } from './appController'
 
-export function installMenu(controller: AppController, updates: UpdateService): void {
+export function buildMenu(
+    controller: AppController,
+    updates: UpdateService,
+    recent: RecentFilesStore,
+    recentFiles: readonly RecentFileView[]
+): Menu {
     const template: MenuItemConstructorOptions[] = [
         {
             label: ru.menu.file,
@@ -17,6 +25,14 @@ export function installMenu(controller: AppController, updates: UpdateService): 
                     label: ru.menu.open,
                     accelerator: 'CmdOrCtrl+O',
                     click: () => controller.sendMenuCommand('open')
+                },
+                {
+                    label: ru.recent.menuTitle,
+                    submenu: recentSubmenu(
+                        recentFiles,
+                        (path) => void controller.openFromMenu(path),
+                        () => void recent.clear()
+                    )
                 },
                 { type: 'separator' },
                 {
@@ -61,5 +77,5 @@ export function installMenu(controller: AppController, updates: UpdateService): 
             ]
         }
     ]
-    Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+    return Menu.buildFromTemplate(template)
 }

@@ -289,6 +289,8 @@ test('markup typed or pasted into the editor can never become active content (NF
     await expect(pasted.locator('.rich strong')).toHaveText('d') // bold is supported, so it survives
     await expect(pasted).toContainText('код')
 
+    // the file is written a moment after the message appears (slower on some machines): wait for the second message
+    await expect.poll(async () => (await savedMessages(file)).length).toBe(2)
     const saved = await savedMessages(file)
     const allowed = new Set([
         'doc',

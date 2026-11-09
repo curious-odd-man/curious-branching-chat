@@ -8,7 +8,7 @@ import type {
     IpcResult,
     MenuCommand,
     OpenOutcome,
-    SettingsView,
+    RecentFileView,SettingsView,
     UpdateView
 } from './ipc'
 
@@ -34,7 +34,13 @@ export interface BranchChatApi {
     /** The person has seen the notice that read status is visible to other participants (FR-125). */
     acknowledgeReadNotice(): Promise<IpcResult<SettingsView>>
     setAutoUpdateCheck(enabled: boolean): Promise<IpcResult<SettingsView>>
-    getUpdateState(): Promise<IpcResult<UpdateView>>
+    /** How many recent files are remembered (0 = none). Lowering it forgets the oldest entries. */
+    setRecentFilesLimit(limit: number): Promise<IpcResult<SettingsView>>
+    setOpenLastFileOnStartup(enabled: boolean): Promise<IpcResult<SettingsView>>
+    getRecentFiles(): Promise<IpcResult<RecentFileView[]>>
+    removeRecentFile(path: string): Promise<IpcResult<null>>
+    clearRecentFiles(): Promise<IpcResult<null>>
+    onRecentFilesChanged(callback: (files: RecentFileView[]) => void): () => voidgetUpdateState(): Promise<IpcResult<UpdateView>>
     /** Manual check (Help > Check for updates); opens the update dialog. */
     checkForUpdates(): Promise<IpcResult<null>>
     downloadUpdate(): Promise<IpcResult<null>>

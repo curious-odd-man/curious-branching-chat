@@ -89,6 +89,8 @@ async function sendText(win: Page, text: string): Promise<void> {
 
 async function replyTo(win: Page, message: Locator, from: string, to = from): Promise<void> {
     const before = await win.getByTestId('thread').getAttribute('data-thread-id')
+    // let a pending save finish first: its status update re-renders the window while the selection is being made
+    await expect(win.getByTestId('status')).toHaveText('Сохранено')
     await selectText(message, from, to)
     await expect(reply(win)).toBeVisible()
     await reply(win).click()

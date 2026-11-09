@@ -12,6 +12,7 @@ import {
     type OpenOutcome
 } from '@shared/types/ipc'
 import { DocumentError } from '../document'
+import type { RecentFilesStore } from '../local-state/recentFiles'
 import type { SettingsStore } from '../local-state/settings'
 import { DocumentSession } from './documentSession'
 import { AppError } from './errors'
@@ -30,6 +31,7 @@ export interface WindowEntry {
 
 export interface ControllerDeps {
     settings: SettingsStore
+    recent: RecentFilesStore
     ui: Ui
     ctx: DomainContext
     appVersion: string
@@ -139,6 +141,13 @@ export class AppController {
         return attempt
     }
 
+    /** A choice from the File > Open recent menu or the jump list: opens in the focused window. */
+    openFromMenu(path: string): Promise<OpenOutcome> {
+        const focused = BrowserWindow.getFocusedWindow()
+        const from = focused ? this.entries.get(focused.webContents.id) : undefined
+        return this.openPath(path, from)
+    }
+
     async openWithDialog(from: WindowEntry | undefined): Promise<OpenOutcome> {
         const chosen = await this.deps.ui.pickOpenPath(from?.win)
         if (!chosen) return { status: 'cancelled' }
@@ -224,6 +233,10 @@ export class AppController {
 
     private bind(entry: WindowEntry, session: DocumentSession): void {
         entry.session = session
+        // Every discussion that was opened or created becomes the most recent one.
+        void this.deps.recent
+            .add(session.path, this.deps.settings.get().recentFilesLimit)
+            .catch(() => undefined) // the list is a convenience; a failed write must not disturb opening
         session.onChange = () => this.push(entry)
         session.onStatusChange = () => this.pushStatus(entry, session)
         this.push(entry)

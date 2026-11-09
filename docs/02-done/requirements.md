@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 10)  
+**Status:** MVP requirements (revision 11)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -436,8 +436,8 @@ file when it is exchanged.
   the
   messages of that thread itself, not the inherited context shown in a branch (those belong to their own threads).
 - **FR-112.** A message also becomes read for the local participant in exactly these two cases, in addition to FR-111:
-  1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
-  2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
+    1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
+    2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
 
   Scrolling, opening a thread, or viewing a message never marks it read.
 - **FR-113.** The side panel must show the number of unread messages for each branch, and must show an indicator on a
@@ -460,6 +460,29 @@ file when it is exchanged.
 - **FR-125.** Because read status is visible to the other participants, the application must tell the user this with a
   one-time notice before the first write of a read-state change on that computer (for example when the first message
   is marked as read or sent), and the user guide must explain it.
+
+### 5.11. Recent discussions and startup
+
+- **FR-143.** The application remembers the discussions the person opened or created, most recent first. The list is
+  local to the Windows user (like the settings) and is never stored in a discussion file.
+- **FR-144.** The start screen (a window without a discussion) shows the list: file name, folder, and a button to
+  remove the entry. Choosing an entry opens the discussion. A "Clear list" action empties the list. Neither removing
+  an entry nor clearing the list touches the discussion files.
+- **FR-145.** An entry whose file no longer exists is shown greyed out and marked "файл не найден". It stays in the list
+  until the person removes it or newer files push it out. Choosing it shows the usual "file not found" message.
+- **FR-146.** The number of remembered discussions is a setting (Settings, default 10, any whole number from 0; 0 keeps
+  no list). Lowering it forgets the oldest entries immediately.
+- **FR-147.** File > "Открыть недавние" and the taskbar jump list (category "Недавние") show the same list (the newest
+  20 at most, because both are small surfaces; the start screen shows all remembered entries). Files that no longer
+  exist are disabled in the menu and left out of the jump list. The menu also offers "Очистить список".
+- **FR-148.** Setting "Открывать последнее обсуждение при запуске" is **on by default**, also for people who already
+  had the application. When the application starts without a file and the most recent discussion still exists, that
+  discussion opens instead of the empty start screen. If it does not exist, the start screen is shown.
+- **FR-149.** A file passed on launch (double-click in Explorer, jump list, command line) always wins: only that file
+  opens, the last discussion is not opened as well. The setting applies only to a plain start, not to a second launch
+  that is forwarded to the running instance.
+- **FR-150.** A problem with the list (unreadable `recent.json`, failed write, jump list unavailable) never prevents a
+  discussion from opening; the list simply starts empty or is not updated.
 
 ## 6. Non-functional requirements
 
@@ -701,6 +724,11 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 11
+
+- Recent discussions and startup (FR-143 to FR-150): list on the start screen, File menu and jump list; configurable
+  size; missing files greyed out; reopening the last discussion at startup (on by default).
 
 ## Changes in revision 10
 

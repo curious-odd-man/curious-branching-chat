@@ -18,6 +18,11 @@ export const IPC = {
     readMarkAll: 'read:mark-all',
     settingsAckReadNotice: 'settings:ack-read-notice',
     settingsSetAutoUpdate: 'settings:set-auto-update',
+    settingsSetRecentLimit: 'settings:set-recent-limit',
+    settingsSetOpenLast: 'settings:set-open-last',
+    recentGet: 'recent:get',
+    recentRemove: 'recent:remove',
+    recentClear: 'recent:clear',
     updateGetState: 'update:get-state',
     updateCheck: 'update:check',
     updateDownload: 'update:download',
@@ -37,6 +42,8 @@ export const IPC = {
     /** main -> renderer: only the save status changed (a save finished); sent instead of the whole discussion. */
     documentStatusChanged: 'document:status-changed',
     menuCommand: 'menu:command',
+    /** main -> renderer: the recent files list changed. */
+    recentChanged: 'recent:changed',
     updateChanged: 'update:changed'
 } as const
 
@@ -54,6 +61,21 @@ export interface SettingsView {
     associationAsked: boolean
     /** Check for updates in the background (FR-097). On by default. */
     autoUpdateCheck: boolean
+    /** How many recently opened files are remembered. 0 turns the list off. Default 10. */
+    recentFilesLimit: number
+    /** Open the most recently used discussion when the application starts without a file. On by default. */
+    openLastFileOnStartup: boolean
+}
+
+/** A recently opened discussion, as shown on the start screen and in menus. */
+export interface RecentFileView {
+    path: string
+    /** File name without the extension. */
+    name: string
+    /** Folder that contains the file. */
+    directory: string
+    /** False when the file is no longer where it was (moved, deleted, drive not connected). */
+    exists: boolean
 }
 
 /**
