@@ -136,7 +136,9 @@ export function MessageList({
         const el = scroller.current
         if (!el) return
         atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD
-        if (selection) setSelection(readMessageSelection(el))
+        // Keep the button while the list moves (a picture finished loading, rows were measured): only the position
+        // follows. Collapsing the selection hides the button through the selectionchange listener below.
+        if (selection) setSelection((current) => readMessageSelection(el) ?? current)
     }
 
     // Show "Reply to this" once a selection is finished (mouse released, or keyboard selection), hide it when the

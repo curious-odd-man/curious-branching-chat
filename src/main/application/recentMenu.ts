@@ -11,17 +11,15 @@ export function recentSubmenu(
 ): MenuItemConstructorOptions[] {
     if (files.length === 0) return [{ label: ru.recent.menuEmpty, enabled: false }]
     return [
-        ...files
-            .slice(0, MENU_RECENT_LIMIT)
-            .map((f): MenuItemConstructorOptions =>
-                f.exists
-                    ? { label: f.name, toolTip: f.path, click: () => open(f.path) }
-                    : {
-                          label: `${f.name} (${ru.recent.menuMissing})`,
-                          toolTip: f.path,
-                          enabled: false
-                      }
-            ),
+        ...files.slice(0, MENU_RECENT_LIMIT).map((f): MenuItemConstructorOptions =>
+            f.exists
+                ? { label: f.name, toolTip: f.path, click: () => open(f.path) }
+                : {
+                      label: `${f.name} (${ru.recent.menuMissing})`,
+                      toolTip: f.path,
+                      enabled: false
+                  }
+        ),
         { type: 'separator' },
         { label: ru.recent.menuClear, click: clear }
     ]
