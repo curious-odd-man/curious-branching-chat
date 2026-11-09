@@ -8,16 +8,16 @@ Design documents are in [`docs/`](docs): requirements, ADR-001, and the implemen
 
 ## Commands
 
-| Command                | What it does                                                        |
-| ---------------------- | ------------------------------------------------------------------- |
-| `npm install`          | Install dependencies                                                |
-| `npm run dev`          | Start the app with hot reload                                       |
-| `npm run build`        | Build main, preload and renderer into `out/`                       |
-| `npm test`             | Unit tests (Vitest): domain, validation, document format            |
-| `npm run test:e2e`     | Builds a test build (`--mode e2e`, dialogs stubbed) and runs the Electron tests (Playwright) |
-| `npm run lint`         | ESLint, including the import-boundary rules                         |
-| `npm run typecheck`    | TypeScript for main/shared and renderer/shared                      |
-| `npm run package`      | Build the unsigned per-user installer `dist/BranchChat-Setup.exe`   |
+| Command             | What it does                                                                                 |
+|---------------------|----------------------------------------------------------------------------------------------|
+| `npm install`       | Install dependencies                                                                         |
+| `npm run dev`       | Start the app with hot reload                                                                |
+| `npm run build`     | Build main, preload and renderer into `out/`                                                 |
+| `npm test`          | Unit tests (Vitest): domain, validation, document format                                     |
+| `npm run test:e2e`  | Builds a test build (`--mode e2e`, dialogs stubbed) and runs the Electron tests (Playwright) |
+| `npm run lint`      | ESLint, including the import-boundary rules                                                  |
+| `npm run typecheck` | TypeScript for main/shared and renderer/shared                                               |
+| `npm run package`   | Build the unsigned per-user installer `dist/BranchChat-Setup.exe`                            |
 
 On Linux as root, run the e2e tests with `BRANCHCHAT_NO_SANDBOX=1 xvfb-run -a npm run test:e2e`.
 
@@ -72,7 +72,8 @@ See `docs/implementation_plan.md`.
 - Phase 4 (branching): done. "Reply to this" from any selection, inherited context with the quoted passage highlighted,
   nested branches, side panel (active/closed), titles, close/reopen, badges, go to source. 150 unit tests and 33
   Electron end-to-end tests.
-- Phase 5 (unread messages): done. Unread highlighting, mark as read (message, thread, all), read-on-reply, panel counts,
+- Phase 5 (unread messages): done. Unread highlighting, mark as read (message, thread, all), read-on-reply, panel
+  counts,
   window title count, read indicators, one-time notice. 157 unit tests and 40 Electron end-to-end tests.
 - Phase 6 (images): done. Paste, drop and file chooser; inline display and larger view; placeholders; no size limit.
   181 unit tests and 52 Electron end-to-end tests.
