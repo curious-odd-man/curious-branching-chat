@@ -80,17 +80,17 @@ association and updates (section 4). One installer `.exe` that the user download
 Electron provides Chromium for rendering and Node.js for the main process, connected through controlled IPC.
 
 - **Strengths:**
-    - Nearly everything is written in TypeScript; no Rust, no Java.
-    - Mature web editor ecosystem (TipTap/ProseMirror).
-    - Main-process access to the filesystem for ZIP handling and atomic saves, without Spring Boot.
-    - `app.requestSingleInstanceLock()` and the `second-instance` event provide a standard way to pass an opened file to
-      the running instance.
-    - Established packaging (electron-builder) and updater (electron-updater) with a GitHub Releases provider.
+  - Nearly everything is written in TypeScript; no Rust, no Java.
+  - Mature web editor ecosystem (TipTap/ProseMirror).
+  - Main-process access to the filesystem for ZIP handling and atomic saves, without Spring Boot.
+  - `app.requestSingleInstanceLock()` and the `second-instance` event provide a standard way to pass an opened file to
+    the running instance.
+  - Established packaging (electron-builder) and updater (electron-updater) with a GitHub Releases provider.
 - **Weaknesses:**
-    - Larger installer and higher memory use than Tauri or JavaFX.
-    - Security-sensitive process model; needs strict configuration (section 7).
-    - The Electron/Chromium runtime must be kept up to date.
-    - The portable single-EXE target is a poor fit for association and updates (section 4).
+  - Larger installer and higher memory use than Tauri or JavaFX.
+  - Security-sensitive process model; needs strict configuration (section 7).
+  - The Electron/Chromium runtime must be kept up to date.
+  - The portable single-EXE target is a poor fit for association and updates (section 4).
 
 ### Qualitative comparison
 
@@ -389,6 +389,24 @@ Required behavior:
 - Work normally when offline; update failure must not block local use.
 - The GitHub repository must be public for the updater to read releases without embedding a token in the application.
 
+**Decision (implemented in phase 8).**
+
+- electron-updater's `NsisUpdater` with the GitHub provider; `autoDownload` is off, prereleases and downgrades are
+  refused, `autoInstallOnAppQuit` is on, and no request headers are added (so a request is the plain metadata and file
+  download, NFR-008). The owner and repository come from the `publish` section in `electron-builder.yml`, which
+  electron-builder writes into the installed application as `app-update.yml`.
+- A check runs 20 seconds after start and every 6 hours, unless switched off in Settings; Help > Check for updates
+  always works. Nothing is downloaded until the person agrees. A downloaded update installs on "Перезапустить и
+  установить" or silently when the application is next closed (`/S --updated`, which the installer script already
+  treats as "keep the association").
+- The checksum check is electron-updater's: the SHA-512 in `latest.yml` is compared with the downloaded file and a
+  mismatch is an error, so nothing is installed (FR-102). This is tested end to end against a local feed with a
+  corrupted file.
+- The service sits behind a small `UpdaterPort` interface, so the flow (states, errors, banner rules) is unit-tested
+  with a fake updater, and the real updater is exercised in end-to-end tests that use a local feed in test builds.
+- Not verifiable on Linux: running the downloaded installer, and replacing a running program on Windows. The checklist
+  in `docs/windows-test-checklist.md` (section H) covers these against a private test repository.
+
 ## 10. Consequences
 
 **Positive**
@@ -464,6 +482,10 @@ Alternatives considered
 - JavaFX: https://openjfx.io/
 - Java jpackage: https://docs.oracle.com/en/java/javase/21/jpackage/
 - Tauri: https://v2.tauri.app/
+
+## Changes in revision 9
+
+- Section 9 now records the implemented update behavior and how it was tested.
 
 ## Changes in revision 8
 

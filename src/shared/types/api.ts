@@ -7,7 +7,8 @@ import type {
   IpcResult,
   MenuCommand,
   OpenOutcome,
-  SettingsView
+  SettingsView,
+  UpdateView
 } from './ipc'
 
 /** The only surface the renderer can reach (exposed by the preload script as `window.branchchat`). */
@@ -31,6 +32,17 @@ export interface BranchChatApi {
   markAllRead(): Promise<IpcResult<null>>
   /** The person has seen the notice that read status is visible to other participants (FR-125). */
   acknowledgeReadNotice(): Promise<IpcResult<SettingsView>>
+  setAutoUpdateCheck(enabled: boolean): Promise<IpcResult<SettingsView>>
+  getUpdateState(): Promise<IpcResult<UpdateView>>
+  /** Manual check (Help > Check for updates); opens the update dialog. */
+  checkForUpdates(): Promise<IpcResult<null>>
+  downloadUpdate(): Promise<IpcResult<null>>
+  /** Closes the application and installs the downloaded update (FR-106). */
+  installUpdate(): Promise<IpcResult<null>>
+  showUpdateDialog(): Promise<IpcResult<null>>
+  dismissUpdateDialog(): Promise<IpcResult<null>>
+  openReleasePage(): Promise<IpcResult<boolean>>
+  onUpdateChanged(callback: (view: UpdateView) => void): () => void
   getAssociation(): Promise<IpcResult<AssociationInfo>>
   /** Turns the .branchchat file association on or off. Refused if another program holds the type (FR-090). */
   setAssociation(enabled: boolean): Promise<IpcResult<AssociationInfo>>

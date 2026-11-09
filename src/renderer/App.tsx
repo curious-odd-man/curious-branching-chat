@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { mainThread } from '@shared/domain'
+import { ru } from '@shared/i18n/ru'
 import type { RichDoc } from '@shared/validation'
 import { DISCUSSION_EXTENSION } from '@shared/types/constants'
 import type { IpcResult } from '@shared/types/ipc'
@@ -7,8 +8,9 @@ import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
 import { ReadNotice } from './components/ReadNotice'
 import { SettingsDialog } from './components/SettingsDialog'
+import { UpdateDialog } from './components/UpdateDialog'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
-import { useDocumentView, useSettings } from './hooks'
+import { useDocumentView, useSettings, useUpdateState } from './hooks'
 
 export function App(): React.JSX.Element {
   const api = window.branchchat
@@ -21,6 +23,8 @@ export function App(): React.JSX.Element {
   const [nav, setNav] = useState<{ documentId: string; threadId: string; focus?: string } | null>(
     null
   )
+  const update = useUpdateState()
+  const [bannerHidden, setBannerHidden] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [readNotice, setReadNotice] = useState<{ retry: () => void } | null>(null)
   const settingsRef = useRef(settings)
@@ -154,6 +158,29 @@ export function App(): React.JSX.Element {
           </button>
         </div>
       )}
+      {update &&
+        !update.dialogOpen &&
+        (update.phase === 'available' || update.phase === 'ready') &&
+        update.info &&
+        bannerHidden !== update.info.version && (
+          <div className="banner info" role="status" data-testid="update-banner">
+            <span>{ru.update.banner(update.info.version)}</span>
+            <button
+              type="button"
+              data-testid="update-banner-details"
+              onClick={() => void api.showUpdateDialog()}
+            >
+              {ru.update.bannerDetails}
+            </button>
+            <button
+              type="button"
+              aria-label={ru.update.bannerDismiss}
+              onClick={() => setBannerHidden(update.info?.version ?? null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
       {view === undefined ? null : view === null ? (
         <Launcher version={version} onNew={startNew} onOpen={openDialog} />
       ) : (
@@ -174,10 +201,15 @@ export function App(): React.JSX.Element {
           onRetrySave={() => void api.retrySave().then(report)}
         />
       )}
+      {update?.dialogOpen && <UpdateDialog view={update} />}
       {showSettings && (
         <SettingsDialog
           settings={settings}
           onNameSaved={(s) => {
+            setSettings(s)
+            settingsRef.current = s
+          }}
+          onSettingsChanged={(s) => {
             setSettings(s)
             settingsRef.current = s
           }}

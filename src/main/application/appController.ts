@@ -102,6 +102,12 @@ export class AppController {
     if (win && !win.isDestroyed()) win.webContents.send(IPC.menuCommand, command)
   }
 
+  /** Sends a message to every open window (e.g. update state). */
+  broadcast(channel: string, payload: unknown): void {
+    for (const entry of this.entries.values())
+      if (!entry.win.isDestroyed()) entry.win.webContents.send(channel, payload)
+  }
+
   // ---- opening and creating -----------------------------------------------------------------------------------
 
   /** Opens every path (launch arguments); makes sure at least one window exists afterwards. */

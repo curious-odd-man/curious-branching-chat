@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { BranchChatApi } from '@shared/types/api'
-import { IPC, type DocumentView, type IpcResult, type MenuCommand } from '@shared/types/ipc'
+import {
+  IPC,
+  type DocumentView,
+  type IpcResult,
+  type MenuCommand,
+  type UpdateView
+} from '@shared/types/ipc'
 
 const invoke = <T>(channel: string, payload?: unknown): Promise<IpcResult<T>> =>
   ipcRenderer.invoke(channel, payload) as Promise<IpcResult<T>>
@@ -30,6 +36,15 @@ const api: BranchChatApi = {
   markThreadRead: (threadId) => invoke(IPC.readMarkThread, { threadId }),
   markAllRead: () => invoke(IPC.readMarkAll),
   acknowledgeReadNotice: () => invoke(IPC.settingsAckReadNotice),
+  setAutoUpdateCheck: (enabled) => invoke(IPC.settingsSetAutoUpdate, { enabled }),
+  getUpdateState: () => invoke(IPC.updateGetState),
+  checkForUpdates: () => invoke(IPC.updateCheck),
+  downloadUpdate: () => invoke(IPC.updateDownload),
+  installUpdate: () => invoke(IPC.updateInstall),
+  showUpdateDialog: () => invoke(IPC.updateShowDialog),
+  dismissUpdateDialog: () => invoke(IPC.updateDismiss),
+  openReleasePage: () => invoke(IPC.updateOpenReleasePage),
+  onUpdateChanged: (callback) => subscribe<UpdateView>(IPC.updateChanged, callback),
   getAssociation: () => invoke(IPC.associationGet),
   setAssociation: (enabled) => invoke(IPC.associationSet, { enabled }),
   createBranch: (sourceMessageId, selectionStart, selectionEnd) =>

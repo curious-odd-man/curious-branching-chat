@@ -5,6 +5,7 @@ import type { AssociationInfo, SettingsView } from '@shared/types/ipc'
 interface Props {
   settings: SettingsView | undefined
   onNameSaved(settings: SettingsView): void
+  onSettingsChanged(settings: SettingsView): void
   onClose(): void
 }
 
@@ -16,7 +17,12 @@ const stateText = {
 } as const
 
 /** File > Settings…: the person's name (FR-138) and the .branchchat file association (FR-089, FR-138). */
-export function SettingsDialog({ settings, onNameSaved, onClose }: Props): React.JSX.Element {
+export function SettingsDialog({
+  settings,
+  onNameSaved,
+  onSettingsChanged,
+  onClose
+}: Props): React.JSX.Element {
   const api = window.branchchat
   const [name, setName] = useState(settings?.displayName ?? '')
   const [nameMessage, setNameMessage] = useState<string | null>(null)
@@ -119,6 +125,37 @@ export function SettingsDialog({ settings, onNameSaved, onClose }: Props): React
               {stateText[state]}
             </p>
           )}
+        </section>
+
+        <section>
+          <h3>{ru.updateSettings.heading}</h3>
+          <label className="check">
+            <input
+              type="checkbox"
+              data-testid="settings-auto-update"
+              checked={settings?.autoUpdateCheck ?? true}
+              onChange={(e) =>
+                void api.setAutoUpdateCheck(e.target.checked).then((r) => {
+                  if (r.ok) onSettingsChanged(r.data)
+                  else setError(r.error.message)
+                })
+              }
+            />
+            <span>{ru.updateSettings.autoCheck}</span>
+          </label>
+          <p className="hint">{ru.updateSettings.hint}</p>
+          <div className="buttons">
+            <button
+              type="button"
+              data-testid="settings-check-updates"
+              onClick={() => {
+                void api.checkForUpdates()
+                onClose()
+              }}
+            >
+              {ru.updateSettings.checkNow}
+            </button>
+          </div>
         </section>
 
         {error && (

@@ -6,9 +6,13 @@ import { systemContext } from './application/clock'
 import { createMainWindow } from './application/mainWindow'
 import { installMenu } from './application/menu'
 import { electronUi } from './application/ui'
-import { e2eRegistry, installE2eHooks } from './e2e/hooks'
+import { IPC } from '@shared/types/ipc'
+import { e2eRegistry, e2eUpdaterConfig, installE2eHooks } from './e2e/hooks'
 import { registerIpcHandlers } from './ipc/handlers'
 import { SettingsStore } from './local-state/settings'
+import { ElectronUpdaterPort } from './updates/electronUpdaterPort'
+import { UpdateService } from './updates/updateService'
+import { openExternalLink } from './windows/security'
 import { AssociationService } from './windows/associationService'
 import { createFileAssociation } from './windows/createAssociation'
 import { extractDiscussionPaths } from './windows/launchArgs'
@@ -60,8 +64,24 @@ if (!gotLock) {
       settings,
       electronUi
     )
-    registerIpcHandlers(controller, settings, association)
-    installMenu(controller)
+    // Updates (FR-093 to FR-107): a first check shortly after start, then every few hours, unless turned off.
+    const testUpdates = __E2E_HOOKS__ ? e2eUpdaterConfig() : null
+    const ctrl = controller
+    const updates = new UpdateService({
+      port: new ElectronUpdaterPort(testUpdates?.options),
+      currentVersion: app.getVersion(),
+      publish: (view) => ctrl.broadcast(IPC.updateChanged, view),
+      openLink: openExternalLink,
+      autoCheckEnabled: () => settings.get().autoUpdateCheck,
+      log: (message) => console.log(`[updates] ${message}`)
+    })
+    setTimeout(() => void updates.checkAutomatically(), testUpdates?.startupDelayMs ?? 20_000)
+    setInterval(
+      () => void updates.checkAutomatically(),
+      testUpdates?.intervalMs ?? 6 * 60 * 60 * 1000
+    )
+    registerIpcHandlers(controller, settings, association, updates)
+    installMenu(controller, updates)
     await controller.openPaths(earlyPaths)
     void association.offerAtStartup()
 

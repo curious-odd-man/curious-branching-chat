@@ -17,6 +17,14 @@ export const IPC = {
   readMarkThread: 'read:mark-thread',
   readMarkAll: 'read:mark-all',
   settingsAckReadNotice: 'settings:ack-read-notice',
+  settingsSetAutoUpdate: 'settings:set-auto-update',
+  updateGetState: 'update:get-state',
+  updateCheck: 'update:check',
+  updateDownload: 'update:download',
+  updateInstall: 'update:install',
+  updateShowDialog: 'update:show-dialog',
+  updateDismiss: 'update:dismiss',
+  updateOpenReleasePage: 'update:open-release-page',
   associationGet: 'association:get',
   associationSet: 'association:set',
   imageStage: 'image:stage',
@@ -26,7 +34,8 @@ export const IPC = {
   branchSetTitle: 'branch:set-title',
   /** main -> renderer */
   documentChanged: 'document:changed',
-  menuCommand: 'menu:command'
+  menuCommand: 'menu:command',
+  updateChanged: 'update:changed'
 } as const
 
 export interface AppInfo {
@@ -41,6 +50,8 @@ export interface SettingsView {
   readNoticeAcknowledged: boolean
   /** The question about opening .branchchat files in BranchChat has been settled (installer or app, FR-136). */
   associationAsked: boolean
+  /** Check for updates in the background (FR-097). On by default. */
+  autoUpdateCheck: boolean
 }
 
 /**
@@ -86,3 +97,29 @@ export interface OpenOutcome {
 }
 
 export type MenuCommand = 'new' | 'open' | 'settings'
+
+/** What the person is told about an available update (FR-098). Notes are plain text. */
+export interface UpdateInfoView {
+  version: string
+  /** ISO timestamp of the release, if published. */
+  releaseDate: string | null
+  notes: string | null
+  sizeBytes: number | null
+  /** True when the release page on GitHub can be opened (FR-099). */
+  hasReleasePage: boolean
+}
+
+export type UpdatePhase =
+  'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error'
+
+export interface UpdateView {
+  phase: UpdatePhase
+  info: UpdateInfoView | null
+  /** Download progress, 0 to 100. */
+  percent: number
+  /** Set when phase is 'error'. */
+  errorCode: string | null
+  /** The update dialog is open. Automatic checks do not open it; they only show a small banner. */
+  dialogOpen: boolean
+  currentVersion: string
+}

@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 8)  
+**Status:** MVP requirements (revision 9)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -408,6 +408,18 @@ Proposed internal structure:
   from the official GitHub Release over HTTPS and on checksum verification (FR-101). If signing is added later, the
   application must also reject updates whose publisher signature does not match.
 
+- **FR-139.** An update is downloaded only after the person asks for it ("Скачать" in the update dialog). A check never
+  downloads anything.
+- **FR-140.** An automatic check that finds a new version does not interrupt the person: it shows a small banner with
+  "Подробнее" and a way to hide it. An automatic check that finds nothing, or fails (for example offline), shows
+  nothing. Only a manual check always answers: new version, "the latest version is installed", or the reason it failed.
+- **FR-141.** A downloaded update is installed when the person chooses "Перезапустить и установить", or silently the
+  next time the application is closed normally. The silent install shows no installer pages and leaves the file
+  association as it was (FR-135). Downgrades are never offered.
+- **FR-142.** Release notes come from the internet and are shown as plain text only (markup is removed, never
+  interpreted). Settings has an option to turn automatic checks off (default: on) and a "Проверить сейчас" button
+  (FR-097).
+
 ### 5.10. Unread messages
 
 Read state describes what each participant has seen. It is stored **in the discussion file**, so it travels with the
@@ -424,8 +436,8 @@ file when it is exchanged.
   the
   messages of that thread itself, not the inherited context shown in a branch (those belong to their own threads).
 - **FR-112.** A message also becomes read for the local participant in exactly these two cases, in addition to FR-111:
-    1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
-    2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
+  1. The local participant sends a message in a thread: every earlier message in that same thread becomes read.
+  2. The local participant creates a branch from a message with "Reply to this": that source message becomes read.
 
   Scrolling, opening a thread, or viewing a message never marks it read.
 - **FR-113.** The side panel must show the number of unread messages for each branch, and must show an indicator on a
@@ -689,6 +701,10 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 9
+
+- Updates (phase 8): what an update check and download may and may not do (FR-139 to FR-142).
 
 ## Changes in revision 8
 

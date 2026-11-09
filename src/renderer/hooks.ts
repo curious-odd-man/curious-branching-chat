@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { DocumentView, SettingsView } from '@shared/types/ipc'
+import type { DocumentView, SettingsView, UpdateView } from '@shared/types/ipc'
 
 /** The discussion shown in this window: undefined while loading, null when the window has none. */
 export function useDocumentView(): DocumentView | null | undefined {
@@ -23,4 +23,17 @@ export function useSettings(): [SettingsView | undefined, (s: SettingsView) => v
     })
   }, [])
   return [settings, setSettings]
+}
+
+/** The update state (shared by all windows); undefined until the first answer arrives. */
+export function useUpdateState(): UpdateView | undefined {
+  const [view, setView] = useState<UpdateView | undefined>(undefined)
+  useEffect(() => {
+    const unsubscribe = window.branchchat.onUpdateChanged(setView)
+    void window.branchchat.getUpdateState().then((r) => {
+      setView((current) => current ?? (r.ok ? r.data : undefined))
+    })
+    return unsubscribe
+  }, [])
+  return view
 }

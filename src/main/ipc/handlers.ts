@@ -13,6 +13,7 @@ import {
   openLinkSchema,
   openPathSchema,
   setAssociationSchema,
+  setAutoUpdateSchema,
   setNameSchema,
   stageImageSchema,
   setStatusSchema,
@@ -24,6 +25,7 @@ import type { ReadAction } from '../application/documentSession'
 import { DocumentError } from '../document'
 import { openExternalLink } from '../windows/security'
 import type { SettingsStore } from '../local-state/settings'
+import type { UpdateService } from '../updates/updateService'
 import type { AssociationService } from '../windows/associationService'
 
 function toError(err: unknown): { code: string; message: string } {
@@ -40,7 +42,8 @@ function toError(err: unknown): { code: string; message: string } {
 export function registerIpcHandlers(
   controller: AppController,
   settings: SettingsStore,
-  association: AssociationService
+  association: AssociationService,
+  updates: UpdateService
 ): void {
   function handle<P, R>(
     channel: string,
@@ -68,6 +71,32 @@ export function registerIpcHandlers(
   handle(IPC.settingsGet, noPayloadSchema, () => settings.get())
   handle(IPC.settingsSetName, setNameSchema, (_e, p) => settings.setDisplayName(p.displayName))
 
+  handle(IPC.settingsSetAutoUpdate, setAutoUpdateSchema, (_e, p) =>
+    settings.setAutoUpdateCheck(p.enabled)
+  )
+  handle(IPC.updateGetState, noPayloadSchema, () => updates.get())
+  // The work continues in the background; progress and results arrive as state changes (FR-095).
+  handle(IPC.updateCheck, noPayloadSchema, () => {
+    void updates.checkManually()
+    return null
+  })
+  handle(IPC.updateDownload, noPayloadSchema, () => {
+    void updates.download()
+    return null
+  })
+  handle(IPC.updateInstall, noPayloadSchema, () => {
+    updates.install()
+    return null
+  })
+  handle(IPC.updateShowDialog, noPayloadSchema, () => {
+    updates.showDialog()
+    return null
+  })
+  handle(IPC.updateDismiss, noPayloadSchema, () => {
+    updates.dismissDialog()
+    return null
+  })
+  handle(IPC.updateOpenReleasePage, noPayloadSchema, () => updates.openReleasePage())
   handle(IPC.associationGet, noPayloadSchema, () => association.info())
   handle(IPC.associationSet, setAssociationSchema, (_e, p) => association.set(p.enabled))
 

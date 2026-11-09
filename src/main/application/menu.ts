@@ -1,8 +1,9 @@
 import { app, dialog, Menu, type MenuItemConstructorOptions } from 'electron'
 import { ru } from '@shared/i18n/ru'
+import type { UpdateService } from '../updates/updateService'
 import type { AppController } from './appController'
 
-export function installMenu(controller: AppController): void {
+export function installMenu(controller: AppController, updates: UpdateService): void {
   const template: MenuItemConstructorOptions[] = [
     {
       label: ru.menu.file,
@@ -43,6 +44,8 @@ export function installMenu(controller: AppController): void {
     {
       label: ru.menu.help,
       submenu: [
+        { label: ru.menu.checkUpdates, click: () => void updates.checkManually() },
+        { type: 'separator' },
         {
           label: ru.menu.about,
           click: () =>

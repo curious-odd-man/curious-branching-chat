@@ -25,3 +25,4 @@ export const markMessageSchema = z.object({ messageId: z.string().min(1) }).stri
 export const markThreadSchema = z.object({ threadId: z.string().min(1) }).strict()
 export const stageImageSchema = z.object({ data: z.instanceof(Uint8Array) }).strict()
 export const setAssociationSchema = z.object({ enabled: z.boolean() }).strict()
+export const setAutoUpdateSchema = z.object({ enabled: z.boolean() }).strict()

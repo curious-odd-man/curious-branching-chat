@@ -62,5 +62,33 @@ the old path. Fix: switch the option off and on in Settings.
 
 ## G. Optional automatic check
 
-`powershell -File scripts\installer-smoke.ps1` runs sections D1, D3 and D4 automatically against `dist\BranchChat-Setup.exe`
+`powershell -File scripts\installer-smoke.ps1` runs sections D1, D3 and D4 automatically against
+`dist\BranchChat-Setup.exe`
 (CI runs it too). It uninstalls BranchChat from the current user profile, so run it only on a test machine.
+
+## H. Updates (phase 8) — needs a private or public test repository with real releases
+
+Set `owner` and `repo` in `electron-builder.yml`, build versions 0.1.0 and 0.2.0 with CI (so each release has
+`BranchChat-Setup.exe`, `latest.yml` and the blockmap), publish both as normal (non-draft, non-prerelease) GitHub
+Releases of a **public** repository.
+
+1. Install 0.1.0 (association page ticked). About 20 seconds after start a banner "Доступно обновление BranchChat
+   0.2.0" appears; no dialog interrupts. "Подробнее" shows version, release date, notes (plain text) and size.
+2. "Страница релиза" opens the release in the browser.
+3. "Скачать": progress is shown, then "Обновление загружено". Close BranchChat normally: it updates silently, with no
+   installer pages. Start it again: version 0.2.0; settings, name and `.branchchat` association are unchanged; open
+   discussions are unchanged (compare file hashes of a few discussions before and after: they must be identical).
+4. Repeat from 0.1.0 with "Перезапустить и установить": the application closes, updates and starts again by itself.
+5. Corrupted release: edit `latest.yml` of a test release so its `sha512` is wrong. The download ends with "не прошёл
+   проверку целостности"; nothing is installed; 0.1.0 keeps working.
+6. Interrupted download: disconnect the network during the download. An error with "Повторить" appears; after
+   reconnecting, "Повторить" completes the download.
+7. Offline start: start with the network off. No error or dialog appears; File > Open and everything else work. Help >
+   Проверить обновления… explains that the check failed.
+8. Settings: turn "Проверять обновления автоматически" off, restart: no banner and no network request to GitHub (check
+   with a proxy such as Fiddler or Wireshark). The Help menu check still works.
+9. Network traffic (NFR-008): with a proxy, make a check and a download; the requests go to github.com only and contain
+   no discussion titles, names or message text (only the standard headers and a User-Agent).
+10. Pre-release and draft: publish 0.3.0 as a pre-release and another as a draft: neither is offered.
+11. Unsigned installer: SmartScreen may warn during a manual download; during an update the silent install is not
+    interrupted by SmartScreen (record what you see).

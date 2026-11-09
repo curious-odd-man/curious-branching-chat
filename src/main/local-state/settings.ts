@@ -11,7 +11,9 @@ const settingsSchema = z
     /** The person has seen that read status is stored in the file and visible to others (FR-125). */
     readNoticeAcknowledged: z.boolean().optional(),
     /** The question about the .branchchat file association has been settled (FR-136). */
-    associationAsked: z.boolean().optional()
+    associationAsked: z.boolean().optional(),
+    /** Background update checks (FR-097); on unless the person turned them off. */
+    autoUpdateCheck: z.boolean().optional()
   })
   .passthrough()
 type Settings = z.infer<typeof settingsSchema>
@@ -59,7 +61,8 @@ export class SettingsStore {
       participantId: this.data.participantId,
       displayName: this.data.displayName ?? null,
       readNoticeAcknowledged: this.data.readNoticeAcknowledged ?? false,
-      associationAsked: this.data.associationAsked ?? false
+      associationAsked: this.data.associationAsked ?? false,
+      autoUpdateCheck: this.data.autoUpdateCheck ?? true
     }
   }
 
@@ -83,6 +86,13 @@ export class SettingsStore {
     if (!this.data) throw new Error('SettingsStore.load() has not been called')
     if (this.data.associationAsked) return this.get()
     this.data = { ...this.data, associationAsked: true }
+    await this.persist()
+    return this.get()
+  }
+
+  async setAutoUpdateCheck(enabled: boolean): Promise<SettingsView> {
+    if (!this.data) throw new Error('SettingsStore.load() has not been called')
+    this.data = { ...this.data, autoUpdateCheck: enabled }
     await this.persist()
     return this.get()
   }
