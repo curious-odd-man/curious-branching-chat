@@ -1,6 +1,6 @@
 # Design: Encrypted Synchronized BranchChat Discussions over a Shared Folder
 
-**Status:** Draft, revision 5 (answers Q-01 to Q-38 included; one open question in Section 22)  
+**Status:** Ready for implementation, revision 6 (all questions Q-01 to Q-39 answered)  
 **Platform:** Windows 10 and Windows 11 (same as the MVP)  
 **Transport model:** A shared local folder that a sync product (for example Google Drive for Desktop) keeps in sync  
 **Backend:** None  
@@ -12,9 +12,9 @@
 
 - Section 2 records facts from the current code. These facts are the baseline for this design.
 - Section 3 lists the conflicts between revision 1 and the code, and how each conflict is resolved.
-- Section 4 records all decisions (answers Q-01 to Q-38).
-- Sections 5 to 21 give the design. Text marked **[Pending Q-nn]** depends on an open question.
-- Section 22 contains the new open questions. Write your answer on the **Answer:** line.
+- Section 4 records all decisions (answers Q-01 to Q-39).
+- Sections 5 to 21 give the design.
+- Section 22: there are no open questions.
 - Section 23 lists tests that must be done before the release with sync. Their results are assumed for now.
 - The implementation plan is `google-drive-sync-implementation-plan.md`.
 
@@ -199,7 +199,7 @@ The application refuses to load or save a file that breaks these rules:
 | D-35 | Sync problem notices        | Status line in the discussion window and in the tray menu only. No Windows notification for sync problems or key change requests                                                                                                                                                                                                                                                |
 | D-36 | Start with Windows          | On after the first synchronized discussion is created or joined. The wizard says so. The person can turn it off in Settings                                                                                                                                                                                                                                                     |
 | D-37 | Loading or partial message  | Until it is processed: it cannot be marked read, it cannot be a branch source, it does not count as unread, and sending in the same thread does not mark it read. Its text can be selected and copied. When processed, it becomes unread as usual. The UI shows the loading clearly, with a progress bar (Section 9.4)                                                          |
-| D-38 | Notification content        | Author, discussion name, and the first characters of the text. Setting "Показывать текст в уведомлениях" turns the text off **[Pending Q-39]**                                                                                                                                                                                                                                  |
+| D-38 | Notification content        | Author, discussion name, and the first characters of the text. Setting "Показывать текст в уведомлениях" (default on) turns the text off. Text: up to 100 characters of plain text, cut at a word boundary, with "…"; images as "[изображение]". A loading message raises a notification only when it is processed                                                              |
 
 Settled from revision 1, still valid:
 
@@ -490,8 +490,10 @@ A message for a branch that is closed on this computer is accepted. The branch s
   on.
 - Setting "Запускать вместе с Windows". It is turned on after the first synchronized discussion is created or
   joined; the wizard says so (D-36).
-- Notification content (D-38): author, discussion name, and the first characters of the text. Setting "Показывать
-  текст в уведомлениях" turns the text off. Default and length: **[Pending Q-39]**.
+- Notification content (D-38): author, discussion name, and up to 100 characters of the message's plain text (the
+  same plain text as for quotes), cut at a word boundary, with "…". Images are shown as "[изображение]".
+- Setting "Показывать текст в уведомлениях", default on, turns the text off.
+- A large message raises a notification only when it is processed, not when its header arrives.
 - Missing registered file at start: warning in the tray menu with "Найти файл…" (D-27).
 - "Exit" from the tray is a normal close. A downloaded update installs then (FR-141).
 - Single instance stays. Double-clicking a `.branchchat` file while the app is in the tray opens a window.
@@ -749,17 +751,7 @@ automatically).
 
 ## 22. Open questions
 
-Write your answer after **Answer:**. A recommendation is only a proposal.
-
-**Q-39. Default and length of the text in notifications (D-38).**  
-Your answer to Q-38: show the first characters of the text, with a setting.  
-a) Default of "Показывать текст в уведомлениях": (i) on; (ii) off.  
-b) How many characters? Recommendation: up to 100 characters of the plain text (the same plain text as for quotes),
-cut at a word boundary, with "…". Images are shown as "[изображение]".  
-c) A loading message: notify when the header arrives or when the message is processed? Recommendation: when it is
-processed, because only then is it unread.  
-Recommendation: a) (i), b) as above, c) when processed.  
-**Answer:** a) (i), b) as above, c) when processed.
+None. All questions Q-01 to Q-39 have answers (Section 4).
 
 ---
 
@@ -788,6 +780,11 @@ The results below are **assumed**. Do the tests and correct the results before t
 - Never put private keys, plain text, or local state in the shared folder.
 - Never delete a file that another member wrote, except a processed file in the own inbox.
 - Never invent a cryptographic protocol. Use the libsodium constructions as documented.
+
+## Changes in revision 6
+
+- Recorded the answer to Q-39 in D-38 (notification text: default on, 100 characters, only for processed messages).
+- No open questions remain. Only the Google Drive tests in Section 23 are still assumed.
 
 ## Changes in revision 5
 

@@ -1,6 +1,6 @@
 # BranchChat — Implementation Plan: Encrypted Synchronized Discussions
 
-**Inputs:** `google-drive-desktop-encrypted-chat-design.md` (revision 5), `requirements.md` (revision 10),
+**Inputs:** `google-drive-desktop-encrypted-chat-design.md` (revision 6), `requirements.md` (revision 10),
 `adr.md` (ADR-001), current code (version 1.0.0)  
 **Stack:** Electron + TypeScript, React, zod, Vitest, Playwright (unchanged); new: libsodium, Chokidar  
 **Platform:** Windows 10 and Windows 11
@@ -28,7 +28,7 @@
 
 ---
 
-## 1. Assumptions and open items
+## 1. Assumptions
 
 ### 1.1 Google Drive test results (design Section 23, assumed)
 
@@ -40,13 +40,9 @@
 
 Do the real tests before release 1.2 (Phase 10, task 1).
 
-### 1.2 Open design questions (recommendations used)
+### 1.2 Design questions
 
-| Question | Assumption used in this plan                                                                                                                                                                                 | Phases |
-|----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|
-| Q-39     | "Показывать текст в уведомлениях" is on by default. Up to 100 characters of plain text, cut at a word boundary; images as "[изображение]". A loading message raises a notification only when it is processed | 12     |
-
-All other design questions (Q-01 to Q-38) have answers. They are decisions D-01 to D-38 in the design document.
+All design questions (Q-01 to Q-39) have answers. They are decisions D-01 to D-38 in the design document.
 
 ### 1.3 No users yet
 
@@ -116,7 +112,6 @@ Effort sizes as in the MVP plan: **S** ≈ up to 3 days, **M** ≈ about a week,
 
 Tasks
 
-- Close design question Q-39. Update Section 1.2 of this plan with the answer.
 - `requirements.md` revision 11: new FR numbers for synchronized discussions, detached copies, schema version 2,
   identity, large messages, delivery marks, tray, notifications. Change FR-026 (order by clock), FR-124 (roster
   members are known participants), FR-012 (no version 1.0 compatibility). Remove "real-time sync", "cloud storage",
@@ -436,9 +431,9 @@ Tasks
 - One-time notice on the first close to the tray (D-33).
 - Tray menu: open a discussion (registered list), sync status (D-35), "Проверить папки", "Выход".
 - Windows notification for each new message from another member (D-33), raised when the message is processed:
-  author, discussion name, and the first characters of the text (D-38, Q-39). Click opens the discussion at the
-  message. Settings: "Уведомления о новых сообщениях" (default on) and "Показывать текст в уведомлениях"
-  (default per Q-39).
+  author, discussion name, and up to 100 characters of plain text, cut at a word boundary, with "…"; images as
+  "[изображение]" (D-38). Click opens the discussion at the message. Settings: "Уведомления о новых сообщениях"
+  (default on) and "Показывать текст в уведомлениях" (default on).
 - Settings: "Запускать вместе с Windows" (D-36: on after the first synchronized discussion; the wizard says so).
   Starts in the tray, with no window.
 - "Выход" is a normal close: a downloaded update installs then (FR-141).
