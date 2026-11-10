@@ -759,7 +759,7 @@ cut at a word boundary, with "…". Images are shown as "[изображение
 c) A loading message: notify when the header arrives or when the message is processed? Recommendation: when it is
 processed, because only then is it unread.  
 Recommendation: a) (i), b) as above, c) when processed.  
-**Answer:**
+**Answer:** a) (i), b) as above, c) when processed.
 
 ---
 
