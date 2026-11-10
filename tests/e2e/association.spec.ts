@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
-import { cleanup, launchApp, type TestApp } from './helpers/app'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 
 const EXT_KEY = 'HKCU\\Software\\Classes\\.branchchat'
 const PROG_ID_KEY = 'HKCU\\Software\\Classes\\BranchChat.Discussion'
@@ -141,9 +143,15 @@ test('no question if the installer already asked, or another program holds the t
 })
 
 test('Settings lets the person change their name, which is remembered (FR-138)', async () => {
-    t = await launchApp()
+    // The name is in the profile before the window starts: the window reads the settings once at startup, so
+    // setting the name through the API while it runs would race with that first read.
+    const userData = await tempDir('bc-name-profile-')
+    await fs.writeFile(
+        join(userData, 'settings.json'),
+        JSON.stringify({ participantId: 'p-test', displayName: 'Анна', associationAsked: true })
+    )
+    t = await launchApp({ userData })
     const win = await t.app.firstWindow()
-    await win.evaluate(() => window.branchchat.setDisplayName('Анна'))
     await openSettings(t, win)
     await expect(win.getByTestId('settings-name')).toHaveValue('Анна')
     await win.getByTestId('settings-name').fill('Анна Иванова')
