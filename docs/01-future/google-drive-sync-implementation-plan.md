@@ -1,6 +1,6 @@
 # BranchChat — Implementation Plan: Encrypted Synchronized Discussions
 
-**Inputs:** `google-drive-desktop-encrypted-chat-design.md` (revision 4), `requirements.md` (revision 10),
+**Inputs:** `google-drive-desktop-encrypted-chat-design.md` (revision 5), `requirements.md` (revision 10),
 `adr.md` (ADR-001), current code (version 1.0.0)  
 **Stack:** Electron + TypeScript, React, zod, Vitest, Playwright (unchanged); new: libsodium, Chokidar  
 **Platform:** Windows 10 and Windows 11
@@ -42,13 +42,11 @@ Do the real tests before release 1.2 (Phase 10, task 1).
 
 ### 1.2 Open design questions (recommendations used)
 
-| Question | Assumption used in this plan                                                                                                        | Phases |
-|----------|-------------------------------------------------------------------------------------------------------------------------------------|--------|
-| Q-36     | "Запускать вместе с Windows" is on after the first synchronized discussion; the wizard says so                                      | 12     |
-| Q-37     | A loading or partial message cannot be marked read, cannot be a branch source, and does not count as unread. Its text can be copied | 4, 8   |
-| Q-38     | A new-message notification shows the author and the discussion name only                                                            | 12     |
+| Question | Assumption used in this plan                                                                                                                                                                                 | Phases |
+|----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|
+| Q-39     | "Показывать текст в уведомлениях" is on by default. Up to 100 characters of plain text, cut at a word boundary; images as "[изображение]". A loading message raises a notification only when it is processed | 12     |
 
-All other design questions (Q-01 to Q-35) have answers. They are decisions D-01 to D-35 in the design document.
+All other design questions (Q-01 to Q-38) have answers. They are decisions D-01 to D-38 in the design document.
 
 ### 1.3 No users yet
 
@@ -118,7 +116,7 @@ Effort sizes as in the MVP plan: **S** ≈ up to 3 days, **M** ≈ about a week,
 
 Tasks
 
-- Close design questions Q-36 to Q-38. Update Section 1.2 of this plan with the answers.
+- Close design question Q-39. Update Section 1.2 of this plan with the answer.
 - `requirements.md` revision 11: new FR numbers for synchronized discussions, detached copies, schema version 2,
   identity, large messages, delivery marks, tray, notifications. Change FR-026 (order by clock), FR-124 (roster
   members are known participants), FR-012 (no version 1.0 compatibility). Remove "real-time sync", "cloud storage",
@@ -214,7 +212,8 @@ Tasks
 - A message for a closed branch is accepted; the branch stays closed (D-07).
 - Dependency check: an event that needs a missing or still-loading thread, message, or member returns "pending". A
   pending queue that retries after each applied event.
-- Rules for loading messages (Q-37): not readable, not a branch source, not unread.
+- Rules for loading messages (D-37): not readable, not a branch source, not unread; sending in the same thread
+  does not mark them read.
 - Idempotence: applying the same event twice changes nothing.
 - Event builders: build an event from each local change, so local and remote changes give the same data.
 - Known participants = roster members (D-25): update the read indicator rules for synchronized discussions.
@@ -226,7 +225,8 @@ Exit criteria
 - Property tests pass for 3 simulated members and thousands of random orders.
 - The integrity check passes after every apply.
 
-Decisions: D-04, D-05, D-07, D-08 (read-state events), D-12, D-13 (apply side), D-23, D-24, D-25, D-30 (model).
+Decisions: D-04, D-05, D-07, D-08 (read-state events), D-12, D-13 (apply side), D-23, D-24, D-25, D-30 (model),
+D-37 (rules).
 
 ### Phase 5 — Event cryptography and parts (M)
 
@@ -319,8 +319,12 @@ Tasks
   a window that opens during a write gets the new state.
 - Lifecycle for release 1.2: sync runs for all registered discussions while the app runs. The app still quits when the
   last window closes (tray comes in release 1.4).
-- Loading messages in the message list (D-30): at their clock position, "Сообщение загружается: N из M частей";
-  partial message with text and "Изображение загружается…" placeholders (D-31). Rules of Q-37.
+- Loading messages in the message list (D-30, D-37): a bubble at its clock position with author and time; a progress
+  bar "Загружается: N из M частей (X из Y МБ)" that updates when each part arrives; a grey placeholder line until the
+  content arrives; partial message with text and "Изображение загружается…" placeholders, each with its own progress
+  (D-31). No read mark, no "Reply to this", no unread highlight; text can be selected and copied.
+- Main → renderer update for loading progress: send only the progress of the changed message, not the whole
+  discussion.
 - Detached copy detection: a file with a `sync` object whose path is not the registered path for its `documentId`
   (D-06, D-26).
 - Moved file (D-27): when the registered path is missing and a file with that `documentId` opens, ask "Это ваше
@@ -331,10 +335,11 @@ Tasks
 Exit criteria
 
 - Two-instance e2e test: messages, branches, nested branches, status, title, images, large messages, and read state
-  reach the other instance with and without the window open. The loading state is visible while parts are held back.
+  reach the other instance with and without the window open. While parts are held back, the bubble shows the
+  progress bar, and the progress grows as parts are released.
 - A detached copy opened on a third profile behaves as a normal discussion.
 
-Decisions: D-01, D-06, D-07, D-08, D-10, D-12, D-25, D-26, D-27 (open-time part), D-30, D-31.
+Decisions: D-01, D-06, D-07, D-08, D-10, D-12, D-25, D-26, D-27 (open-time part), D-30, D-31, D-37.
 
 ### Phase 9 — Wizards and invitations (L)
 
@@ -377,7 +382,7 @@ Tasks
 4. Security review of the crypto code and the protocol document.
 5. Performance: 5,000-message discussion converted and joined; 200 MB image sent; UI stays responsive.
 6. Russian user guide: synchronized discussions, what the provider can see, key loss consequences, detached copies,
-   "Отправить копию…".
+   "Отправить копию…", loading messages.
 
 Exit criteria
 
@@ -430,9 +435,11 @@ Tasks
   as today.
 - One-time notice on the first close to the tray (D-33).
 - Tray menu: open a discussion (registered list), sync status (D-35), "Проверить папки", "Выход".
-- Windows notification for each new message from another member (D-33): author and discussion name (Q-38). Click
-  opens the discussion at the message. Setting "Уведомления о новых сообщениях", default on.
-- Settings: "Запускать вместе с Windows" (Q-36: on after the first synchronized discussion; the wizard says so).
+- Windows notification for each new message from another member (D-33), raised when the message is processed:
+  author, discussion name, and the first characters of the text (D-38, Q-39). Click opens the discussion at the
+  message. Settings: "Уведомления о новых сообщениях" (default on) and "Показывать текст в уведомлениях"
+  (default per Q-39).
+- Settings: "Запускать вместе с Windows" (D-36: on after the first synchronized discussion; the wizard says so).
   Starts in the tray, with no window.
 - "Выход" is a normal close: a downloaded update installs then (FR-141).
 - Missing registered file at start: warning in the tray menu with "Найти файл…" (D-27).
@@ -442,10 +449,10 @@ Tasks
 Exit criteria
 
 - E2E tests: close all windows; a message from another instance is applied to the file and a notification is raised;
-  reopen shows it.
+  with "Показывать текст в уведомлениях" off, the notification has no text; reopen shows the message.
 - Windows check: start with Windows, tray icon at different display scales, notifications, update installs on exit.
 
-Decisions: D-16, D-27 (start-time part), D-33, D-35.
+Decisions: D-16, D-27 (start-time part), D-33, D-35, D-36, D-38.
 
 ---
 
@@ -519,7 +526,7 @@ Decisions: D-15, D-32.
 | Writes from the sync service and a window to the same file              | One write queue per file; the sync service uses the open session when a window exists        |
 | Chokidar misses events on cloud drives                                  | Periodic scans are the source of truth (Phase 7)                                             |
 | Detached copies confuse users                                           | FR-117 warning; "Отправить копию…" makes a clean copy                                        |
-| Notifications show private information                                  | Author and discussion name only (Q-38)                                                       |
+| Notifications show private information                                  | Setting to hide the text (D-38); Settings text and user guide explain it                     |
 
 ---
 

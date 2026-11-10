@@ -1,6 +1,6 @@
 # Design: Encrypted Synchronized BranchChat Discussions over a Shared Folder
 
-**Status:** Draft, revision 4 (answers Q-01 to Q-35 included; new open questions in Section 22)  
+**Status:** Draft, revision 5 (answers Q-01 to Q-38 included; one open question in Section 22)  
 **Platform:** Windows 10 and Windows 11 (same as the MVP)  
 **Transport model:** A shared local folder that a sync product (for example Google Drive for Desktop) keeps in sync  
 **Backend:** None  
@@ -12,7 +12,7 @@
 
 - Section 2 records facts from the current code. These facts are the baseline for this design.
 - Section 3 lists the conflicts between revision 1 and the code, and how each conflict is resolved.
-- Section 4 records all decisions (answers Q-01 to Q-35).
+- Section 4 records all decisions (answers Q-01 to Q-38).
 - Sections 5 to 21 give the design. Text marked **[Pending Q-nn]** depends on an open question.
 - Section 22 contains the new open questions. Write your answer on the **Answer:** line.
 - Section 23 lists tests that must be done before the release with sync. Their results are assumed for now.
@@ -197,6 +197,9 @@ The application refuses to load or save a file that breaks these rules:
 | D-33 | Tray details                | Stay in the tray only when at least one synchronized discussion exists. One-time notice on the first close to the tray. Windows notifications for new messages, with a setting (default on)                                                                                                                                                                                     |
 | D-34 | Receipt file cleanup        | A receipt file that the inbox owner did not delete is deleted by its writer after 7 days. Own sent files that never got a receipt are deleted after 30 days                                                                                                                                                                                                                     |
 | D-35 | Sync problem notices        | Status line in the discussion window and in the tray menu only. No Windows notification for sync problems or key change requests                                                                                                                                                                                                                                                |
+| D-36 | Start with Windows          | On after the first synchronized discussion is created or joined. The wizard says so. The person can turn it off in Settings                                                                                                                                                                                                                                                     |
+| D-37 | Loading or partial message  | Until it is processed: it cannot be marked read, it cannot be a branch source, it does not count as unread, and sending in the same thread does not mark it read. Its text can be selected and copied. When processed, it becomes unread as usual. The UI shows the loading clearly, with a progress bar (Section 9.4)                                                          |
+| D-38 | Notification content        | Author, discussion name, and the first characters of the text. Setting "Показывать текст в уведомлениях" turns the text off **[Pending Q-39]**                                                                                                                                                                                                                                  |
 
 Settled from revision 1, still valid:
 
@@ -431,7 +434,16 @@ Each recipient copy also has the recipient ID. The signature covers all of these
 - A part whose SHA-256 does not match is refused. The existing "damaged" placeholder shows if the part never arrives
   in a good state.
 - An image that is already in the discussion (same SHA-256) is not sent again.
-- Interaction with a loading or partial message: **[Pending Q-37]**.
+- Display of a loading message (D-37):
+    - The message is a normal message bubble at its clock position, with the author and time from the header.
+    - A progress bar shows the received parts and the received size, for example "Загружается: 3 из 7 частей
+      (12 из 28 МБ)". The bar updates when each part arrives.
+    - If the content has not arrived yet, the bubble shows a short grey placeholder line instead of the text.
+    - The bubble has no read mark, no "Reply to this" action, and no unread highlight.
+    - Each missing image shows "Изображение загружается…" with its own progress (parts of that image).
+- Interaction with a loading or partial message (D-37): it cannot be marked read, it cannot be a branch source, it
+  does not count as unread, and sending in the same thread does not mark it read. Its text can be selected and
+  copied. When it is processed, it becomes unread as usual.
 
 ### 9.5 Dependencies
 
@@ -476,7 +488,10 @@ A message for a branch that is closed on this computer is accepted. The branch s
 - Tray menu: open a discussion, sync status, "Проверить папки", exit.
 - Windows notification for each new message from another member. Setting "Уведомления о новых сообщениях", default
   on.
-- Setting "Запускать вместе с Windows". Default: **[Pending Q-36]**.
+- Setting "Запускать вместе с Windows". It is turned on after the first synchronized discussion is created or
+  joined; the wizard says so (D-36).
+- Notification content (D-38): author, discussion name, and the first characters of the text. Setting "Показывать
+  текст в уведомлениях" turns the text off. Default and length: **[Pending Q-39]**.
 - Missing registered file at start: warning in the tray menu with "Найти файл…" (D-27).
 - "Exit" from the tray is a normal close. A downloaded update installs then (FR-141).
 - Single instance stays. Double-clicking a `.branchchat` file while the app is in the tray opens a window.
@@ -674,8 +689,9 @@ Drive paused, signed out, restarted, updated; permission removed and restored.
 - Treat every file in the shared folder as untrusted. Validate events with zod schemas.
 - Enforce the file size limit before a file is read.
 - Restrict all transport paths to the configured shared root. Refuse path traversal and links.
-- Never log keys, plain text, or decrypted payloads. Windows notifications show only the author and the discussion
-  name **[Pending Q-38]**.
+- Never log keys, plain text, or decrypted payloads.
+- Windows notifications can show the first characters of a message (D-38). Windows can keep them in the
+  notification center. The user guide and the Settings text say so.
 - Get a security review of the crypto code before release.
 
 Protected: sync provider reading content; changed events and parts; forged events from a member whose key is not
@@ -697,7 +713,7 @@ automatically).
 - Each event type reaches all members and gives the same discussion on each computer.
 - Branch, nested branch, branch close/reopen, branch title, images, read state, and "who has read" work across
   computers.
-- Large message: loading state with part count, partial message with image placeholders, final message.
+- Large message: loading bubble with progress bar, partial message with image placeholders, final message.
 - Images larger than the file size limit.
 - A non-synchronized discussion behaves as before (in version 2). A version 1 file is migrated on open.
 - A detached copy (Explorer copy and "Отправить копию…") opens as a normal discussion and sends no events.
@@ -735,26 +751,15 @@ automatically).
 
 Write your answer after **Answer:**. A recommendation is only a proposal.
 
-**Q-36. Default of "Запускать вместе с Windows".**  
-In revision 3 this was Q-33 b. The answer covered a, c, and d only.  
-Options: (a) On after the first synchronized discussion is created or joined; the wizard says so. (b) Off; the
-person turns it on in Settings. (c) The wizard asks.  
-Recommendation: (a).  
-**Answer:** (a)
-
-**Q-37. What can a person do with a loading or partial message?**  
-D-30 says the message is processed only when all parts have arrived. Before that, the message exists only in the
-local sync state.  
-Proposal: until the message is processed, the person cannot mark it read, cannot create a branch from it, and it does
-not count as unread. Sending a message in the same thread does not mark it read. When it is processed, it becomes
-unread as usual. The text of a partial message can be selected and copied.  
-**Answer:** ok. make sure that message that is being loaded is show appropriately. Mb some progress bar or something...
-
-**Q-38. Content of a Windows notification for a new message.**  
-A notification can be seen by other people near the screen, and Windows can keep it in the notification center.  
-Options: (a) Author and discussion name only. (b) Author, discussion name, and the first characters of the text.  
-Recommendation: (a), with (b) as a setting later.  
-**Answer:**  b with a setting.
+**Q-39. Default and length of the text in notifications (D-38).**  
+Your answer to Q-38: show the first characters of the text, with a setting.  
+a) Default of "Показывать текст в уведомлениях": (i) on; (ii) off.  
+b) How many characters? Recommendation: up to 100 characters of the plain text (the same plain text as for quotes),
+cut at a word boundary, with "…". Images are shown as "[изображение]".  
+c) A loading message: notify when the header arrives or when the message is processed? Recommendation: when it is
+processed, because only then is it unread.  
+Recommendation: a) (i), b) as above, c) when processed.  
+**Answer:**
 
 ---
 
@@ -783,6 +788,13 @@ The results below are **assumed**. Do the tests and correct the results before t
 - Never put private keys, plain text, or local state in the shared folder.
 - Never delete a file that another member wrote, except a processed file in the own inbox.
 - Never invent a cryptographic protocol. Use the libsodium constructions as documented.
+
+## Changes in revision 5
+
+- Recorded answers Q-36 to Q-38 as decisions D-36 to D-38.
+- Added the display of a loading message, with a progress bar (Section 9.4).
+- Notifications can show the first characters of the text, with a setting (D-38).
+- New question Q-39.
 
 ## Changes in revision 4
 
