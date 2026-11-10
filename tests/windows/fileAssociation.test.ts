@@ -15,6 +15,13 @@ import { InMemoryRegistry } from '../../src/main/windows/inMemoryRegistry'
 const EXE = 'C:\\Users\\Аня\\AppData\\Local\\Programs\\BranchChat\\BranchChat.exe'
 const ICON = 'C:\\Users\\Аня\\AppData\\Local\\Programs\\BranchChat\\resources\\document.ico'
 
+/** Registration of another program that owns the type: the extension names it and it has an open command. */
+const OTHER_APP_COMMAND = 'HKCU\\Software\\Classes\\Other.App\\shell\\open\\command'
+const otherApp = {
+    [EXT_KEY]: { '': 'Other.App' },
+    [OTHER_APP_COMMAND]: { '': '"C:\\Other\\other.exe" "%1"' }
+}
+
 function make(seed: Record<string, Record<string, string>> = {}) {
     const registry = new InMemoryRegistry(seed)
     return { registry, assoc: new FileAssociation(registry, EXE, ICON) }
@@ -53,10 +60,30 @@ describe('FileAssociation', () => {
     })
 
     it('never takes over a type held by another program (FR-090)', async () => {
-        const { registry, assoc } = make({ [EXT_KEY]: { '': 'Other.App' } })
+        const { registry, assoc } = make(otherApp)
         expect(await assoc.state()).toBe('other-app')
         await expect(assoc.enable()).rejects.toBeInstanceOf(AssociationBlockedError)
-        expect(registry.dump()).toEqual({ [EXT_KEY]: { '': 'Other.App' } })
+        expect(registry.dump()).toEqual(otherApp)
+    })
+
+    it('a leftover plain-text value that names no program holds nothing (can be enabled and replaced)', async () => {
+        // seen in practice: the default value of .branchchat was the description "Обсуждение BranchChat"
+        const { registry, assoc } = make({
+            [EXT_KEY]: { '': 'Обсуждение BranchChat' },
+            [`${EXT_KEY}\\OpenWithProgids`]: {}
+        })
+        expect(await assoc.state()).toBe('off')
+        await assoc.enable()
+        expect(await assoc.state()).toBe('on')
+        expect(registry.dump()[EXT_KEY]).toEqual({ '': PROG_ID })
+    })
+
+    it('a program registered for the machine (HKLM) also holds the type', async () => {
+        const { assoc } = make({
+            [EXT_KEY]: { '': 'Machine.App' },
+            'HKLM\\Software\\Classes\\Machine.App\\shell\\open\\command': { '': 'machine.exe "%1"' }
+        })
+        expect(await assoc.state()).toBe('other-app')
     })
 
     it('treats a program chosen in Windows (UserChoice) as another app', async () => {
@@ -74,7 +101,7 @@ describe('FileAssociation', () => {
     })
 
     it("disable leaves another program's registration alone", async () => {
-        const { registry, assoc } = make({ [EXT_KEY]: { '': 'Other.App' } })
+        const { registry, assoc } = make(otherApp)
         await assoc.disable()
         expect(registry.dump()[EXT_KEY]).toEqual({ '': 'Other.App' })
     })

@@ -54,7 +54,11 @@ test('Settings shows the association, switches it on and off, and writes only HK
 })
 
 test('a file type held by another program is never taken over (FR-090)', async () => {
-    const seed = { ...ASKED, [EXT_KEY]: { '': 'Other.App' } }
+    const seed = {
+        ...ASKED,
+        [EXT_KEY]: { '': 'Other.App' },
+        [`HKCU\\Software\\Classes\\Other.App\\shell\\open\\command`]: { '': 'other.exe "%1"' }
+    }
     t = await launchApp({ env: { BRANCHCHAT_E2E_REGISTRY_SEED: JSON.stringify(seed) } })
     const win = await t.app.firstWindow()
     await openSettings(t, win)
@@ -117,7 +121,13 @@ test('first start: no registers nothing', async () => {
 })
 
 test('no question if the installer already asked, or another program holds the type', async () => {
-    for (const seed of [ASKED, { [EXT_KEY]: { '': 'Other.App' } }]) {
+    for (const seed of [
+        ASKED,
+        {
+            [EXT_KEY]: { '': 'Other.App' },
+            [`HKCU\\Software\\Classes\\Other.App\\shell\\open\\command`]: { '': 'other.exe "%1"' }
+        }
+    ]) {
         t = await launchApp({ env: { BRANCHCHAT_E2E_REGISTRY_SEED: JSON.stringify(seed) } })
         await t.app.firstWindow()
         await new Promise((r) => setTimeout(r, 800))
@@ -143,4 +153,16 @@ test('Settings lets the person change their name, which is remembered (FR-138)',
     expect(stored.ok && stored.data.displayName).toBe('Анна Иванова')
     await win.getByTestId('settings-close').click()
     await expect(win.getByTestId('settings-dialog')).toHaveCount(0)
+})
+
+test('a leftover plain-text value of the file type does not block the association', async () => {
+    const seed = { ...ASKED, [EXT_KEY]: { '': 'Обсуждение BranchChat' } }
+    t = await launchApp({ env: { BRANCHCHAT_E2E_REGISTRY_SEED: JSON.stringify(seed) } })
+    const win = await t.app.firstWindow()
+    await openSettings(t, win)
+    await expect(win.getByTestId('settings-association-state')).toHaveAttribute('data-state', 'off')
+    await expect(win.getByTestId('settings-association')).toBeEnabled()
+    await win.getByTestId('settings-association').check()
+    await expect(win.getByTestId('settings-association-state')).toHaveAttribute('data-state', 'on')
+    expect((await t.registry())[EXT_KEY]).toEqual({ '': 'BranchChat.Discussion' })
 })
