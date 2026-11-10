@@ -1,14 +1,23 @@
 import { z } from 'zod'
 import { richDocSchema } from './richText'
+import type { SyncInfo } from './roster'
 
 export const FORMAT_NAME = 'branchchat'
-export const CURRENT_SCHEMA_VERSION = 1
+/** Version 2 adds logical clocks (FR-151 to FR-153) and the optional roster entry `sync.json` (FR-154). */
+export const CURRENT_SCHEMA_VERSION = 2
 
 const isoUtc = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, 'timestamp must be ISO-8601 UTC (…Z)')
 
 const id = z.string().min(1)
+
+/** Lamport clock (FR-152): a whole number from 0. */
+export const clockSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+
+/** Clock and participant of the last change of a last-writer-wins value (FR-153). */
+export const changeStampSchema = z.object({ clock: clockSchema, by: id }).passthrough()
+export type ChangeStamp = z.infer<typeof changeStampSchema>
 
 /** Objects use passthrough so unknown optional fields survive a load/save cycle (FR-015). */
 export const manifestSchema = z
@@ -32,6 +41,8 @@ export const messageSchema = z
         messageId: id,
         threadId: id,
         sequence: z.number().int().nonnegative(),
+        /** Logical clock; messages of a thread are ordered by (clock, authorId, messageId) (FR-152). */
+        clock: clockSchema,
         authorId: id,
         /** Display name of the author when the message was written (FR-024). */
         authorDisplayName: z.string().min(1),
@@ -57,6 +68,12 @@ export const threadSchema = z
         status: threadStatusSchema,
         createdAt: isoUtc,
         createdBy: id,
+        /** Logical clock of the branch's creation; the main thread has 0 (FR-152). */
+        clock: clockSchema,
+        /** Last status change; absent = never changed (clock 0 by the creator) (FR-153). */
+        statusSet: changeStampSchema.optional(),
+        /** Last title change; absent = never changed (FR-153). */
+        titleSet: changeStampSchema.optional(),
         messages: z.array(messageSchema)
     })
     .passthrough()
@@ -96,4 +113,6 @@ export interface DocumentContents {
     manifest: Manifest
     discussion: DiscussionData
     readState: ReadState
+    /** Roster of a synchronized discussion (ZIP entry `sync.json`); absent for a normal discussion (FR-154). */
+    sync?: SyncInfo
 }

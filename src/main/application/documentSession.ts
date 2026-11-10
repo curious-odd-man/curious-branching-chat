@@ -288,19 +288,25 @@ export class DocumentSession {
         return unreadSummary(this.contents.discussion, this.contents.readState, participantId).total
     }
 
-    /** Close or reopen a branch (FR-059, FR-060). */
-    setThreadStatus(threadId: string, status: ThreadStatus): void {
+    /** Close or reopen a branch (FR-059, FR-060). `by` is the local participant ID (FR-153). */
+    setThreadStatus(by: string, threadId: string, status: ThreadStatus): void {
         this.commit({
             ...this.contents,
-            discussion: setThreadStatus(this.deps.ctx, this.contents.discussion, threadId, status)
+            discussion: setThreadStatus(
+                this.deps.ctx,
+                this.contents.discussion,
+                threadId,
+                status,
+                by
+            )
         })
     }
 
-    /** Optional branch title (FR-058); an empty title removes it. */
-    setThreadTitle(threadId: string, title: string): void {
+    /** Optional branch title (FR-058); an empty title removes it. `by` is the local participant ID (FR-153). */
+    setThreadTitle(by: string, threadId: string, title: string): void {
         this.commit({
             ...this.contents,
-            discussion: setThreadTitle(this.deps.ctx, this.contents.discussion, threadId, title)
+            discussion: setThreadTitle(this.deps.ctx, this.contents.discussion, threadId, title, by)
         })
     }
 

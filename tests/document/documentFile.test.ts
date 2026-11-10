@@ -463,7 +463,7 @@ describe('refuses to write bad data', () => {
     it('wrong schema version', async () => {
         await withTempDir(async (dir) => {
             const { contents } = buildSample()
-            const bad = { ...contents, manifest: { ...contents.manifest, schemaVersion: 2 } }
+            const bad = { ...contents, manifest: { ...contents.manifest, schemaVersion: 1 } }
             await rejectsWith(
                 writeDocument(join(dir, 'x.branchchat'), bad, { discardExisting: true }),
                 'UNSUPPORTED_VERSION'

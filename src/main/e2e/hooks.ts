@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { ASKED_KEY, ASKED_VALUE } from '../windows/fileAssociation'
 import type { ElectronUpdaterOptions } from '../updates/electronUpdaterPort'
 import { InMemoryRegistry } from '../windows/inMemoryRegistry'
+import type { KeyProtector } from '../crypto/keyStore'
 
 interface Answers {
     save: string[]
@@ -51,6 +52,22 @@ export function e2eUpdaterConfig(): {
             : {},
         startupDelayMs: Number(process.env['BRANCHCHAT_E2E_UPDATE_STARTUP_MS'] ?? 600_000),
         intervalMs: Number(process.env['BRANCHCHAT_E2E_UPDATE_INTERVAL_MS'] ?? 600_000)
+    }
+}
+
+/**
+ * Key protection for test builds: a reversible stand-in for Windows DPAPI, so tests do not depend on the system
+ * keyring. With BRANCHCHAT_E2E_KEYS=unavailable it reports that protection is not available (FR-156).
+ */
+export function e2eKeyProtector(): KeyProtector {
+    const tag = Buffer.from('E2E-PROTECTED:')
+    return {
+        isAvailable: () => process.env['BRANCHCHAT_E2E_KEYS'] !== 'unavailable',
+        encrypt: (plain) => Buffer.concat([tag, Buffer.from(plain).reverse()]),
+        decrypt: (sealed) => {
+            if (!sealed.subarray(0, tag.length).equals(tag)) throw new Error('not protected')
+            return Buffer.from(sealed.subarray(tag.length)).reverse()
+        }
     }
 }
 

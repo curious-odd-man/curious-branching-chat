@@ -216,20 +216,26 @@ describe('branches', () => {
 
     it('closes and reopens independently of parent and children (FR-064)', () => {
         const { contents, ctx, ids } = buildSample()
-        let d = setThreadStatus(ctx, contents.discussion, ids.branch1, 'closed')
+        let d = setThreadStatus(ctx, contents.discussion, ids.branch1, 'closed', anna.participantId)
         expect(findThread(d, ids.branch1).status).toBe('closed')
         expect(findThread(d, ids.branch2).status).toBe('open')
         expect(findThread(d, mainThread(d).threadId).status).toBe('open')
-        d = setThreadStatus(ctx, d, ids.branch1, 'open')
+        d = setThreadStatus(ctx, d, ids.branch1, 'open', anna.participantId)
         expect(findThread(d, ids.branch1).status).toBe('open')
-        expect(() => setThreadStatus(ctx, d, mainThread(d).threadId, 'closed')).toThrow(
-            /main thread/
-        )
+        expect(() =>
+            setThreadStatus(ctx, d, mainThread(d).threadId, 'closed', anna.participantId)
+        ).toThrow(/main thread/)
     })
 
     it('groups branches into active and closed', () => {
         const { contents, ctx, ids } = buildSample()
-        const d = setThreadStatus(ctx, contents.discussion, ids.branch2, 'closed')
+        const d = setThreadStatus(
+            ctx,
+            contents.discussion,
+            ids.branch2,
+            'closed',
+            anna.participantId
+        )
         const g = groupBranchesByStatus(d)
         expect(g.active.map((t) => t.threadId)).toEqual([ids.branch1])
         expect(g.closed.map((t) => t.threadId)).toEqual([ids.branch2])
@@ -237,9 +243,15 @@ describe('branches', () => {
 
     it('sets and clears titles', () => {
         const { contents, ctx, ids } = buildSample()
-        let d = setThreadTitle(ctx, contents.discussion, ids.branch1, '  Ёлка  ')
+        let d = setThreadTitle(
+            ctx,
+            contents.discussion,
+            ids.branch1,
+            '  Ёлка  ',
+            anna.participantId
+        )
         expect(findThread(d, ids.branch1).title).toBe('Ёлка')
-        d = setThreadTitle(ctx, d, ids.branch1, '')
+        d = setThreadTitle(ctx, d, ids.branch1, '', anna.participantId)
         expect(findThread(d, ids.branch1).title).toBeUndefined()
     })
 

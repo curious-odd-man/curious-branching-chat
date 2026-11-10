@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { ru } from '@shared/i18n/ru'
-import type { AssociationInfo, SettingsView } from '@shared/types/ipc'
+import type { AssociationInfo, IdentityView, SettingsView } from '@shared/types/ipc'
 
 interface Props {
     settings: SettingsView | undefined
@@ -17,7 +17,10 @@ const stateText = {
     unsupported: ru.association.stateUnsupported
 } as const
 
-/** File > Settings…: the person's name (FR-138) and the .branchchat file association (FR-089, FR-138). */
+/**
+ * File > Settings…: the person's name (FR-138), the .branchchat file association (FR-089, FR-138), and the
+ * encryption key fingerprint with copy and save of the public key (FR-155 to FR-157).
+ */
 export function SettingsDialog({
     settings,
     onNameSaved,
@@ -35,10 +38,35 @@ export function SettingsDialog({
     const [limitText, setLimitText] = useState(String(settings?.recentFilesLimit ?? 10))
     // The value being applied, shown right away while the change is written.
     const [requested, setRequested] = useState<boolean | null>(null)
+    const [identity, setIdentity] = useState<IdentityView | null>(null)
+    const [keyMessage, setKeyMessage] = useState<string | null>(null)
 
     useEffect(() => {
         void api.getAssociation().then((r) => r.ok && setAssociation(r.data))
+        void api.getIdentity().then((r) => {
+            if (r.ok) setIdentity(r.data)
+            else setError(r.error.message)
+        })
     }, [api])
+
+    const copyKey = (): void => {
+        setKeyMessage(null)
+        void api.copyKeyBundle().then((r) => {
+            if (r.ok) setKeyMessage(ru.identity.copied)
+            else setError(r.error.message)
+        })
+    }
+
+    const saveKey = (): void => {
+        setKeyMessage(null)
+        void api.saveKeyBundle().then((r) => {
+            if (r.ok) {
+                if (r.data) setKeyMessage(ru.identity.saved)
+            } else setError(r.error.message)
+        })
+    }
+
+    const hasName = Boolean(settings?.displayName)
 
     const saveName = useCallback(() => {
         if (name.trim().length === 0) return
@@ -119,6 +147,63 @@ export function SettingsDialog({
                             {ru.settings.saveName}
                         </button>
                     </div>
+                </section>
+
+                <section data-testid="settings-identity">
+                    <h3>{ru.identity.heading}</h3>
+                    {identity === null && <p className="hint">{ru.identity.loading}</p>}
+                    {identity?.state === 'unavailable' && (
+                        <p className="error-text" data-testid="identity-unavailable">
+                            {ru.identity.unavailable}
+                        </p>
+                    )}
+                    {identity?.state === 'ready' && (
+                        <>
+                            <p className="hint">{ru.identity.explanation}</p>
+                            <p className="fingerprint-row">
+                                <span>{ru.identity.fingerprintLabel}: </span>
+                                <code className="fingerprint" data-testid="identity-fingerprint">
+                                    {identity.fingerprint}
+                                </code>
+                            </p>
+                            <p className="hint">{ru.identity.fingerprintHint}</p>
+                            {identity.replaced && (
+                                <p className="hint" data-testid="identity-replaced">
+                                    {identity.replaced === 'unreadable'
+                                        ? ru.identity.replacedUnreadable
+                                        : ru.identity.replacedOther}
+                                </p>
+                            )}
+                            {!hasName && (
+                                <p className="hint" data-testid="identity-name-first">
+                                    {ru.identity.nameFirst}
+                                </p>
+                            )}
+                            <div className="buttons">
+                                {keyMessage && (
+                                    <span className="ok" data-testid="identity-message">
+                                        {keyMessage}
+                                    </span>
+                                )}
+                                <button
+                                    type="button"
+                                    data-testid="identity-copy"
+                                    disabled={!hasName}
+                                    onClick={copyKey}
+                                >
+                                    {ru.identity.copy}
+                                </button>
+                                <button
+                                    type="button"
+                                    data-testid="identity-save"
+                                    disabled={!hasName}
+                                    onClick={saveKey}
+                                >
+                                    {ru.identity.save}
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </section>
 
                 <section>

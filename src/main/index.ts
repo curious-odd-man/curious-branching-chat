@@ -1,5 +1,7 @@
-import { app, BrowserWindow, Menu, session } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, Menu, session } from 'electron'
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
+import { ru } from '@shared/i18n/ru'
 import { AppController } from './application/appController'
 import { installAssetProtocol, registerAssetScheme } from './application/assetProtocol'
 import { systemContext } from './application/clock'
@@ -8,7 +10,10 @@ import { buildMenu } from './application/menu'
 import { describeRecent } from './application/recentView'
 import { electronUi } from './application/ui'
 import { IPC } from '@shared/types/ipc'
-import { e2eRegistry, e2eUpdaterConfig, installE2eHooks } from './e2e/hooks'
+import { e2eKeyProtector, e2eRegistry, e2eUpdaterConfig, installE2eHooks } from './e2e/hooks'
+import { IdentityService } from './crypto/identityService'
+import { KeyStore } from './crypto/keyStore'
+import { safeStorageProtector } from './crypto/protector'
 import { registerIpcHandlers } from './ipc/handlers'
 import { RecentFilesStore } from './local-state/recentFiles'
 import { SettingsStore } from './local-state/settings'
@@ -90,7 +95,30 @@ if (!gotLock) {
             () => void updates.checkAutomatically(),
             testUpdates?.intervalMs ?? 6 * 60 * 60 * 1000
         )
-        registerIpcHandlers(controller, settings, recent, association, updates)
+        // Encryption identity (FR-155 to FR-157): keys in the user data folder, protected by Windows DPAPI.
+        const keys = new KeyStore(
+            join(app.getPath('userData'), 'keys'),
+            __E2E_HOOKS__ ? e2eKeyProtector() : safeStorageProtector,
+            systemContext.now
+        )
+        const identity = new IdentityService({
+            keys,
+            settings,
+            now: systemContext.now,
+            writeClipboard: (text) => clipboard.writeText(text),
+            pickBundlePath: async (parent, defaultName) => {
+                const options = {
+                    title: ru.identity.saveTitle,
+                    defaultPath: join(app.getPath('documents'), defaultName),
+                    filters: [{ name: ru.identity.fileFilter, extensions: ['bckey'] }]
+                }
+                const result = parent
+                    ? await dialog.showSaveDialog(parent, options)
+                    : await dialog.showSaveDialog(options)
+                return result.canceled || !result.filePath ? null : result.filePath
+            }
+        })
+        registerIpcHandlers(controller, settings, recent, association, updates, identity)
         // The File > Open recent menu, the taskbar jump list and every window follow the recent files list.
         const refreshRecent = async (): Promise<void> => {
             const files = await describeRecent(recent.list())

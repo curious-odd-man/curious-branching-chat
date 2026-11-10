@@ -5,16 +5,24 @@ import type {
     AssociationInfo,
     DocumentStatus,
     DocumentView,
+    IdentityView,
     IpcResult,
     MenuCommand,
     OpenOutcome,
-    RecentFileView,SettingsView,
+    RecentFileView,
+    SettingsView,
     UpdateView
 } from './ipc'
 
 /** The only surface the renderer can reach (exposed by the preload script as `window.branchchat`). */
 export interface BranchChatApi {
     getAppInfo(): Promise<IpcResult<AppInfo>>
+    /** Encryption key: created on first use; only the fingerprint is returned (FR-155 to FR-157). */
+    getIdentity(): Promise<IpcResult<IdentityView>>
+    /** Copies the public-key bundle as text to the clipboard. */
+    copyKeyBundle(): Promise<IpcResult<null>>
+    /** Saves the public-key bundle as a .bckey file; false if the person cancelled. */
+    saveKeyBundle(): Promise<IpcResult<boolean>>
     getSettings(): Promise<IpcResult<SettingsView>>
     setDisplayName(displayName: string): Promise<IpcResult<SettingsView>>
     newDocument(): Promise<IpcResult<OpenOutcome>>
@@ -40,7 +48,8 @@ export interface BranchChatApi {
     getRecentFiles(): Promise<IpcResult<RecentFileView[]>>
     removeRecentFile(path: string): Promise<IpcResult<null>>
     clearRecentFiles(): Promise<IpcResult<null>>
-    onRecentFilesChanged(callback: (files: RecentFileView[]) => void): () => voidgetUpdateState(): Promise<IpcResult<UpdateView>>
+    onRecentFilesChanged(callback: (files: RecentFileView[]) => void): () => void
+    getUpdateState(): Promise<IpcResult<UpdateView>>
     /** Manual check (Help > Check for updates); opens the update dialog. */
     checkForUpdates(): Promise<IpcResult<null>>
     downloadUpdate(): Promise<IpcResult<null>>

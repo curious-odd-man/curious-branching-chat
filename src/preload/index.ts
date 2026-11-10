@@ -22,6 +22,9 @@ function subscribe<T>(channel: string, callback: (value: T) => void): () => void
 
 const api: BranchChatApi = {
     getAppInfo: () => invoke(IPC.appInfo),
+    getIdentity: () => invoke(IPC.identityGet),
+    copyKeyBundle: () => invoke(IPC.identityCopyBundle),
+    saveKeyBundle: () => invoke(IPC.identitySaveBundle),
     getSettings: () => invoke(IPC.settingsGet),
     setDisplayName: (displayName) => invoke(IPC.settingsSetName, { displayName }),
     newDocument: () => invoke(IPC.documentNew),

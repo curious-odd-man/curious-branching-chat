@@ -9,6 +9,8 @@ export type AppErrorCode =
     | 'NO_DOCUMENT'
     | 'FORBIDDEN'
     | 'INVALID_REQUEST'
+    | 'KEYS_UNAVAILABLE'
+    | 'WRITE_FAILED'
 
 export class AppError extends Error {
     readonly code: AppErrorCode

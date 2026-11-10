@@ -9,22 +9,44 @@
 
 ## Progress
 
-| Release | Phase                                        | Status      | Notes |
-|---------|----------------------------------------------|-------------|-------|
-| 1.1     | 1 — Requirements, ADR, and protocol contract | Not started |       |
-| 1.1     | 2 — Schema version 2                         | Not started |       |
-| 1.1     | 3 — Identity and key store                   | Not started |       |
-| 1.2     | 4 — Pure sync core                           | Not started |       |
-| 1.2     | 5 — Event cryptography and parts             | Not started |       |
-| 1.2     | 6 — Folder transport and local sync state    | Not started |       |
-| 1.2     | 7 — Sync service                             | Not started |       |
-| 1.2     | 8 — Session integration                      | Not started |       |
-| 1.2     | 9 — Wizards and invitations                  | Not started |       |
-| 1.2     | 10 — Hardening of release 1.2                | Not started |       |
-| 1.3     | 11 — Delivery marks and sync health          | Not started |       |
-| 1.4     | 12 — Tray, background sync, notifications    | Not started |       |
-| 1.5     | 13 — Add members after activation            | Not started |       |
-| 1.5     | 14 — Rejoin after key loss                   | Not started |       |
+| Release | Phase                                        | Status                                  | Notes                                                                                                                                                            |
+|---------|----------------------------------------------|-----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1.1     | 1 — Requirements, ADR, and protocol contract | Done                                    | `requirements.md` revision 12 (FR-151 to FR-178), `adr-002-sync.md`, `sync-protocol.md`; event schemas in `src/shared/sync/` with 46 unit tests                  |
+| 1.1     | 2 — Schema version 2                         | Done                                    | Clocks, last-writer stamps, migration 1 → 2, `sync.json` entry; 10 unit tests and 1 e2e test                                                                     |
+| 1.1     | 3 — Identity and key store                   | Done in code; **needs a Windows check** | `libsodium-wrappers` (standard build), key store with `safeStorage`, Settings section; 10 unit tests and 4 e2e tests. DPAPI on real Windows: checklist section L |
+| 1.2     | 4 — Pure sync core                           | Not started                             |                                                                                                                                                                  |
+| 1.2     | 5 — Event cryptography and parts             | Not started                             |                                                                                                                                                                  |
+| 1.2     | 6 — Folder transport and local sync state    | Not started                             |                                                                                                                                                                  |
+| 1.2     | 7 — Sync service                             | Not started                             |                                                                                                                                                                  |
+| 1.2     | 8 — Session integration                      | Not started                             |                                                                                                                                                                  |
+| 1.2     | 9 — Wizards and invitations                  | Not started                             |                                                                                                                                                                  |
+| 1.2     | 10 — Hardening of release 1.2                | Not started                             |                                                                                                                                                                  |
+| 1.3     | 11 — Delivery marks and sync health          | Not started                             |                                                                                                                                                                  |
+| 1.4     | 12 — Tray, background sync, notifications    | Not started                             |                                                                                                                                                                  |
+| 1.5     | 13 — Add members after activation            | Not started                             |                                                                                                                                                                  |
+| 1.5     | 14 — Rejoin after key loss                   | Not started                             |                                                                                                                                                                  |
+
+Implementation decisions made in phases 1 to 3:
+
+- The roster is a separate ZIP entry `sync.json`, not a field of `discussion.json`. The writer never copies it
+  through, so "Отправить копию…" (release 1.2) only has to leave it out.
+- Each recipient copy is signed separately, because the signature covers `recipientId` (sync-protocol.md section 6).
+  The design said "sign once"; Ed25519 signing is cheap, so this costs nothing noticeable.
+- An invitation carries the full discussion as a complete `.branchchat` file (version 2, with `sync.json` and images),
+  split into parts. The import reuses the normal file reader and all its checks.
+- Fingerprint: the first 32 hex characters of a SHA-256 with a context string, shown in 8 groups of 4.
+- `sequence` is derived: when a file is read, messages and threads are sorted by clock and `sequence` is recomputed.
+  The integrity check before every save refuses data that is not in clock order.
+- Branch status and title changes now record the participant (`statusSet`, `titleSet`), also when that person has no
+  name yet; the participant ID always exists in the settings.
+- Keys are created the first time Settings shows the key section (first use, FR-155). If the key file cannot be read
+  (for example DPAPI after a profile move) or belongs to another participant ID, it is kept as a backup and a new key
+  is made; Settings says so.
+- libsodium: the standard `libsodium-wrappers` build. SHA-256 comes from Node `crypto`.
+- Test builds protect keys with a stand-in for DPAPI; `BRANCHCHAT_E2E_KEYS=unavailable` simulates missing data
+  protection. The release workflow checks that release builds do not contain it.
+- The shared code had a syntax error in `src/shared/types/api.ts` (two lines joined); it was fixed first.
+- `package.json` is still version 1.0.0. Set 1.1.0 when release 1.1 is tagged (release process, step 1).
 
 ---
 
@@ -165,7 +187,7 @@ Decisions: D-03, D-05 (order rule), D-24 (data), D-26 (detached behavior), D-28.
 
 Tasks
 
-- Add `libsodium-wrappers-sumo` (or `libsodium-wrappers`; select by the APIs used). Load it in the main process.
+- Add `libsodium-wrappers` (standard build; the sumo build is not needed). Load it in the main process.
   Check that the packaged app loads it (no native build).
 - `src/main/crypto/keyStore.ts`: create Ed25519 and X25519 key pairs on first use, bound to the `participantId` in
   `settings.json`. Store the private keys encrypted with `safeStorage` in the user data folder, in a separate file.

@@ -233,8 +233,8 @@ describe('DocumentSession branches', () => {
                 selectionStart: 0,
                 selectionEnd: 6
             })
-            s.setThreadTitle(branchId, '  Приветствие ')
-            s.setThreadStatus(branchId, 'closed')
+            s.setThreadTitle(boris.participantId, branchId, '  Приветствие ')
+            s.setThreadStatus(boris.participantId, branchId, 'closed')
             await s.flush()
             const closed = (await readDocument(file)).contents.discussion.threads.find(
                 (t) => t.threadId === branchId
@@ -242,7 +242,7 @@ describe('DocumentSession branches', () => {
             expect(closed).toMatchObject({ status: 'closed', title: 'Приветствие' })
             expect(() => s.appendMessage(boris, branchId, text('ещё'))).toThrow(/closed/)
 
-            s.setThreadStatus(branchId, 'open')
+            s.setThreadStatus(boris.participantId, branchId, 'open')
             s.appendMessage(boris, branchId, text('ещё'))
             await s.flush()
             const reopened = (await readDocument(file)).contents.discussion.threads.find(
@@ -252,6 +252,7 @@ describe('DocumentSession branches', () => {
             expect(reopened.messages).toHaveLength(1)
             expect(() =>
                 s.setThreadStatus(
+                    anna.participantId,
                     mainThread(s.view(anna.participantId).discussion).threadId,
                     'closed'
                 )

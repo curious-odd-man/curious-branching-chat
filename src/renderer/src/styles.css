@@ -377,6 +377,16 @@ button:disabled {
     margin: 0 0 0.4rem;
     font-size: 1rem;
 }
+.dialog.settings .fingerprint-row {
+    margin: 0.3rem 0;
+}
+.dialog.settings .fingerprint {
+    font-family: Consolas, 'Cascadia Mono', monospace;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    user-select: all;
+}
 .dialog label.check {
     display: flex;
     align-items: center;

@@ -32,6 +32,7 @@ import type { RecentFilesStore } from '../local-state/recentFiles'
 import type { SettingsStore } from '../local-state/settings'
 import type { UpdateService } from '../updates/updateService'
 import type { AssociationService } from '../windows/associationService'
+import type { IdentityService } from '../crypto/identityService'
 
 /** Only the application's own page may call the main process: the packaged `file:` page, or the dev server. */
 function isAppPage(url: string): boolean {
@@ -55,7 +56,8 @@ export function registerIpcHandlers(
     settings: SettingsStore,
     recent: RecentFilesStore,
     association: AssociationService,
-    updates: UpdateService
+    updates: UpdateService,
+    identity: IdentityService
 ): void {
     function handle<P, R>(
         channel: string,
@@ -90,6 +92,12 @@ export function registerIpcHandlers(
     }
 
     handle(IPC.appInfo, noPayloadSchema, () => ({ name: app.getName(), version: app.getVersion() }))
+    handle(IPC.identityGet, noPayloadSchema, () => identity.view())
+    handle(IPC.identityCopyBundle, noPayloadSchema, async () => {
+        await identity.copyBundle()
+        return null
+    })
+    handle(IPC.identitySaveBundle, noPayloadSchema, (entry) => identity.saveBundle(entry?.win))
     handle(IPC.settingsGet, noPayloadSchema, () => settings.get())
     handle(IPC.settingsSetName, setNameSchema, (_e, p) => settings.setDisplayName(p.displayName))
 
@@ -194,11 +202,11 @@ export function registerIpcHandlers(
         return { threadId: session.createBranch(me, p) }
     })
     handle(IPC.branchSetStatus, setStatusSchema, (entry, p) => {
-        requireSession(entry).setThreadStatus(p.threadId, p.status)
+        requireSession(entry).setThreadStatus(settings.get().participantId, p.threadId, p.status)
         return null
     })
     handle(IPC.branchSetTitle, setTitleSchema, (entry, p) => {
-        requireSession(entry).setThreadTitle(p.threadId, p.title)
+        requireSession(entry).setThreadTitle(settings.get().participantId, p.threadId, p.title)
         return null
     })
     handle(IPC.documentRetrySave, noPayloadSchema, async (entry) => {

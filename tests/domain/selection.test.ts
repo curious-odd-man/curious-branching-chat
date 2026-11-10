@@ -115,7 +115,13 @@ describe('quoteFromSelection takes the quote from the stored message', () => {
 describe('closed branches take no new messages', () => {
     it('refuses to append until the branch is reopened', () => {
         const { contents, ctx, ids } = buildSample()
-        const closed = setThreadStatus(ctx, contents.discussion, ids.branch1, 'closed')
+        const closed = setThreadStatus(
+            ctx,
+            contents.discussion,
+            ids.branch1,
+            'closed',
+            anna.participantId
+        )
         expect(() =>
             appendMessage(ctx, closed, {
                 threadId: ids.branch1,
@@ -123,7 +129,7 @@ describe('closed branches take no new messages', () => {
                 content: simple('x')
             })
         ).toThrow(/closed/)
-        const reopened = setThreadStatus(ctx, closed, ids.branch1, 'open')
+        const reopened = setThreadStatus(ctx, closed, ids.branch1, 'open', anna.participantId)
         expect(() =>
             appendMessage(ctx, reopened, {
                 threadId: ids.branch1,
@@ -134,7 +140,13 @@ describe('closed branches take no new messages', () => {
     })
     it('a branch can still be created from a message of a closed branch', () => {
         const { contents, ctx, ids } = buildSample()
-        const closed = setThreadStatus(ctx, contents.discussion, ids.branch1, 'closed')
+        const closed = setThreadStatus(
+            ctx,
+            contents.discussion,
+            ids.branch1,
+            'closed',
+            anna.participantId
+        )
         expect(() =>
             createBranch(ctx, closed, {
                 sourceMessageId: ids.branch1Messages[0]!,
@@ -148,7 +160,13 @@ describe('closed branches take no new messages', () => {
 describe('side panel data', () => {
     it('groups branches by status; a closed parent never hides its open child (FR-064)', () => {
         const { contents, ctx, ids } = buildSample()
-        const d = setThreadStatus(ctx, contents.discussion, ids.branch1, 'closed') // branch2 (child) stays open
+        const d = setThreadStatus(
+            ctx,
+            contents.discussion,
+            ids.branch1,
+            'closed',
+            anna.participantId
+        ) // branch2 (child) stays open
 
         const active = groupedForest(d, 'open')
         expect(active.map((n) => n.thread.threadId)).toEqual([ids.branch2])

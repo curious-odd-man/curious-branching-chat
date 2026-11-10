@@ -149,3 +149,18 @@ Releases of a **public** repository.
 4. A real other program: `reg add "HKCU\Software\Classes\.branchchat" /ve /d "txtfile" /f` (txtfile has an open
    command): both the
    installer and Settings show the type as held by another program and disable the checkbox.
+
+## L. Release 1.1: file format version 2 and encryption key
+
+1. Open a discussion made by version 1.0. It shows the same messages in the same order. Send a message, close, open
+   again: the order is the same. The file is now version 2 (version 1.0 can no longer open it; that is expected).
+2. Файл > Настройки… > «Ключ шифрования»: a fingerprint of 8 groups of 4 characters shows. The file
+   `%APPDATA%\BranchChat\keys\identity.json` exists; it contains no private key in clear text (`protectedSecret` is
+   DPAPI data).
+3. Close and start BranchChat again: the same fingerprint.
+4. «Скопировать мой ключ», paste into Notepad: one line that starts with `BRANCHCHAT-KEY-1:`.
+5. «Сохранить мой ключ…»: the save dialog suggests `<имя>.bckey` in Documents; the file is JSON with the same
+   fingerprint.
+6. Install the update over 1.1 (silent update): the fingerprint stays the same.
+7. Log in as another Windows user (or copy `identity.json` to another user's profile): BranchChat cannot read the key
+   (DPAPI belongs to the account), creates a new one, and Settings says that the earlier key could not be read.

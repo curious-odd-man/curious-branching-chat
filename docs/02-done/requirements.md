@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements (revision 11)  
+**Status:** MVP requirements plus synchronized discussions (revision 12)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -47,18 +47,22 @@ checking and downloading application updates.
 
 ## 3. Out of scope for the MVP
 
-- Real-time synchronization.
 - Server infrastructure and online user accounts.
-- Concurrent editing of the same document.
-- Automatic merging or detection of independently edited copies (beyond the warning in FR-117).
+- Concurrent editing of the same document file.
+- Automatic merging or detection of independently edited copies (beyond the warning in FR-117). Synchronized
+  discussions (section 5.12) merge events, not files.
 - Automatic sending of messages through WhatsApp.
-- Cloud storage of discussions.
+- Use of a cloud provider's API (Google Drive API, OAuth). A synchronized discussion uses only a local folder that a
+  sync product keeps in sync (section 5.12).
 - Support for operating systems other than Windows.
 - Voice and video calls or audio messages.
-- Cryptographic identity verification.
 - Editing or deleting sent messages.
 - Save As / "save a copy" commands (users can copy the file in Explorer).
-- Live read receipts (read information is only as current as the file the user has).
+- Live read receipts for non-synchronized discussions (read information is only as current as the file the user
+  has).
+
+Revision 12 adds synchronized discussions (section 5.12). Real-time synchronization through a server, cryptographic
+identity verification beyond the fingerprint check, and cloud storage of the discussion file itself stay out of scope.
 
 The MVP and foreseeable product scope are Windows desktop only. Do not add cross-platform or mobile requirements unless
 the product scope changes.
@@ -211,7 +215,9 @@ If the computer is offline or the update check fails, BranchChat must continue t
 - **FR-009.** The application must show a useful error if a document is damaged or cannot be opened.
 - **FR-010.** The document format must include a schema version.
 - **FR-011.** The application must support document schema migrations where required.
-- **FR-012.** The application must avoid corrupting documents created by newer unsupported versions.
+- **FR-012.** The application must avoid corrupting documents created by newer unsupported versions. Files of schema
+  version 1 are migrated to version 2 when opened (FR-151). Compatibility with version 1.0 of the application is not
+  required (FR-151).
 - **FR-013.** Saving must use a safe atomic-write strategy (write a temporary file, then replace the original).
 - **FR-014.** The document should use a ZIP container with a manifest, discussion data, read state, and embedded
   assets.
@@ -250,9 +256,9 @@ Proposed internal structure:
 
 ### 5.3. Chat interface
 
-- **FR-026.** Messages must be displayed within a thread in the order in which they were added to the document. This
-  append order is authoritative; timestamps are displayed but are not used for ordering, because computers' clocks
-  can differ.
+- **FR-026.** Messages must be displayed within a thread in the order of their logical clock (FR-152). For a
+  discussion that is not synchronized this is the order in which they were added to the document. Timestamps are
+  displayed but are not used for ordering, because computers' clocks can differ.
 - **FR-027.** Each message must show its author.
 - **FR-028.** Each message must show its timestamp.
 - **FR-029.** The message composer must be located at the bottom of the active chat.
@@ -456,7 +462,8 @@ file when it is exchanged.
 - **FR-124.** A person who has never written to the file is not a known participant and is therefore not shown as
   having read or not read anything. Read information reflects the file as last saved by each participant; it is not
   live. Once a person has changed their read state, they become a known participant (FR-022), so
-  messages they have not read then show as not read by them.
+  messages they have not read then show as not read by them. In a synchronized discussion, all members of the roster
+  are known participants from the start (FR-163).
 - **FR-125.** Because read status is visible to the other participants, the application must tell the user this with a
   one-time notice before the first write of a read-state change on that computer (for example when the first message
   is marked as read or sent), and the user guide must explain it.
@@ -483,6 +490,101 @@ file when it is exchanged.
   that is forwarded to the running instance.
 - **FR-150.** A problem with the list (unreadable `recent.json`, failed write, jump list unavailable) never prevents a
   discussion from opening; the list simply starts empty or is not updated.
+
+### 5.12. Synchronized discussions
+
+Source: `docs/01-future/google-drive-desktop-encrypted-chat-design.md` (revision 6), decisions D-01 to D-38. The wire
+format is in `sync-protocol.md`. The release column says in which release the requirement is delivered.
+
+#### Format and identity (release 1.1)
+
+- **FR-151.** All discussion files use schema version 2. A version 1 file is migrated when it is opened and saved as
+  version 2 at the next write. Version 1.0 of the application refuses version 2 files; this is accepted because there
+  are no users of version 1.0 (D-03, D-28).
+- **FR-152.** Every message and every thread has a logical clock (Lamport clock). Messages of a thread are ordered by
+  (clock, author ID, message ID); `sequence` is the position after this order. A local change gets a clock one higher
+  than every clock in the discussion, so in a discussion that is not synchronized the visible order is the order of
+  writing (D-05).
+- **FR-153.** Branch status and branch title record the clock and the participant of their last change. The change
+  with the higher (clock, participant ID) wins (D-24).
+- **FR-154.** A discussion file can contain the roster of a synchronized discussion (ZIP entry `sync.json`). A file with
+  a roster that is not registered on this computer as a synchronized discussion opens as a normal discussion and keeps
+  the roster unchanged (detached copy, D-06, D-26).
+- **FR-155.** Each Windows user has one encryption identity: an Ed25519 signing key pair and an X25519 encryption key
+  pair, bound to the participant ID (D-14). The keys are created on first use.
+- **FR-156.** Private keys are stored only in the user's application data folder, encrypted with the Windows data
+  protection of the user account (Electron `safeStorage`). They are never written to a discussion file, the shared
+  folder, a log, or the window's page. If Windows data protection is not available, no keys are created and Settings
+  says why.
+- **FR-157.** Settings shows the key fingerprint (8 groups of 4 characters) and lets the person copy the public-key
+  bundle as text or save it as a `.bckey` file (D-21).
+
+#### Synchronized discussions (release 1.2)
+
+- **FR-158.** File > "Новое общее обсуждение…", "Присоединиться к обсуждению…", and "Сделать обсуждение общим…"
+  (for the open discussion) start wizards (D-20). An existing discussion can become synchronized; its full history
+  goes to the members in the invitations (D-02).
+- **FR-159.** A synchronized discussion uses a shared folder that a sync product (for example Google Drive for Desktop)
+  keeps in sync. The application uses only the local path. It has no Google API, no OAuth, and no server (D-18).
+- **FR-160.** The local `.branchchat` file of a synchronized discussion must be outside the shared folder. Only
+  encrypted files are written to the shared folder (D-01).
+- **FR-161.** Every change (message, branch, branch status, branch title, read state, display name) is sent as a signed
+  event, encrypted separately for each other member. Members apply the events to their local file, in any arrival
+  order, and get the same discussion (D-04, D-05).
+- **FR-162.** A member joins only by invitation. The person who invites checks the invitee's name and fingerprint and
+  can discard a candidate key. The invitee checks the inviter's fingerprint. A member is active as soon as the
+  invitation is imported (D-21, D-22, D-23).
+- **FR-163.** All roster members are known participants for the read indicator, also before their first write (D-25).
+- **FR-164.** A message for a branch that is closed on this computer is accepted; the branch stays closed (D-07).
+- **FR-165.** Images and large messages travel as parts of at most 4 MB. While parts are missing, the message is shown
+  at its place with a progress bar ("Загружается: N из M частей") and, where possible, its text with the placeholder
+  "Изображение загружается…" for each missing image. Until all parts arrive, the message cannot be marked read, cannot
+  be the source of a branch, and does not count as unread; its text can be selected and copied (D-10, D-30, D-31,
+  D-37).
+- **FR-166.** Settings has "Максимальный размер файла" for files in the shared folder: 5 MB to 1 000 MB, default 30
+  MB. Larger files are not read (D-11, D-30).
+- **FR-167.** "Отправить копию…" saves a copy of a synchronized discussion without the roster, for manual sharing. A
+  copy made in Explorer is a detached copy (FR-154). Neither copy sends events (D-26).
+- **FR-168.** If the registered file of a synchronized discussion is missing and a file with the same `documentId`
+  is opened, the application asks "Это ваше общее обсуждение, которое было перемещено?". "Да" makes it the registered
+  file (D-27).
+
+#### Delivery marks and sync health (release 1.3)
+
+- **FR-169.** The sender's own messages show one grey check when the message is written to the shared folder for all
+  recipients, and two grey checks when all recipients confirmed delivery. The message details show per member:
+  written, delivered, read. This state is stored only on the sender's computer (D-09).
+- **FR-170.** An unconfirmed copy is written again at start and every 30 minutes, but only if the recipient has shown
+  activity since the last write (D-29).
+- **FR-171.** Old files in the shared folder are cleaned up: receipts after 7 days, unconfirmed own files after 30
+  days (D-19, D-34).
+- **FR-172.** Sync problems (folder missing, no permission, invalid files, an update needed, key change requests) are
+  shown in a status line in the window and in the tray menu. They do not raise Windows notifications (D-35).
+
+#### Background sync (release 1.4)
+
+- **FR-173.** When the last window closes and a synchronized discussion exists, the application stays in the
+  notification area (tray) and keeps syncing. It shows a one-time notice the first time. "Выход" in the tray menu
+  closes it (D-16, D-33).
+- **FR-174.** "Запускать вместе с Windows" is turned on after the first synchronized discussion is created or joined;
+  the wizard says so. The person can turn it off (D-36).
+- **FR-175.** A new message from another member raises a Windows notification with the author, the discussion name, and
+  up to 100 characters of the text (images as "[изображение]"). A loading message raises it only when it is complete.
+  Settings: "Уведомления о новых сообщениях" (default on) and "Показывать текст в уведомлениях" (default on) (D-33,
+  D-38).
+
+#### Membership changes (release 1.5)
+
+- **FR-176.** Any member can invite a new person into an active discussion. The other members accept the new member
+  without a confirmation (D-13).
+- **FR-177.** A person who lost the keys can be re-invited with the old participant ID. Each other member must accept
+  the new keys after a fingerprint check; until then, events with the new keys wait and nobody encrypts to them. A
+  member who rejects keeps the old keys, and both sides see a warning (D-15, D-32).
+
+#### Not supported
+
+- **FR-178.** Members cannot leave a synchronized discussion and cannot remove another member. There is no
+  administrator after creation. There is no forward secrecy and no key backup (design, settled decisions).
 
 ## 6. Non-functional requirements
 
@@ -546,7 +648,8 @@ This is a conceptual model, not a final implementation schema.
 
 - `messageId` — unique message identifier.
 - `threadId` — thread containing the message.
-- `sequence` — position of the message in its thread (append order; authoritative for display order).
+- `sequence` — position of the message in its thread after ordering by clock (FR-152).
+- `clock` — logical clock of the message (schema version 2, FR-152).
 - `authorId` — participant who authored the message.
 - `authorDisplayName` — the author's display name at the time the message was written (so that renaming a participant
   affects new messages only, FR-024).
@@ -570,6 +673,8 @@ Sent messages are immutable.
 - `status` — Open or Closed.
 - `createdAt` — creation timestamp.
 - `createdBy` — participant who created the branch.
+- `clock` — logical clock of the branch; `statusSet` and `titleSet` — clock and participant of the last status and
+  title change (schema version 2, FR-152, FR-153).
 
 Because sent messages are immutable, the selection range stays valid for the life of the message. The source message ID
 and stored quote text remain the durable reference; the range is used to highlight the passage and may be ignored if it
@@ -583,6 +688,11 @@ what the window reports.
 - Messages authored by a participant are implicitly read by that participant and are not listed.
 - Because it is part of the file, other participants' applications show which messages a participant has read
   (FR-122). Participants are informed of this (FR-125).
+
+### Roster (synchronized discussions only, ZIP entry `sync.json`)
+
+- `protocolVersion` and `members[]`: participant ID, display name, public signing and encryption keys, fingerprint,
+  who added the member, and previous keys (FR-154). Never private keys.
 
 ### Local state (not stored in the discussion file)
 
@@ -704,7 +814,7 @@ The MVP is acceptable when:
 - More advanced search.
 - Improved branch filtering.
 - Additional document recovery tools.
-- Detection and merging of divergent copies.
+- Detection and merging of divergent copies (synchronized discussions, section 5.12, cover the shared case).
 - Further usability improvements.
 
 No mobile or non-Windows client is currently planned.
@@ -724,6 +834,12 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 12
+
+- Synchronized discussions (section 5.12, FR-151 to FR-178), from the design document revision 6. Schema version 2
+  for all files; order by logical clock (FR-026 changed); roster members are known participants (FR-124 changed);
+  version 1 files are migrated (FR-012 changed). Out-of-scope list updated.
 
 ## Changes in revision 11
 

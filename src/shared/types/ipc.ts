@@ -41,6 +41,9 @@ export const IPC = {
     documentChanged: 'document:changed',
     /** main -> renderer: only the save status changed (a save finished); sent instead of the whole discussion. */
     documentStatusChanged: 'document:status-changed',
+    identityGet: 'identity:get',
+    identityCopyBundle: 'identity:copy-bundle',
+    identitySaveBundle: 'identity:save-bundle',
     menuCommand: 'menu:command',
     /** main -> renderer: the recent files list changed. */
     recentChanged: 'recent:changed',
@@ -90,6 +93,18 @@ export type AssociationState = 'on' | 'off' | 'other-app' | 'unsupported'
 export interface AssociationInfo {
     state: AssociationState
 }
+
+/** The encryption key section of Settings (FR-155 to FR-157). Never contains private keys. */
+export type IdentityView =
+    | {
+          state: 'ready'
+          /** 8 groups of 4 characters */
+          fingerprint: string
+          /** An earlier key could not be used and was replaced by a new one. */
+          replaced: 'unreadable' | 'other-participant' | null
+      }
+    /** Windows data protection is not available, so no keys are created (FR-156). */
+    | { state: 'unavailable' }
 
 /** Everything a window needs to show its discussion. */
 export interface DocumentView {

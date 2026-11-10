@@ -2,6 +2,7 @@ import type { DiscussionData, Message, Thread, ThreadStatus } from '../validatio
 import type { Author, DomainContext } from './context'
 import { DomainError } from './errors'
 import { ensureParticipant, findMessage, findThread, touch } from './discussion'
+import { nextClock } from '../validation/order'
 
 export interface CreateBranchInput {
     sourceMessageId: string
@@ -39,6 +40,7 @@ export function createBranch(
         status: 'open',
         createdAt: ctx.now(),
         createdBy: input.author.participantId,
+        clock: nextClock(d),
         messages: []
     }
     const withAuthor = ensureParticipant(d, input.author)
@@ -61,29 +63,37 @@ function updateThread(
     })
 }
 
-/** Closing or reopening only affects this branch, never its parent or children (FR-059, FR-064). */
+/**
+ * Closing or reopening only affects this branch, never its parent or children (FR-059, FR-064).
+ * `by` is the participant who makes the change; the change is stamped with a new clock (FR-153).
+ */
 export function setThreadStatus(
     ctx: DomainContext,
     d: DiscussionData,
     threadId: string,
-    status: ThreadStatus
+    status: ThreadStatus,
+    by: string
 ): DiscussionData {
     const thread = findThread(d, threadId)
     if (thread.parentThreadId === undefined && status === 'closed')
         throw new DomainError('MAIN_THREAD_NOT_CLOSABLE', 'the main thread cannot be closed')
-    return updateThread(ctx, d, threadId, (t) => ({ ...t, status }))
+    const statusSet = { clock: nextClock(d), by }
+    return updateThread(ctx, d, threadId, (t) => ({ ...t, status, statusSet }))
 }
 
+/** Sets or removes (empty title) the optional branch title (FR-058), stamped with a new clock (FR-153). */
 export function setThreadTitle(
     ctx: DomainContext,
     d: DiscussionData,
     threadId: string,
-    title: string
+    title: string,
+    by: string
 ): DiscussionData {
     const trimmed = title.trim()
+    const titleSet = { clock: nextClock(d), by }
     return updateThread(ctx, d, threadId, (t) => {
         const { title: _old, ...rest } = t
-        return trimmed ? { ...rest, title: trimmed } : rest
+        return trimmed ? { ...rest, title: trimmed, titleSet } : { ...rest, titleSet }
     })
 }
 

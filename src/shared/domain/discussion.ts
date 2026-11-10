@@ -1,5 +1,6 @@
 import type { AssetInfo, DiscussionData, Message, Participant, Thread } from '../validation/schemas'
 import { collectImageAssetIds, type RichDoc } from '../validation/richText'
+import { nextClock } from '../validation/order'
 import type { Author, DomainContext } from './context'
 import { DomainError } from './errors'
 
@@ -21,6 +22,7 @@ export function createDiscussion(
                 status: 'open',
                 createdAt: now,
                 createdBy: input.author.participantId,
+                clock: 0,
                 messages: []
             }
         ],
@@ -131,6 +133,8 @@ export function appendMessage(
         messageId: ctx.newId(),
         threadId: thread.threadId,
         sequence: thread.messages.length,
+        // one higher than every clock in the discussion, so the new message is the last one (FR-152)
+        clock: nextClock(d),
         authorId: input.author.participantId,
         authorDisplayName: input.author.displayName,
         createdAt: ctx.now(),

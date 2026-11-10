@@ -47,7 +47,7 @@ docs/          requirements, ADR, implementation plan
 Lint enforces the boundaries: `shared/` may not import Electron, React or Node built-ins; the renderer may not import
 Electron, Node built-ins or `main/`.
 
-## Document format (schema version 1)
+## Document format (schema version 2)
 
 A `.branchchat` file is a ZIP:
 
@@ -55,11 +55,17 @@ A `.branchchat` file is a ZIP:
 manifest.json     format name, schemaVersion, documentId
 discussion.json   participants, threads (messages inside), asset index
 readstate.json    participantId -> IDs of messages that participant has read
+sync.json         only in a synchronized discussion: the member list with public keys (never private keys)
 assets/images/<sha256>.<png|jpg|gif|webp>
 ```
 
+Version 2 adds a logical clock to every message and branch, and the clock and author of the last branch status and
+title change (FR-151 to FR-153). Version 1 files are migrated when opened and saved as version 2 at the next change.
+The wire format of synchronized discussions is in [`docs/02-done/sync-protocol.md`](docs/02-done/sync-protocol.md).
+
 Messages hold structured rich text (a documented ProseMirror/TipTap JSON subset, never HTML) and are immutable. Display
-order is append order (`sequence`), not timestamps. Unknown optional fields and unknown ZIP entries are preserved on
+order is the logical clock order (`clock`, then author and message ID); `sequence` is the position after that order.
+Timestamps are only shown. Unknown optional fields and unknown ZIP entries are preserved on
 save. Files from a newer schema version are refused, never rewritten.
 
 ## Status

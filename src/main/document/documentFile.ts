@@ -5,9 +5,12 @@ import {
     CURRENT_SCHEMA_VERSION,
     FORMAT_NAME,
     checkDiscussionIntegrity,
+    checkRosterIntegrity,
     discussionSchema,
     manifestSchema,
+    normalizeOrder,
     readStateSchema,
+    syncInfoSchema,
     type DocumentContents,
     type AssetInfo
 } from '@shared/validation'
@@ -20,7 +23,9 @@ import { collect, openEntry, readEntryBuffer, scanZip } from './zip'
 export const MANIFEST_ENTRY = 'manifest.json'
 export const DISCUSSION_ENTRY = 'discussion.json'
 export const READSTATE_ENTRY = 'readstate.json'
-const MANAGED_ENTRIES = new Set([MANIFEST_ENTRY, DISCUSSION_ENTRY, READSTATE_ENTRY])
+/** Roster of a synchronized discussion (FR-154). Written only when present; never copied through. */
+export const SYNC_ENTRY = 'sync.json'
+const MANAGED_ENTRIES = new Set([MANIFEST_ENTRY, DISCUSSION_ENTRY, READSTATE_ENTRY, SYNC_ENTRY])
 
 export interface LoadedDocument {
     contents: DocumentContents
@@ -90,18 +95,27 @@ export async function readDocument(path: string): Promise<LoadedDocument> {
     const fromVersion = parseWith(manifestSchema, manifestObj, MANIFEST_ENTRY).schemaVersion
 
     const readStateBuf = buffers.get(READSTATE_ENTRY)
+    const syncBuf = buffers.get(SYNC_ENTRY)
     const migrated: RawDocument = migrateToCurrent(
         {
             manifest: manifestObj,
             discussion: parseJson(discussionBuf, DISCUSSION_ENTRY),
-            readState: readStateBuf ? parseJson(readStateBuf, READSTATE_ENTRY) : {}
+            readState: readStateBuf ? parseJson(readStateBuf, READSTATE_ENTRY) : {},
+            ...(syncBuf ? { sync: parseJson(syncBuf, SYNC_ENTRY) } : {})
         },
         fromVersion
     )
 
     const manifest = parseWith(manifestSchema, migrated.manifest, MANIFEST_ENTRY)
-    const discussion = parseWith(discussionSchema, migrated.discussion, DISCUSSION_ENTRY)
+    // FR-152: the order comes from the clocks; `sequence` is the position after sorting
+    const discussion = normalizeOrder(
+        parseWith(discussionSchema, migrated.discussion, DISCUSSION_ENTRY)
+    )
     const readState = parseWith(readStateSchema, migrated.readState, READSTATE_ENTRY)
+    const sync =
+        migrated.sync === undefined
+            ? undefined
+            : parseWith(syncInfoSchema, migrated.sync, SYNC_ENTRY)
 
     const problems = checkDiscussionIntegrity(discussion)
     if (problems.length > 0)
@@ -111,8 +125,20 @@ export async function readDocument(path: string): Promise<LoadedDocument> {
             problems.slice(0, 8)
         )
 
+    const rosterProblems = sync ? checkRosterIntegrity(sync) : []
+    if (rosterProblems.length > 0)
+        throw new DocumentError(
+            'INVALID_STRUCTURE',
+            'The member list of the discussion is inconsistent.',
+            rosterProblems.slice(0, 8)
+        )
+
     const missingAssetIds = discussion.assets.filter((a) => !seen.has(a.path)).map((a) => a.assetId)
-    return { contents: { manifest, discussion, readState }, entryNames, missingAssetIds }
+    return {
+        contents: { manifest, discussion, readState, ...(sync ? { sync } : {}) },
+        entryNames,
+        missingAssetIds
+    }
 }
 
 /** Reads and verifies an embedded image. Returns null if the entry is missing (use a placeholder). */
@@ -134,6 +160,16 @@ function validateBeforeWrite(contents: DocumentContents): void {
     parseWith(manifestSchema, contents.manifest, MANIFEST_ENTRY)
     parseWith(discussionSchema, contents.discussion, DISCUSSION_ENTRY)
     parseWith(readStateSchema, contents.readState, READSTATE_ENTRY)
+    if (contents.sync !== undefined) {
+        parseWith(syncInfoSchema, contents.sync, SYNC_ENTRY)
+        const rosterProblems = checkRosterIntegrity(contents.sync)
+        if (rosterProblems.length > 0)
+            throw new DocumentError(
+                'INVALID_STRUCTURE',
+                'Refusing to save an inconsistent member list.',
+                rosterProblems.slice(0, 8)
+            )
+    }
     const problems = checkDiscussionIntegrity(contents.discussion)
     if (problems.length > 0)
         throw new DocumentError(
@@ -188,6 +224,8 @@ export async function writeDocument(
         zip.addBuffer(json(contents.manifest), MANIFEST_ENTRY, { mtime, compress: true })
         zip.addBuffer(json(contents.discussion), DISCUSSION_ENTRY, { mtime, compress: true })
         zip.addBuffer(json(contents.readState), READSTATE_ENTRY, { mtime, compress: true })
+        if (contents.sync !== undefined)
+            zip.addBuffer(json(contents.sync), SYNC_ENTRY, { mtime, compress: true })
         for (const asset of newAssets)
             zip.addBuffer(asset.data, asset.path, { mtime, compress: false })
 

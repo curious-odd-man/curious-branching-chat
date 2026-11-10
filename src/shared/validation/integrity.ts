@@ -1,5 +1,6 @@
 import type { DiscussionData } from './schemas'
 import { collectImageAssetIds } from './richText'
+import { orderProblems } from './order'
 
 /** Cross-reference checks that a plain schema cannot express. Returns a list of problems (empty = valid). */
 export function checkDiscussionIntegrity(d: DiscussionData): string[] {
@@ -19,6 +20,13 @@ export function checkDiscussionIntegrity(d: DiscussionData): string[] {
 
     const mains = d.threads.filter((t) => t.parentThreadId === undefined)
     if (mains.length !== 1) problems.push(`expected exactly one main thread, found ${mains.length}`)
+    for (const t of d.threads) {
+        if (t.parentThreadId === undefined && t.clock !== 0)
+            problems.push(`main thread ${t.threadId} must have clock 0`)
+        if (t.parentThreadId !== undefined && t.clock === 0)
+            problems.push(`branch ${t.threadId} must have a clock above 0`)
+    }
+    problems.push(...orderProblems(d))
 
     const assetIds = new Set(d.assets.map((a) => a.assetId))
     const seenMessages = new Set<string>()
