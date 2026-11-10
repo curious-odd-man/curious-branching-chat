@@ -687,7 +687,7 @@ In revision 2, Q-07 also asked about this rule. The answer "(a)" covered only th
 Rule: when two members change the status (or the title) of the same branch at the same time, the change with the
 higher (Lamport clock, participant ID) wins on all computers.  
 Recommendation: yes.  
-**Answer:**
+**Answer:** yes
 
 **Q-25. Show roster members in the "who has read" indicator before their first write?**  
 In revision 2, Q-13 also asked about this. Today a person is a "known participant" only after the first write
@@ -695,7 +695,7 @@ In revision 2, Q-13 also asked about this. Today a person is a "known participan
 Options: (a) Yes; all roster members are known participants (a new member shows as "not read" at once). (b) No;
 keep FR-124.  
 Recommendation: (a).  
-**Answer:**
+**Answer:** (a)
 
 **Q-26. What happens to the sync data in a detached copy?**  
 A detached copy has schema version 2 and contains the roster and public keys. Old app versions cannot open it (D-03).  
@@ -705,7 +705,7 @@ it removes the sync data on the first write and saves it as version 1, so old ve
 Also: should a detached copy get a new `documentId`, so it is clearly a different discussion? Options: (i) Keep the
 same `documentId`; FR-117 warns if both are open. (ii) New `documentId` on the first write.  
 Recommendation: (c) and (i).  
-**Answer:**
+**Answer:** (c) and (i). But keep version 2 always-  there are no users at this point.
 
 **Q-27. The owner moves or renames the synchronized local file in Explorer.**  
 The sync registry then points to a missing path, and the moved file looks like a detached copy.  
@@ -714,14 +714,14 @@ Options: (a) When the app opens a file whose `documentId` is registered but whos
 must join again. (c) When the registered file is missing at start, the tray shows a warning and asks the person to
 find the file.  
 Recommendation: (a) and (c).  
-**Answer:**
+**Answer:** (a) and (c).
 
 **Q-28. Schema version of non-synchronized discussions.**  
 D-03 sets version 2 for synchronized discussions.  
 Options: (a) Non-synchronized discussions stay version 1, so people with old versions can still open manually shared
 files. Version 2 only when a discussion becomes synchronized. (b) The new app writes all files as version 2.  
 Recommendation: (a).  
-**Answer:**
+**Answer:** (b) - there are literally no users at this point
 
 **Q-29. Exact meaning of the retry rule.**  
 Your answer: retry at start and every 30 minutes, only if there was other activity from the same recipient in that
@@ -731,7 +731,7 @@ time. Please confirm the details:
 - "In that time" = since the last write of the unconfirmed copy. Do you agree?
 - Is there a maximum number of retries? Recommendation: no maximum, because each retry needs new activity.
 - Do image chunks use the same rule? Recommendation: yes.  
-  **Answer:**
+  **Answer:** yes to all
 
 **Q-30. Image size "no limit" versus the 30 MB file size limit.**  
 D-10 says no image size limit. D-11 says 30 MB per shared-folder file. An image larger than the limit must be split.  
@@ -740,14 +740,16 @@ chunk is one encrypted file, so each file stays below the limit. The SHA-256 in 
 signed invitation header) protects the full payload.  
 Also: the Settings value can be different on each computer, but the chunk size is fixed. What is the allowed range of
 the setting? Recommendation: 5 MB to 1 000 MB, default 30 MB.  
-**Answer:**
+**Answer:** allowed range with default ok. for large messages - split - yes. app should send first an event listing all parts. then parts go separately.
+i.e. if there is large message. `message.sent` eveni it sent containing list of files to be downloaded. Then once files (parts) are downloaded - message is processed.
+User sees in UI that message is being loaded (num of parts loaded, partial message, where applicable).
 
 **Q-31. Image placeholder while the image is on its way.**  
 The existing placeholder means "image missing or damaged".  
 Options: (a) Use a separate placeholder "Изображение загружается…" until all chunks arrive, then the image. If the
 SHA-256 does not match, use the existing "damaged" placeholder. (b) Use the existing placeholder for all cases.  
 Recommendation: (a).  
-**Answer:**
+**Answer:** (a)
 
 **Q-32. Rejoin with the old participant ID (D-15): details.**  
 a) The person's app must take the old participant ID. One identity is shared by all discussions (D-14). If the person
@@ -761,7 +763,7 @@ c) Until a member accepts, does that member encrypt messages to the new keys? Re
 d) What if a member rejects the new keys? Recommendation: that member keeps the old keys for that person, so the
 person gets no messages from that member; the UI shows a warning on both sides.  
 Recommendation: a) (i), b) (i), c) no, d) as above.  
-**Answer:**
+**Answer:** as recommended
 
 **Q-33. Tray details.**  
 a) Stay in the tray only when at least one synchronized discussion exists? Recommendation: yes.  
@@ -770,7 +772,7 @@ joined; the wizard says so.
 c) Windows notifications for new messages? Options: (i) No in v1. (ii) Yes, with a setting (default on). (iii) Yes,
 with a setting (default off).  
 d) The first time the window closes into the tray, show a one-time notice? Recommendation: yes.  
-**Answer:**
+**Answer:** (a), (d), (c) - with setting default on. 
 
 **Q-34. Cleanup of receipt files.**  
 A recipient writes a receipt into the sender's inbox. The recipient owns that file, so the sender may not be able to
@@ -779,13 +781,13 @@ Options: (a) The owner deletes its own receipt files after 7 days. (b) The sende
 "receipt acknowledged" event; then the owner deletes the receipt. (c) Receipt files are never deleted.  
 Same question for the sender's own `.bcmsg` files when no receipt ever comes (D-09 says no retry without activity).
 Recommendation: (a), and delete unconfirmed own files after 30 days.  
-**Answer:**
+**Answer:** as recommended
 
 **Q-35. Notification about blocked or failing sync.**  
 Examples: shared folder missing, permission removed, invalid files, key change requests.  
 Options: (a) Show a status line in the discussion window and in the tray menu. (b) (a) plus a Windows notification.  
 Recommendation: (a), plus a Windows notification for key change requests only.  
-**Answer:**
+**Answer:** a only
 
 ---
 
