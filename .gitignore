@@ -1,6 +1,5 @@
 HELP.md
 .gradle
-build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -53,4 +52,3 @@ dist
 .DS_Store
 test-results
 playwright-report
-.idea

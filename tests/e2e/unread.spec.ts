@@ -147,6 +147,7 @@ test('"Mark as read" works per message; the notice is shown once and can be decl
     await expect(total(win)).toHaveText('Непрочитано: 5')
     await expect.poll(() => windowTitle(t)).toContain('(5)')
     await expect.poll(() => savedReadState(file)).toEqual(['m1'])
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     const participants = (await readDiscussionFile(file)).discussion.participants.map(
         (p) => p.displayName
     )

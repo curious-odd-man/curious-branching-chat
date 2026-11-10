@@ -136,3 +136,16 @@ Releases of a **public** repository.
    gone; type -1 or 1.5, the old value comes back.
 7. Update from the previous version: the option is on without any action (FR-148), the list is empty until files are
    opened.
+
+## K. File association with leftovers (regression)
+
+1. In PowerShell set a leftover value: `reg add "HKCU\Software\Classes\.branchchat" /ve /d "Обсуждение BranchChat" /f`
+   (and make sure `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.branchchat\UserChoice` does not
+   exist).
+2. Run the installer: the "Файлы обсуждений" page offers the checkbox **enabled and ticked**. Finish: double-click opens
+   BranchChat;
+   `reg query "HKCU\Software\Classes\.branchchat" /ve` now shows `BranchChat.Discussion`.
+3. Repeat with Settings instead of the installer (silent install, then Файл > Настройки…): the checkbox is enabled.
+4. A real other program: `reg add "HKCU\Software\Classes\.branchchat" /ve /d "txtfile" /f` (txtfile has an open
+   command): both the
+   installer and Settings show the type as held by another program and disable the checkbox.

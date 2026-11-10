@@ -166,6 +166,7 @@ test('selections across bold, italic and link, list items, heading+paragraph and
     }
 
     // what was stored: the quote, and offsets that point at exactly that text in the stored message
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     const threads = await savedThreads(file)
     const branches = threads.filter((th) => th.parentThreadId)
     expect(branches).toHaveLength(4)
@@ -183,6 +184,7 @@ test('selections across bold, italic and link, list items, heading+paragraph and
     await expect(win.getByTestId('branch-badge-item')).toHaveCount(4)
 
     // replying marked the source message as read for this participant (FR-112)
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     expect((await readReadState(file))['p-local']).toEqual(['m1'])
 })
 
@@ -307,6 +309,7 @@ test('closing and reopening a branch; a closed parent never hides its open child
     await expect(win.getByTestId('closed-notice')).toBeVisible()
     await expect(composer(win)).toHaveCount(0)
     await expect(win.getByTestId('branch-toggle')).toHaveText('Открыть ветку снова')
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     expect((await savedThreads(file)).find((th) => th.threadId === 'a')!.status).toBe('closed')
 
     // the child is independent: it is still open and writable
@@ -321,6 +324,7 @@ test('closing and reopening a branch; a closed parent never hides its open child
     await expect(win.getByTestId('panel-closed')).toHaveCount(0)
     await expect(win.locator('[data-testid=panel-active] [data-thread-id=a]')).toHaveCount(1)
     await sendText(win, 'Снова можно писать')
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     const a = (await savedThreads(file)).find((th) => th.threadId === 'a')!
     expect(a.status).toBe('open')
     expect(a.messages).toHaveLength(3)
@@ -489,6 +493,7 @@ test('the participant name is asked for before the first branch is created (FR-0
     await expect(win.getByTestId('branch-header')).toBeVisible()
     expect(await win.getByTestId('branch-quote').textContent()).toBe('которого') // the selection was kept
 
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     const saved = await readDiscussionFile(file)
     expect(saved.discussion.participants.map((x) => x.displayName)).toContain('Вера') // added on first write
     const settings = JSON.parse(await fs.readFile(join(profile, 'settings.json'), 'utf8')) as {

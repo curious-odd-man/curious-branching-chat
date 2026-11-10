@@ -162,6 +162,7 @@ test('a pasted picture is shown in the draft, sent, saved in the file, and shown
     const sha = sha256(pic.data)
     expect(await assetEntries(file)).toEqual([`assets/images/${sha}.png`])
     expect((await readEntries(file)).get(`assets/images/${sha}.png`)!.equals(pic.data)).toBe(true)
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     const saved = (await readDiscussionFile(file)).discussion as unknown as {
         assets: { assetId: string; mediaType: string }[]
     }
@@ -246,6 +247,7 @@ test('a message with only a picture can be sent; an unsent picture counts as a d
     await expect(messageImages(win)).toHaveCount(1)
     await expect(composer(win).locator('img')).toHaveCount(0) // the draft is empty again
     await expect(win.getByTestId('status')).toHaveText('Сохранено')
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     const thread = await savedThread(file)
     expect(thread.messages).toHaveLength(1)
     expect(plainTextOf(thread.messages[0]!.content)).toBe('') // no text at all
@@ -264,6 +266,7 @@ test('the same picture is stored once, however often it is sent (deduplicated by
     await expect(messageImages(win)).toHaveCount(3)
     await expect(win.getByTestId('status')).toHaveText('Сохранено')
     expect(await assetEntries(file)).toEqual([`assets/images/${sha256(pic.data)}.png`])
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     expect((await savedThread(file)).messages).toHaveLength(2)
 })
 
@@ -460,6 +463,7 @@ test('pictures do not disturb text selection or branches: the quote around a pic
     expect(marked).toBe('до  после')
     await expect(win.getByTestId('inherited-message').getByTestId('message-image')).toHaveCount(1) // still shown
 
+    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
     const thread = (await readDiscussionFile(file)).discussion.threads.find(
         (th) => th.parentThreadId
     )!

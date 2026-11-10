@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
-import { cleanup, launchApp, type TestApp } from './helpers/app'
+import { promises as fs } from 'node:fs'
+import { join } from 'node:path'
+import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 
 const EXT_KEY = 'HKCU\\Software\\Classes\\.branchchat'
 const PROG_ID_KEY = 'HKCU\\Software\\Classes\\BranchChat.Discussion'
@@ -54,7 +56,11 @@ test('Settings shows the association, switches it on and off, and writes only HK
 })
 
 test('a file type held by another program is never taken over (FR-090)', async () => {
-    const seed = { ...ASKED, [EXT_KEY]: { '': 'Other.App' } }
+    const seed = {
+        ...ASKED,
+        [EXT_KEY]: { '': 'Other.App' },
+        [`HKCU\\Software\\Classes\\Other.App\\shell\\open\\command`]: { '': 'other.exe "%1"' }
+    }
     t = await launchApp({ env: { BRANCHCHAT_E2E_REGISTRY_SEED: JSON.stringify(seed) } })
     const win = await t.app.firstWindow()
     await openSettings(t, win)
@@ -117,7 +123,13 @@ test('first start: no registers nothing', async () => {
 })
 
 test('no question if the installer already asked, or another program holds the type', async () => {
-    for (const seed of [ASKED, { [EXT_KEY]: { '': 'Other.App' } }]) {
+    for (const seed of [
+        ASKED,
+        {
+            [EXT_KEY]: { '': 'Other.App' },
+            [`HKCU\\Software\\Classes\\Other.App\\shell\\open\\command`]: { '': 'other.exe "%1"' }
+        }
+    ]) {
         t = await launchApp({ env: { BRANCHCHAT_E2E_REGISTRY_SEED: JSON.stringify(seed) } })
         await t.app.firstWindow()
         await new Promise((r) => setTimeout(r, 800))
@@ -131,9 +143,15 @@ test('no question if the installer already asked, or another program holds the t
 })
 
 test('Settings lets the person change their name, which is remembered (FR-138)', async () => {
-    t = await launchApp()
+    // The name is in the profile before the window starts: the window reads the settings once at startup, so
+    // setting the name through the API while it runs would race with that first read.
+    const userData = await tempDir('bc-name-profile-')
+    await fs.writeFile(
+        join(userData, 'settings.json'),
+        JSON.stringify({ participantId: 'p-test', displayName: 'Анна', associationAsked: true })
+    )
+    t = await launchApp({ userData })
     const win = await t.app.firstWindow()
-    await win.evaluate(() => window.branchchat.setDisplayName('Анна'))
     await openSettings(t, win)
     await expect(win.getByTestId('settings-name')).toHaveValue('Анна')
     await win.getByTestId('settings-name').fill('Анна Иванова')
@@ -143,4 +161,16 @@ test('Settings lets the person change their name, which is remembered (FR-138)',
     expect(stored.ok && stored.data.displayName).toBe('Анна Иванова')
     await win.getByTestId('settings-close').click()
     await expect(win.getByTestId('settings-dialog')).toHaveCount(0)
+})
+
+test('a leftover plain-text value of the file type does not block the association', async () => {
+    const seed = { ...ASKED, [EXT_KEY]: { '': 'Обсуждение BranchChat' } }
+    t = await launchApp({ env: { BRANCHCHAT_E2E_REGISTRY_SEED: JSON.stringify(seed) } })
+    const win = await t.app.firstWindow()
+    await openSettings(t, win)
+    await expect(win.getByTestId('settings-association-state')).toHaveAttribute('data-state', 'off')
+    await expect(win.getByTestId('settings-association')).toBeEnabled()
+    await win.getByTestId('settings-association').check()
+    await expect(win.getByTestId('settings-association-state')).toHaveAttribute('data-state', 'on')
+    expect((await t.registry())[EXT_KEY]).toEqual({ '': 'BranchChat.Discussion' })
 })

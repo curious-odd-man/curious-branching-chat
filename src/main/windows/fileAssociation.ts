@@ -40,13 +40,27 @@ export class FileAssociation {
     ) {}
 
     async state(): Promise<Exclude<AssociationState, 'unsupported'>> {
-        const owner = await this.registry.get(EXT_KEY)
+        let owner = await this.registry.get(EXT_KEY)
+        // A value that names no registered program (for example the plain description text left behind by an earlier
+        // build) holds nothing: it is not another program, so it neither blocks nor counts as ours.
+        if (owner && owner !== PROG_ID && !(await this.isRegisteredProgram(owner))) owner = null
         // Windows remembers a program the person picked in "Open with" here; it overrides everything else.
         const choice = await this.registry.get(USER_CHOICE_KEY, 'ProgId')
         if (choice && choice !== PROG_ID) return 'other-app'
         if (owner === PROG_ID) return 'on'
         if (owner && owner.length > 0) return 'other-app'
         return 'off'
+    }
+
+    /** True if `progId` has an open command, for the current user or for the machine. */
+    private async isRegisteredProgram(progId: string): Promise<boolean> {
+        for (const root of ['HKCU', 'HKLM']) {
+            const command = await this.registry.get(
+                `${root}\\Software\\Classes\\${progId}\\shell\\open\\command`
+            )
+            if (command && command.length > 0) return true
+        }
+        return false
     }
 
     /** Registers the type for BranchChat. Throws AssociationBlockedError if another program holds it. */

@@ -76,7 +76,10 @@ describe('AssociationService.offerAtStartup (FR-136)', () => {
 
     it('does not ask if the type is already associated, with BranchChat or another program', async () => {
         for (const owner of ['BranchChat.Discussion', 'Other.App']) {
-            const { service, asked, settings } = await setup({ [EXT_KEY]: { '': owner } })
+            const { service, asked, settings } = await setup({
+                [EXT_KEY]: { '': owner },
+                [`HKCU\\Software\\Classes\\${owner}\\shell\\open\\command`]: { '': 'app.exe "%1"' }
+            })
             await service.offerAtStartup()
             expect(asked).toHaveLength(0)
             expect(settings.get().associationAsked).toBe(true)
@@ -100,7 +103,10 @@ describe('AssociationService.set (FR-089, FR-138)', () => {
     })
 
     it('is refused when another program holds the type', async () => {
-        const { service } = await setup({ [EXT_KEY]: { '': 'Other.App' } })
+        const { service } = await setup({
+            [EXT_KEY]: { '': 'Other.App' },
+            [`HKCU\\Software\\Classes\\Other.App\\shell\\open\\command`]: { '': 'other.exe "%1"' }
+        })
         await expect(service.set(true)).rejects.toMatchObject({ code: 'ASSOCIATION_BLOCKED' })
     })
 
