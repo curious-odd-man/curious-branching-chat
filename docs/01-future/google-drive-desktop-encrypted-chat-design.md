@@ -740,7 +740,7 @@ In revision 3 this was Q-33 b. The answer covered a, c, and d only.
 Options: (a) On after the first synchronized discussion is created or joined; the wizard says so. (b) Off; the
 person turns it on in Settings. (c) The wizard asks.  
 Recommendation: (a).  
-**Answer:**
+**Answer:** (a)
 
 **Q-37. What can a person do with a loading or partial message?**  
 D-30 says the message is processed only when all parts have arrived. Before that, the message exists only in the
@@ -748,13 +748,13 @@ local sync state.
 Proposal: until the message is processed, the person cannot mark it read, cannot create a branch from it, and it does
 not count as unread. Sending a message in the same thread does not mark it read. When it is processed, it becomes
 unread as usual. The text of a partial message can be selected and copied.  
-**Answer:**
+**Answer:** ok. make sure that message that is being loaded is show appropriately. Mb some progress bar or something...
 
 **Q-38. Content of a Windows notification for a new message.**  
 A notification can be seen by other people near the screen, and Windows can keep it in the notification center.  
 Options: (a) Author and discussion name only. (b) Author, discussion name, and the first characters of the text.  
 Recommendation: (a), with (b) as a setting later.  
-**Answer:**
+**Answer:**  b with a setting.
 
 ---
 
