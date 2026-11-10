@@ -527,7 +527,8 @@ format is in `sync-protocol.md`. The release column says in which release the re
 - **FR-159.** A synchronized discussion uses a shared folder that a sync product (for example Google Drive for Desktop)
   keeps in sync. The application uses only the local path. It has no Google API, no OAuth, and no server (D-18).
 - **FR-160.** The local `.branchchat` file of a synchronized discussion must be outside the shared folder. Only
-  encrypted files are written to the shared folder (D-01).
+  encrypted files are written to the shared folder (D-01). No temporary file is ever created there: each file is
+  written completely on the local file system and then moved into the shared folder (D-39).
 - **FR-161.** Every change (message, branch, branch status, branch title, read state, display name) is sent as a signed
   event, encrypted separately for each other member. Members apply the events to their local file, in any arrival
   order, and get the same discussion (D-04, D-05).

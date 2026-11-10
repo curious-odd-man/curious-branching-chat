@@ -23,6 +23,13 @@ export const MAX_ENVELOPE_BYTES = 4 * 1024 * 1024
 export const MAX_READ_IDS_PER_EVENT = 10_000
 export const MAX_RECEIPT_IDS = 1_000
 
+/**
+ * A file in the shared root must keep the same size and modification time this long before it is read, and a file
+ * that does not open is quarantined only after it stayed unchanged for the grace time (sync-protocol.md 9.6).
+ */
+export const STABLE_FILE_SECONDS = 2
+export const INCOMPLETE_FILE_GRACE_MINUTES = 10
+
 /** File size limit setting for shared-folder files, in MB (FR-166, D-11, D-30). */
 export const FILE_SIZE_LIMIT_MB = { min: 5, max: 1000, default: 30 } as const
 

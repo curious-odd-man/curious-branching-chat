@@ -61,15 +61,18 @@ The serializer refuses any value that breaks these rules. Test vectors: `tests/s
     <partId>.bcpart               part of a message or an invitation
     <receiptId>.bcrcpt            delivery receipt
     <invitationId>.bcinv          invitation header
-  .test/<random>.tmp              folder test
+  .test/<random>.bctest           folder test (deleted after the test)
 ```
 
 - `<participantId>`, `<eventId>`, `<partId>`, `<receiptId>`, `<invitationId>`: IDs as in Section 2.1. A name that
   does not match `^[0-9a-f-]{36}\.(bcmsg|bcpart|bcrcpt|bcinv|bckey)$` is ignored. Sync-product conflict copies (for
   example `<id> (1).bcmsg`) are also read, because the event ID comes from the authenticated content, not from the
   name.
-- Files are written under a temporary name `<name>.<random>.tmp` in the same folder, then renamed. Readers ignore
-  `.tmp` files.
+- Writers never create temporary files in the shared root. A file is written and closed completely in a local staging
+  folder (Section 3.4), then moved into the shared root under its final name.
+- Readers ignore every name that does not match the pattern above, also `.tmp` files and temporary files of the sync
+  product.
+- A file can be visible before it is complete (a move to another drive is a copy). Readers handle this by Section 9.6.
 - No file in the shared root contains plain text of the discussion, private keys, or local state.
 
 ### 3.1 Conversation marker
@@ -123,6 +126,22 @@ A synchronized discussion has a ZIP entry `sync.json` (document schema version 2
 
 - The initiator has `addedBy` = own `participantId`.
 - A file without `sync.json` is not synchronized. "Отправить копию…" removes the entry (D-26).
+
+### 3.4 Writing files (local staging)
+
+1. Encrypt the frame and write it to `<staging>/<final name>` on the local file system. `<staging>` is a folder in the
+   user's application data folder (`<userData>/sync/<conversationId>/staging/`), never inside the shared root.
+2. Flush the file to disk (`fsync`) and close it.
+3. Move it to `<shared root>/<folder>/<final name>`:
+    - If both paths are on the same volume, `rename`. The file appears complete in one step.
+    - Otherwise (`EXDEV`, for example `C:` and the Google Drive drive `G:`): copy to the final name, flush and close
+      the copy, then delete the staging file. During the copy a reader can see a partial file (Section 9.6).
+4. If the final name already exists (an earlier attempt of the same copy), replace it.
+5. At start, delete every file in `<staging>`. The outbox (local state) still lists those copies as not written, so
+   they are encrypted and written again with the same event ID.
+
+The same steps apply to `branchchat-sync.json`, `keys/<participantId>.bckey`, and the folder test file. These files
+are plain JSON, so step 1 writes them without encryption.
 
 ---
 
@@ -202,7 +221,7 @@ Receipts (`receipt.delivered`) have `senderSeq` = 0 and do not change the sender
 
 The recipient:
 
-1. Opens the sealed box with its own key pair. Failure → quarantine.
+1. Opens the sealed box with its own key pair. Failure → the file may be incomplete: Section 9.6.
 2. Checks magic, length, and that the envelope is valid canonical JSON that matches the schema.
 3. Finds the sender in the roster. Verifies the signature with the sender's current signing key, or with a key in
    `previousKeys` if the event was created before the replacement (Section 9.2).
@@ -342,6 +361,18 @@ pending queue. No receipt is sent for it until it is applied.
 
 - A file larger than the local setting (5 MB to 1 000 MB, default 30 MB) is not read.
 - Envelope JSON: at most 4 MiB. Part payload: at most 4 MiB.
+
+### 9.6 Incomplete files
+
+A file in the shared root can be incomplete: a cross-volume move (Section 3.4) or the sync product is still writing
+it.
+
+- Read a file only when its size and modification time have not changed for 2 seconds.
+- If the sealed box does not open or the frame is truncated, do not quarantine the file yet. Try again at the next
+  scan.
+- Quarantine the file only when it still fails and its size and modification time have not changed for 10 minutes
+  (`INCOMPLETE_FILE_GRACE_MINUTES`).
+- Never delete a file because it failed to open; only the inbox owner's normal cleanup deletes files (Section 9.4).
 
 ---
 

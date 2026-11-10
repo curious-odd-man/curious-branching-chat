@@ -1,6 +1,6 @@
 # BranchChat — Implementation Plan: Encrypted Synchronized Discussions
 
-**Inputs:** `google-drive-desktop-encrypted-chat-design.md` (revision 6), `requirements.md` (revision 10),
+**Inputs:** `google-drive-desktop-encrypted-chat-design.md` (revision 7), `requirements.md` (revision 10),
 `adr.md` (ADR-001), current code (version 1.0.0)  
 **Stack:** Electron + TypeScript, React, zod, Vitest, Playwright (unchanged); new: libsodium, Chokidar  
 **Platform:** Windows 10 and Windows 11
@@ -43,6 +43,9 @@ Implementation decisions made in phases 1 to 3:
   (for example DPAPI after a profile move) or belongs to another participant ID, it is kept as a backup and a new key
   is made; Settings says so.
 - libsodium: the standard `libsodium-wrappers` build. SHA-256 comes from Node `crypto`.
+- No temporary files in the shared folder (D-39, added after phase 3): files are written in a local staging folder and
+  moved in when complete. Protocol version stays 1. Constants `STABLE_FILE_SECONDS` and
+  `INCOMPLETE_FILE_GRACE_MINUTES` are in `src/shared/sync/schemas.ts`.
 - Test builds protect keys with a stand-in for DPAPI; `BRANCHCHAT_E2E_KEYS=unavailable` simulates missing data
   protection. The release workflow checks that release builds do not contain it.
 - The shared code had a syntax error in `src/shared/types/api.ts` (two lines joined); it was fixed first.
@@ -276,11 +279,13 @@ Decisions: settled decision 2, D-10, D-11, D-30.
 
 Tasks
 
-- `src/main/transport/folderTransport.ts`: `list`, `read`, `writeAtomic` (temp name in the same folder, then rename),
+- `src/main/transport/folderTransport.ts`: `list`, `read`, `publish` (write and close in the local staging folder, then
+  move into the shared root: `rename` on the same volume, copy and delete across volumes; D-39, protocol 3.4),
   `delete`, `watch` (Chokidar), all relative to the shared root. Refuse path traversal, links, and names outside the
   layout of design Section 13. Check the size limit before a read.
 - Shared-folder layout: create `branchchat-sync.json`, `keys/`, `inbox/<participantId>/` as needed.
-- Folder test: write, read, and delete a file in `.test/`.
+- Folder test: publish, read, and delete a `.bctest` file in `.test/`, through the staging folder.
+- Staging folder `<userData>/sync/<conversationId>/staging/`: emptied at start; the outbox writes those copies again.
 - Local sync state in JSON files with `writeFileAtomically`: outbox, processed events and parts, loading messages
   (part bytes in a local folder), pending queue, peer state, quarantine, own receipt files with write time (design
   Section 18).
@@ -304,7 +309,8 @@ Tasks
 - `src/main/sync/syncService.ts`: one worker per registered discussion while the app runs.
 - Outgoing flow (design Section 14, steps 1 to 7): outbox, per-recipient copies, `message.sent` before its parts,
   retry of failed writes with the same ID. No activity-based retry yet (release 1.3).
-- Incoming flow (design Section 15): stable-size wait, size limit, decrypt, verify, replay check by ID and sender
+- Incoming flow (design Section 15): stable size and time wait, size limit, decrypt (a file that does not open is
+  retried and quarantined only after 10 unchanged minutes, protocol 9.6), verify, replay check by ID and sender
   sequence, part check against the header, loading-message store, apply through the core when complete, pending
   queue, delivery receipts, delete.
 - Cleanup (D-19): the inbox owner deletes each processed file (events, parts, receipts, invitations). If a delete
@@ -318,8 +324,9 @@ Tasks
 Exit criteria
 
 - Tests with the fault-injecting transport: three members, random delays, duplicates, conflict copies, parts before
-  headers, failed deletes, and crashes at each step of design Section 15 give identical discussions and no duplicate
-  messages.
+  headers, failed deletes, partial files from a cross-volume copy, a crash during the move from the staging folder,
+  and crashes at each step of design Section 15 give identical discussions and no duplicate messages. No temporary
+  file ever appears in the shared root.
 
 Decisions: D-09 (receipts only), D-19, D-23, D-30.
 

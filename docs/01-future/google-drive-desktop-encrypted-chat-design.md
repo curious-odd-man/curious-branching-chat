@@ -1,6 +1,6 @@
 # Design: Encrypted Synchronized BranchChat Discussions over a Shared Folder
 
-**Status:** Ready for implementation, revision 6 (all questions Q-01 to Q-39 answered)  
+**Status:** Ready for implementation, revision 7 (all questions Q-01 to Q-39 answered)  
 **Platform:** Windows 10 and Windows 11 (same as the MVP)  
 **Transport model:** A shared local folder that a sync product (for example Google Drive for Desktop) keeps in sync  
 **Backend:** None  
@@ -12,7 +12,7 @@
 
 - Section 2 records facts from the current code. These facts are the baseline for this design.
 - Section 3 lists the conflicts between revision 1 and the code, and how each conflict is resolved.
-- Section 4 records all decisions (answers Q-01 to Q-39).
+- Section 4 records all decisions (answers Q-01 to Q-39, and D-39 added later).
 - Sections 5 to 21 give the design.
 - Section 22: there are no open questions.
 - Section 23 lists tests that must be done before the release with sync. Their results are assumed for now.
@@ -200,6 +200,7 @@ The application refuses to load or save a file that breaks these rules:
 | D-36 | Start with Windows          | On after the first synchronized discussion is created or joined. The wizard says so. The person can turn it off in Settings                                                                                                                                                                                                                                                     |
 | D-37 | Loading or partial message  | Until it is processed: it cannot be marked read, it cannot be a branch source, it does not count as unread, and sending in the same thread does not mark it read. Its text can be selected and copied. When processed, it becomes unread as usual. The UI shows the loading clearly, with a progress bar (Section 9.4)                                                          |
 | D-38 | Notification content        | Author, discussion name, and the first characters of the text. Setting "Показывать текст в уведомлениях" (default on) turns the text off. Text: up to 100 characters of plain text, cut at a word boundary, with "…"; images as "[изображение]". A loading message raises a notification only when it is processed                                                              |
+| D-39 | Temporary files             | Temporary files are never created in the shared folder. Each file is written and closed in a local staging folder, then moved into the shared folder under its final name. Across drives the move is a copy, so readers treat a file that does not open as possibly incomplete and quarantine it only after 10 unchanged minutes. Protocol version stays 1                      |
 
 Settled from revision 1, still valid:
 
@@ -557,13 +558,15 @@ the person to move it first.
     <partId>.bcpart               encrypted part of a large message or invitation
     <eventId>.bcrcpt              encrypted receipt for this member
     <invitationId>.bcinv          encrypted invitation header for this member
-  .test/<random>.tmp              folder test, deleted after the test
+  .test/<random>.bctest           folder test, deleted after the test
 ```
 
 - File names use random IDs only.
 - Never write plain text, private keys, local state, logs, or decrypted images into the shared folder.
 - A sender writes into the inbox of each other member.
-- Write a file under a temporary name in the same folder, then rename it. Ignore `.tmp` files.
+- Never create temporary files in the shared folder. Write and close each file completely in a local staging folder
+  (in the user data folder), then move it into the shared folder under its final name (D-39).
+- Ignore every file name that the protocol does not define, also `.tmp` files.
 
 Cleanup (D-19, D-34):
 
@@ -582,7 +585,8 @@ Cleanup (D-19, D-34):
    sequence numbers.
 3. The crypto module signs each event once and encrypts each event and part once per recipient.
 4. The sync service records each recipient copy in the local outbox.
-5. The transport writes each copy with temp-file-then-rename into the recipient's inbox. `message.sent` is written
+5. The transport writes each copy completely to the local staging folder, then moves it into the recipient's inbox
+   (D-39). `message.sent` is written
    before its parts.
 6. The sync service marks each recipient copy as "written". When all copies of a message (header and parts) are
    written, the message shows one grey check.
@@ -596,7 +600,9 @@ Cleanup (D-19, D-34):
 ## 15. Incoming flow
 
 1. A watcher event or a scan finds a file in the own inbox.
-2. Wait until the file size is stable. Refuse a file larger than the limit in Settings (D-11).
+2. Wait until the file size and time are stable. Refuse a file larger than the limit in Settings (D-11). A file that
+   does not open yet may be incomplete: try again later; quarantine it only after it stayed unchanged and failing for
+   10 minutes (D-39).
 3. Decrypt. Verify the signature. Check conversation ID, recipient ID, sender in roster (with an accepted key),
    event ID, and sequence. For a part: check that a known header lists it and that the SHA-256 matches.
 4. If the event or part was already processed, skip step 5.
@@ -659,6 +665,7 @@ JSON files with the existing atomic write, per synchronized discussion, in the u
 - Pending queue: events that wait for a dependency.
 - Peer state: last sender sequence, last activity time, key history, pending key-replacement requests.
 - Quarantine list and last scan time.
+- Staging folder for outgoing files before they are moved into the shared folder (D-39); emptied at start.
 
 Global sync registry: `documentId`, local file path, shared folder path.
 
@@ -780,6 +787,11 @@ The results below are **assumed**. Do the tests and correct the results before t
 - Never put private keys, plain text, or local state in the shared folder.
 - Never delete a file that another member wrote, except a processed file in the own inbox.
 - Never invent a cryptographic protocol. Use the libsodium constructions as documented.
+
+## Changes in revision 7
+
+- D-39: temporary files are written on the local file system and moved into the shared folder when complete
+  (Sections 13, 14, 15, 18). Protocol version unchanged.
 
 ## Changes in revision 6
 

@@ -23,6 +23,9 @@ The sync product is untrusted: it can read files, delay them, duplicate them, an
    recipient into the recipient's inbox folder in the shared folder. The local `.branchchat` file stays outside the
    shared folder and is the materialized view (D-01, D-04).
 2. **No provider code.** One transport: a local folder. No Google API, no OAuth, no server (D-18).
+   No temporary files in the shared folder: files are written and closed in a local staging folder and then moved in
+   under their final name (D-39). A sync product therefore never uploads half-written temporary files. Across drives
+   the move is a copy, so readers wait for a stable file and retry files that do not open yet.
 3. **Ordering by Lamport clock** for all files, with schema version 2. Last writer wins for branch status and title
    (D-05, D-24, D-28).
 4. **Cryptography: libsodium** (`libsodium-wrappers`, the standard WebAssembly build, no native build). Ed25519
