@@ -253,6 +253,9 @@ test('an existing link can be edited or removed (FR-071)', async () => {
     await win.getByTestId('link-url').fill('example.com')
     await win.getByTestId('link-apply').click()
     await expect(composer(win).locator('a')).toHaveCount(1)
+    // wait for the dialog to close and the editor to have the focus again before the next key press
+    await expect(win.getByTestId('link-url')).toHaveCount(0)
+    await expect(composer(win)).toBeFocused()
 
     // put the cursor inside the link: the dialog shows the current address and offers to remove it
     await win.keyboard.press('ArrowRight')
