@@ -1,6 +1,6 @@
 # Design: Encrypted Synchronized BranchChat Discussions over a Shared Folder
 
-**Status:** Draft, revision 3 (answers from revision 2 included; new open questions in Section 22)  
+**Status:** Draft, revision 4 (answers Q-01 to Q-35 included; new open questions in Section 22)  
 **Platform:** Windows 10 and Windows 11 (same as the MVP)  
 **Transport model:** A shared local folder that a sync product (for example Google Drive for Desktop) keeps in sync  
 **Backend:** None  
@@ -12,10 +12,11 @@
 
 - Section 2 records facts from the current code. These facts are the baseline for this design.
 - Section 3 lists the conflicts between revision 1 and the code, and how each conflict is resolved.
-- Section 4 records all decisions (answers Q-01 to Q-23).
-- Sections 5 to 20 give the design. Text marked **[Pending Q-nn]** depends on an open question.
+- Section 4 records all decisions (answers Q-01 to Q-35).
+- Sections 5 to 21 give the design. Text marked **[Pending Q-nn]** depends on an open question.
 - Section 22 contains the new open questions. Write your answer on the **Answer:** line.
-- Section 23 lists tasks that must be done before the implementation plan.
+- Section 23 lists tests that must be done before the release with sync. Their results are assumed for now.
+- The implementation plan is `google-drive-sync-implementation-plan.md`.
 
 ---
 
@@ -40,6 +41,9 @@ order. The sync product must not see message content.
 Manual file exchange continues to work. A copy of a synchronized discussion that a person sends manually is
 **detached**: it opens as a normal discussion and is not synchronized. The only way to join a synchronized discussion
 is an invitation.
+
+There are no users of the application yet. Backward compatibility with version 1.0 files and with version 1.0 of the
+application is not required.
 
 ---
 
@@ -130,57 +134,69 @@ The application refuses to load or save a file that breaks these rules:
 
 ## 3. Conflicts between revision 1 and the code, and their resolution
 
-| #   | Revision 1 assumption                              | Current code                             | Resolution                                                                    |
-|-----|----------------------------------------------------|------------------------------------------|-------------------------------------------------------------------------------|
-| C1  | The BranchChat file is shared                      | The file is plain text                   | File stays local (D-01)                                                       |
-| C2  | Only `message.sent` events                         | Six kinds of change                      | All changes are events (D-04)                                                 |
-| C3  | Order by event metadata                            | `sequence` = local index                 | Deterministic Lamport order (D-05)                                            |
-| C4  | Read when displayed; green checkmarks              | Read by explicit action; visible to all  | Existing model kept (D-08)                                                    |
-| C5  | Sent / delivered checkmarks                        | No such state                            | Added, local to sender (D-09)                                                 |
-| C6  | Image handling unchanged                           | Images are inside the ZIP                | Separate image events (D-10) **[Pending Q-30]**                               |
-| C7  | File-size limits                                   | NFR-015: no limits                       | 30 MB per file, configurable (D-11) **[Pending Q-30]**                        |
-| C8  | No display-name change                             | Settings allows it                       | Allowed, `profile.updated` (D-12)                                             |
-| C9  | Roster from invitations                            | Participant appears after first write    | Roster in the file (D-13) **[Pending Q-25]**                                  |
-| C10 | Per-conversation identity; returning user keeps ID | One `participantId` per Windows user     | One identity per user (D-14); re-invite with old ID (D-15) **[Pending Q-32]** |
-| C11 | Continuous processing                              | App quits with the last window           | Tray (D-16) **[Pending Q-33]**                                                |
-| C12 | Incoming changes update the conversation           | Session does not accept external changes | Section 10                                                                    |
-| C13 | Any participant may share the file                 | No merge                                 | Manual copy is detached (D-06) **[Pending Q-26, Q-27]**                       |
-| C14 | Remote messages always apply                       | Closed branch refuses messages           | Accept; branch stays closed (D-07)                                            |
-| C15 | SQLite                                             | JSON with atomic writes                  | JSON (D-17)                                                                   |
-| C16 | Preserve the format                                | Old versions refuse newer schema         | `schemaVersion` 2 (D-03) **[Pending Q-28]**                                   |
-| C17 | Recipient deletes inbox files                      | Files belong to the sender's account     | Cleanup rule (D-19) **[Pending Q-34]**                                        |
-| C18 | Several adapters, local-only mode                  | Manual exchange is the existing behavior | One folder transport (D-18)                                                   |
-| C19 | Menu "Chat → New chat"                             | Menu has File, Edit, Help                | File menu items (D-20)                                                        |
+| #   | Revision 1 assumption                              | Current code                             | Resolution                                                       |
+|-----|----------------------------------------------------|------------------------------------------|------------------------------------------------------------------|
+| C1  | The BranchChat file is shared                      | The file is plain text                   | File stays local (D-01)                                          |
+| C2  | Only `message.sent` events                         | Six kinds of change                      | All changes are events (D-04)                                    |
+| C3  | Order by event metadata                            | `sequence` = local index                 | Deterministic Lamport order (D-05)                               |
+| C4  | Read when displayed; green checkmarks              | Read by explicit action; visible to all  | Existing model kept (D-08)                                       |
+| C5  | Sent / delivered checkmarks                        | No such state                            | Added, local to sender (D-09)                                    |
+| C6  | Image handling unchanged                           | Images are inside the ZIP                | Images travel as separate parts (D-10, D-30)                     |
+| C7  | File-size limits                                   | NFR-015: no limits                       | 30 MB per file, configurable; large messages split (D-11, D-30)  |
+| C8  | No display-name change                             | Settings allows it                       | Allowed, `profile.updated` (D-12)                                |
+| C9  | Roster from invitations                            | Participant appears after first write    | Roster members are known participants (D-13, D-25)               |
+| C10 | Per-conversation identity; returning user keeps ID | One `participantId` per Windows user     | One identity per user (D-14); re-invite with old ID (D-15, D-32) |
+| C11 | Continuous processing                              | App quits with the last window           | Tray (D-16, D-33)                                                |
+| C12 | Incoming changes update the conversation           | Session does not accept external changes | Section 10                                                       |
+| C13 | Any participant may share the file                 | No merge                                 | Manual copy is detached (D-06, D-26, D-27)                       |
+| C14 | Remote messages always apply                       | Closed branch refuses messages           | Accept; branch stays closed (D-07)                               |
+| C15 | SQLite                                             | JSON with atomic writes                  | JSON (D-17)                                                      |
+| C16 | Preserve the format                                | Old versions refuse newer schema         | All files use `schemaVersion` 2 (D-03, D-28)                     |
+| C17 | Recipient deletes inbox files                      | Files belong to the sender's account     | Cleanup rule (D-19, D-34)                                        |
+| C18 | Several adapters, local-only mode                  | Manual exchange is the existing behavior | One folder transport (D-18)                                      |
+| C19 | Menu "Chat → New chat"                             | Menu has File, Edit, Help                | File menu items (D-20)                                           |
 
 ---
 
 ## 4. Decisions
 
-| ID   | Topic                       | Decision                                                                                                                                                                                |
-|------|-----------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| D-01 | Local file location         | The `.branchchat` file is local only, outside the shared folder. The app refuses a path inside the shared folder                                                                        |
-| D-02 | Convert existing discussion | Yes. The wizard converts it. The full history goes to members inside the invitations                                                                                                    |
-| D-03 | Format                      | `schemaVersion` 2 for synchronized discussions. Old versions refuse the file                                                                                                            |
-| D-04 | Events                      | All kinds of change are synchronized                                                                                                                                                    |
-| D-05 | Message order               | Deterministic order by Lamport clock. Copies converge                                                                                                                                   |
-| D-06 | Manual file sharing         | Still possible. A manually shared copy opens as before, with no merge. It is detached (not synchronized). Joining is only by invitation                                                 |
-| D-07 | Message for a closed branch | Accept the message. The branch stays closed                                                                                                                                             |
-| D-08 | Read status                 | Keep the existing read model. Send read-state changes to all members. The existing three-state indicator is the read mark                                                               |
-| D-09 | Sent / delivered marks      | One grey check (written), two grey checks (delivered by all), stored on the sender's computer only. Retry rule: Section 14 **[Pending Q-29]**                                           |
-| D-10 | Images                      | An image is sent as a separate event. `message.sent` describes the coming image. The recipient sees a placeholder until the image arrives. No image size limit                          |
-| D-11 | File size limit             | 30 MB per shared-folder file. Configurable in Settings                                                                                                                                  |
-| D-12 | Display-name change         | Allowed. Send `profile.updated`. Old messages keep the old name                                                                                                                         |
-| D-13 | Adding members              | Any member can invite. Others accept the new member automatically, because a valid member signed `member.added`                                                                         |
-| D-14 | Identity                    | One key pair per Windows user, bound to the existing `participantId`                                                                                                                    |
-| D-15 | Rejoin after key loss       | A member re-invites the person with the old participant ID. Other members accept the new keys after a fingerprint check                                                                 |
-| D-16 | Background sync             | The app stays in the tray after the last window closes. Option to start with Windows                                                                                                    |
-| D-17 | Dependencies                | Local state in JSON files with the existing atomic write. Chokidar for watching                                                                                                         |
-| D-18 | Transports                  | One transport: "shared folder". Google Drive for Desktop is covered by wizard text and tests only. No local-only sync mode                                                              |
-| D-19 | Drive setup and cleanup     | Support personal My Drive folders and shared drives. If a recipient cannot delete a file, it records the file as processed; the sender deletes its own files after the delivery receipt |
-| D-20 | Menu                        | File > "Новое общее обсуждение…", File > "Присоединиться к обсуждению…", File > "Сделать обсуждение общим…" (open discussion)                                                           |
-| D-21 | Public-key bundle exchange  | Both: through the shared folder (`keys/`) and as a file or text that users copy                                                                                                         |
-| D-22 | Activation                  | Active for each member when that member has imported the invitation. Others can already write                                                                                           |
-| D-23 | Messages before join        | The invitee is in the roster from the invitation. Senders write copies to the invitee's inbox. The invitee processes them after the import                                              |
+| ID   | Topic                       | Decision                                                                                                                                                                                                                                                                                                                                                                        |
+|------|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| D-01 | Local file location         | The `.branchchat` file is local only, outside the shared folder. The app refuses a path inside the shared folder                                                                                                                                                                                                                                                                |
+| D-02 | Convert existing discussion | Yes. The wizard converts it. The full history goes to members inside the invitations                                                                                                                                                                                                                                                                                            |
+| D-03 | Format                      | `schemaVersion` 2. Version 1.0 of the app refuses the file                                                                                                                                                                                                                                                                                                                      |
+| D-04 | Events                      | All kinds of change are synchronized                                                                                                                                                                                                                                                                                                                                            |
+| D-05 | Message order               | Deterministic order by Lamport clock. Copies converge                                                                                                                                                                                                                                                                                                                           |
+| D-06 | Manual file sharing         | Still possible. A manually shared copy opens as before, with no merge. It is detached (not synchronized). Joining is only by invitation                                                                                                                                                                                                                                         |
+| D-07 | Message for a closed branch | Accept the message. The branch stays closed                                                                                                                                                                                                                                                                                                                                     |
+| D-08 | Read status                 | Keep the existing read model. Send read-state changes to all members. The existing three-state indicator is the read mark                                                                                                                                                                                                                                                       |
+| D-09 | Sent / delivered marks      | One grey check (written), two grey checks (delivered by all), stored on the sender's computer only                                                                                                                                                                                                                                                                              |
+| D-10 | Images                      | Images travel separately from the message header. The recipient sees a placeholder until the image arrives. No image size limit                                                                                                                                                                                                                                                 |
+| D-11 | File size limit             | 30 MB per shared-folder file. Configurable in Settings                                                                                                                                                                                                                                                                                                                          |
+| D-12 | Display-name change         | Allowed. Send `profile.updated`. Old messages keep the old name                                                                                                                                                                                                                                                                                                                 |
+| D-13 | Adding members              | Any member can invite. Others accept the new member automatically, because a valid member signed `member.added`                                                                                                                                                                                                                                                                 |
+| D-14 | Identity                    | One key pair per Windows user, bound to the existing `participantId`                                                                                                                                                                                                                                                                                                            |
+| D-15 | Rejoin after key loss       | A member re-invites the person with the old participant ID. Other members accept the new keys after a fingerprint check                                                                                                                                                                                                                                                         |
+| D-16 | Background sync             | The app stays in the tray after the last window closes. Option to start with Windows                                                                                                                                                                                                                                                                                            |
+| D-17 | Dependencies                | Local state in JSON files with the existing atomic write. Chokidar for watching                                                                                                                                                                                                                                                                                                 |
+| D-18 | Transports                  | One transport: "shared folder". Google Drive for Desktop is covered by wizard text and tests only. No local-only sync mode                                                                                                                                                                                                                                                      |
+| D-19 | Drive setup and cleanup     | Support personal My Drive folders and shared drives. The owner of an inbox deletes processed files in it. If a delete fails, it records the file as processed; the sender deletes its own files after the delivery receipt                                                                                                                                                      |
+| D-20 | Menu                        | File > "Новое общее обсуждение…", File > "Присоединиться к обсуждению…", File > "Сделать обсуждение общим…" (open discussion)                                                                                                                                                                                                                                                   |
+| D-21 | Public-key bundle exchange  | Both: through the shared folder (`keys/`) and as a file or text that users copy                                                                                                                                                                                                                                                                                                 |
+| D-22 | Activation                  | Active for each member when that member has imported the invitation. Others can already write                                                                                                                                                                                                                                                                                   |
+| D-23 | Messages before join        | The invitee is in the roster from the invitation. Senders write copies to the invitee's inbox. The invitee processes them after the import                                                                                                                                                                                                                                      |
+| D-24 | Branch status and title     | Last writer wins by (Lamport clock, participant ID)                                                                                                                                                                                                                                                                                                                             |
+| D-25 | Known participants          | All roster members are known participants for the read indicator, also before their first write                                                                                                                                                                                                                                                                                 |
+| D-26 | Detached copy               | Keeps the same `documentId` (FR-117 warns if both are open). A copy made in Explorer keeps its sync data, which the app ignores. Action "Отправить копию…" saves a clean copy without sync data. Both stay version 2                                                                                                                                                            |
+| D-27 | Moved or renamed file       | When a file with a registered `documentId` opens and the registered path is missing, the app asks "Это ваше общее обсуждение, которое было перемещено?". When the registered file is missing at start, the tray shows a warning and asks the person to find the file                                                                                                            |
+| D-28 | Schema version of all files | The new app writes all files as version 2, also non-synchronized discussions. Version 1 files are migrated when opened                                                                                                                                                                                                                                                          |
+| D-29 | Retry rule                  | At start and every 30 minutes, write an unconfirmed copy again only if a valid event or receipt from that recipient arrived since the last write of the copy. No maximum number of retries. Parts use the same rule                                                                                                                                                             |
+| D-30 | Large messages              | A message that does not fit in one file is split into parts. `message.sent` comes first and lists all parts. The parts follow as separate files. The message is processed when all parts have arrived. The UI shows the message as loading: number of parts loaded, and the partial message where possible. Part size 4 MB. Size limit setting: 5 MB to 1 000 MB, default 30 MB |
+| D-31 | Image placeholder           | Separate placeholder "Изображение загружается…" until the image arrives. The existing placeholder for missing or damaged data stays                                                                                                                                                                                                                                             |
+| D-32 | Rejoin details              | The re-invitation sets the old ID as the global `participantId`. Events signed with keys that a member has not accepted wait in that member's pending queue. Nobody encrypts to unaccepted keys. A member who rejects the keys keeps the old keys; both sides see a warning                                                                                                     |
+| D-33 | Tray details                | Stay in the tray only when at least one synchronized discussion exists. One-time notice on the first close to the tray. Windows notifications for new messages, with a setting (default on)                                                                                                                                                                                     |
+| D-34 | Receipt file cleanup        | A receipt file that the inbox owner did not delete is deleted by its writer after 7 days. Own sent files that never got a receipt are deleted after 30 days                                                                                                                                                                                                                     |
+| D-35 | Sync problem notices        | Status line in the discussion window and in the tray menu only. No Windows notification for sync problems or key change requests                                                                                                                                                                                                                                                |
 
 Settled from revision 1, still valid:
 
@@ -208,13 +224,14 @@ Settled from revision 1, still valid:
 - At-least-once delivery, idempotent processing, recovery from missed events, duplicates, and sync delays.
 - All existing features work in a synchronized discussion: branches, nested branches, branch status and title, rich
   text, images, read state, "who has read" indicator, unread counts.
-- Discussions that are not synchronized work as today.
+- Non-synchronized discussions keep their behavior (in the version 2 format).
 - Manual exchange of a copy still works (detached copy).
 - Wizards to create, convert, and join a synchronized discussion.
 - Sync continues in the background (tray).
 
 ### Non-goals and limitations
 
+- No compatibility with version 1.0 of the application (there are no users yet).
 - No anonymity from the sync provider. The provider can see accounts, folder membership, file sizes, times, and
   traffic volume.
 - No guarantee of immediate delivery. No way to know that a local file has reached the cloud.
@@ -235,14 +252,14 @@ Settled from revision 1, still valid:
 | Existing domain             | `src/shared/domain/`                      | Reused. Local changes still go through the existing functions                       |
 | Document file               | `src/main/document/`                      | Schema version 2 and migration from 1 to 2 (Section 7)                              |
 | Document session            | `src/main/application/documentSession.ts` | Extended: emits an event for each local change; accepts remote events               |
-| App lifecycle and tray      | `src/main/application/`                   | Tray icon; no quit when the last window closes; start with Windows                  |
-| Sync service                | `src/main/sync/`                          | Outbox, inbox processing, receipts, chunks, scans, retries                          |
+| App lifecycle and tray      | `src/main/application/`                   | Tray icon; no quit when the last window closes; start with Windows; notifications   |
+| Sync service                | `src/main/sync/`                          | Outbox, inbox processing, receipts, parts, scans, retries, cleanup                  |
 | Cryptography                | `src/main/crypto/`                        | libsodium. Runs in the main process or a utility process. Never in the renderer     |
 | Key store                   | `src/main/crypto/keyStore.ts`             | Private keys protected with Electron `safeStorage` (DPAPI on Windows)               |
 | Transport                   | `src/main/transport/`                     | `FolderTransport`: the only transport in v1                                         |
 | Local sync state            | User data folder, per discussion          | JSON files, atomic write. Never in the shared folder                                |
 | Sync registry               | User data folder                          | List of synchronized discussions: `documentId`, local file path, shared folder path |
-| Settings                    | `src/main/local-state/settings.ts`        | New: file size limit, start with Windows, tray options                              |
+| Settings                    | `src/main/local-state/settings.ts`        | New: file size limit, start with Windows, notifications                             |
 | Wizard UI                   | `src/renderer/components/sync/`           | Russian strings in `src/shared/i18n/ru.ts`                                          |
 
 Data flow for a local change:
@@ -251,9 +268,9 @@ Data flow for a local change:
 Renderer action (send, branch, status, title, mark read)
   -> IPC (validated)
   -> DocumentSession: existing domain function changes DocumentContents; file is saved as today
-  -> Sync service: builds the event (and image events) from the change
+  -> Sync service: builds the event (and its parts) from the change
   -> Crypto: sign once; encrypt once per other member
-  -> FolderTransport: write one file (or chunk files) into each recipient's inbox
+  -> FolderTransport: write the event file, then the part files, into each recipient's inbox
 ```
 
 Data flow for an incoming event:
@@ -262,8 +279,9 @@ Data flow for an incoming event:
 FolderTransport (watch + scan) -> Sync service: read, size check
   -> Crypto: decrypt, verify signature
   -> Replay and membership checks
-  -> src/shared/sync apply rules -> DocumentSession (open window) or document file (no window)
-  -> Delivery receipt to the sender -> delete or record own inbox file
+  -> Wait for all parts (if any) -> src/shared/sync apply rules
+  -> DocumentSession (open window) or document file (no window)
+  -> Delivery receipt to the sender -> delete own inbox file
 ```
 
 ---
@@ -278,32 +296,40 @@ FolderTransport (watch + scan) -> Sync service: read, size check
 - The sync service writes only to the file path in the sync registry. Any other file with the same `documentId` is a
   detached copy (Section 7.4).
 
-### 7.2 Schema version 2 (D-03) **[Pending Q-28]**
+### 7.2 Schema version 2 (D-03, D-28)
 
-New data for a synchronized discussion:
-
-- `sync` object (in `discussion.json` or a new ZIP entry `sync.json`; select during the plan):
+- All files that the new app writes are version 2. A version 1 file is migrated when it is opened.
+- Version 2 adds, for all files:
+    - Per message: `clock` (Lamport) used for the order (Section 9.3).
+    - Per thread: `clock` and participant ID of the last status change and of the last title change (D-24).
+- Version 2 adds, for synchronized discussions only, a `sync` object (in `discussion.json` or a new ZIP entry
+  `sync.json`; select during the plan):
     - `protocolVersion`.
     - `members[]`: `participantId`, display name, Ed25519 public signing key, X25519 public encryption key,
       fingerprint, `addedBy`, key history (Section 8.3).
-- Per message: `clock` (Lamport) used for the order (Section 9.3).
-- Per thread: `clock` of the last status change and of the last title change, with the participant ID (for
-  "last writer wins", **[Pending Q-24]**).
+- A non-synchronized discussion has no `sync` object. Its clocks follow the local order, so its behavior does not
+  change.
 
 Private keys, local paths, and local sync state are never stored in the file.
 
-### 7.3 Conversion of an existing discussion (D-02)
+### 7.3 Migration and conversion (D-02, D-28)
 
 - Migration 1 → 2 gives each existing message a clock that keeps the current order (for example, the clock is
   derived from the existing `sequence` and thread order).
+- Conversion to a synchronized discussion adds the `sync` object.
 - Existing participants who are not members stay in `participants[]`. They are authors of old messages only.
 - The invitation carries the full history, including images (Section 12.2).
 
-### 7.4 Detached copies (D-06) **[Pending Q-26, Q-27]**
+### 7.4 Detached copies (D-06, D-26, D-27)
 
-- A person can copy the local file in Explorer and send it through WhatsApp, as today.
-- When the app opens a file, and the sync registry on this computer does not map its `documentId` to that path, the
-  file is a detached copy.
+- A person can copy the local file in Explorer and send it through WhatsApp, as today. That copy keeps its `sync`
+  object.
+- Action "Отправить копию…" saves a copy without the `sync` object. The copy is version 2 and keeps the same
+  `documentId`.
+- When the app opens a file with a `sync` object, and the sync registry on this computer does not map its
+  `documentId` to that path, the file is a detached copy. The app ignores the `sync` object.
+- Exception (D-27): if the `documentId` is registered and the registered path is missing, the app asks
+  "Это ваше общее обсуждение, которое было перемещено?". "Да" updates the registry. "Нет" opens the file as detached.
 - A detached copy behaves as a normal discussion: no events, no sync, no merge.
 - The existing FR-117 warning applies when both copies are open on the same computer.
 
@@ -319,27 +345,33 @@ Private keys, local paths, and local sync state are never stored in the file.
 - Private keys are stored with `safeStorage` in the user data folder. They are never logged, never sent to the
   renderer, never written to a discussion file or the shared folder.
 
-### 8.2 Membership (D-13, D-22, D-23)
+### 8.2 Membership (D-13, D-22, D-23, D-25)
 
 - The initiator creates the synchronized discussion and invites the first members.
 - Any member can invite a new member. The inviting member sends a signed `member.added` event to all members. Other
   members accept the new member without a confirmation.
 - The invitee is a member from the moment of the invitation. Senders write copies to the invitee's inbox. The invitee
   processes them after the import.
+- All roster members are known participants for the read indicator, also before their first write. A new member shows
+  as "not read" at once.
 - Nobody can leave. Nobody can remove another participant.
 - Folder access alone does not make a person a member.
-- Roster members are "known participants" for the read indicator **[Pending Q-25]**.
 
-### 8.3 Rejoin after key loss (D-15) **[Pending Q-32]**
+### 8.3 Rejoin after key loss (D-15, D-32)
 
 1. The person loses the private keys (and possibly `settings.json`). The app creates a new key pair.
 2. The person publishes the new public-key bundle.
 3. A member re-invites the person and states that the bundle replaces the keys of the old participant ID. The
    member sends a signed `member.keys.replaced` event (old participant ID, new public keys, new fingerprint).
-4. Each other member's app shows a request: "The keys of <name> changed. Check the fingerprint with this person."
-   The member accepts or rejects.
-5. The invitation carries the full current discussion. The person's app uses the old participant ID.
-6. Old events encrypted to the old key cannot be decrypted with the new key. The invitation already contains the
+4. Each other member's app shows a request in the status line: "Ключи <name> изменились. Сверьте отпечаток с этим
+   человеком." The member accepts or rejects.
+5. The re-invitation sets the old ID as the global `participantId` on the person's computer. The invitation carries
+   the full current discussion.
+6. Until a member accepts, events signed with the new keys wait in that member's pending queue, and that member does
+   not encrypt to the new keys.
+7. A member who rejects keeps the old keys for that person. The person gets no messages from that member. Both sides
+   see a warning.
+8. Old events encrypted to the old key cannot be decrypted with the new key. The invitation already contains the
    history in decrypted form, so the person sees all old messages.
 
 Each member keeps the key history of each participant. Old signatures stay valid with the old keys.
@@ -350,19 +382,19 @@ Each member keeps the key history of each participant. Old signatures stay valid
 
 ### 9.1 Event types (D-04)
 
-| Event                  | Payload                                                                                                                  |
-|------------------------|--------------------------------------------------------------------------------------------------------------------------|
-| `message.sent`         | Full message (without `sequence`), with `clock`. For each image: `assetId` (SHA-256), media type, size, number of chunks |
-| `image.data`           | `assetId`, chunk index, chunk bytes (Section 9.4)                                                                        |
-| `branch.created`       | Full thread without messages                                                                                             |
-| `branch.status.set`    | `threadId`, `status`                                                                                                     |
-| `branch.title.set`     | `threadId`, `title` (empty = remove)                                                                                     |
-| `readstate.added`      | List of `messageId` that the sender has now read                                                                         |
-| `member.added`         | Roster entry of the new member                                                                                           |
-| `member.keys.replaced` | Old participant ID, new public keys, new fingerprint                                                                     |
-| `profile.updated`      | New display name                                                                                                         |
-| `receipt.delivered`    | Original event ID (transport only, not stored in the file)                                                               |
-| `invitation`           | Section 12.2 (sent as chunks if large)                                                                                   |
+| Event                  | Payload                                                                                                                                                                                                              |
+|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `message.sent`         | Message header: `messageId`, `threadId`, author, `clock`, `createdAt`. Content inline if it fits; otherwise listed as parts. List of images (`assetId` = SHA-256, media type, size). List of all parts (Section 9.4) |
+| `message.part`         | `messageId`, part ID, part bytes (content or image data)                                                                                                                                                             |
+| `branch.created`       | Full thread without messages                                                                                                                                                                                         |
+| `branch.status.set`    | `threadId`, `status`                                                                                                                                                                                                 |
+| `branch.title.set`     | `threadId`, `title` (empty = remove)                                                                                                                                                                                 |
+| `readstate.added`      | List of `messageId` that the sender has now read                                                                                                                                                                     |
+| `member.added`         | Roster entry of the new member                                                                                                                                                                                       |
+| `member.keys.replaced` | Old participant ID, new public keys, new fingerprint                                                                                                                                                                 |
+| `profile.updated`      | New display name                                                                                                                                                                                                     |
+| `receipt.delivered`    | Original event ID or part ID (transport only, not stored in the file)                                                                                                                                                |
+| `invitation`           | Section 12.2. Uses the same header-and-parts method when large                                                                                                                                                       |
 
 There are no edit or delete events.
 
@@ -380,38 +412,45 @@ Each recipient copy also has the recipient ID. The signature covers all of these
 - After each insert, the app recomputes `sequence` so the integrity rule (sequence = index) stays true.
 - A late message from an offline member can appear above messages that the reader already saw. It is highlighted as
   unread.
-- This replaces "append order" (FR-026) for synchronized discussions. Non-synchronized discussions keep append order.
+- This replaces "append order" (FR-026). In a non-synchronized discussion, the clocks follow the local order, so the
+  visible order does not change.
 
-### 9.4 Images (D-10, D-11) **[Pending Q-30, Q-31]**
+### 9.4 Large messages and images (D-10, D-11, D-30, D-31)
 
-- `message.sent` lists each new image: `assetId` (SHA-256), media type, size, number of chunks. The signature of
-  `message.sent` therefore covers the image hash.
-- The recipient applies `message.sent` at once. It registers the asset in `assets[]` without bytes. The existing
-  placeholder (FR-075) shows until the bytes arrive.
-- The image bytes travel in `image.data` events. A large image is split into chunks so that each file stays below the
-  file size limit.
-- When all chunks are present, the recipient checks the SHA-256, writes the image into the ZIP, and the window shows
-  the image.
+- The part size is 4 MB. Each part is one encrypted file, so each file stays below the size limit.
+- Each image is always sent as one or more parts (D-10). Message content is inline in `message.sent` if it fits in
+  one file; otherwise it is sent as parts.
+- `message.sent` comes first. It lists every part: part ID, kind (content or image), SHA-256, and size. The signature
+  of `message.sent` covers this list, so it protects all parts.
+- The recipient keeps the header in the local sync state and shows the message at its position as **loading**:
+  "Сообщение загружается: 3 из 7 частей".
+- Partial message: when the content is present but images are still on their way, the UI shows the text with the
+  placeholder "Изображение загружается…" for each missing image (D-31).
+- When all parts have arrived, the recipient checks each SHA-256, writes the message and the images into the local
+  file, and sends the receipts. The message is then "processed".
+- A part whose SHA-256 does not match is refused. The existing "damaged" placeholder shows if the part never arrives
+  in a good state.
 - An image that is already in the discussion (same SHA-256) is not sent again.
+- Interaction with a loading or partial message: **[Pending Q-37]**.
 
 ### 9.5 Dependencies
 
 An event can depend on data that has not arrived yet (a message in an unknown branch, a branch whose source message
-has not arrived, image chunks for an unknown message). The event waits in a local pending queue. It is applied when
-the dependency arrives. The delivery receipt is sent after the event is applied (for image chunks: after the chunk is
-stored).
+has not arrived or is still loading, a part of an unknown message). The event waits in a local pending queue. It is
+applied when the dependency arrives. The delivery receipt is sent after the event is applied (for a part: after the
+part is stored).
 
 ### 9.6 Concurrent changes
 
-| Data          | Merge rule                                                             |
-|---------------|------------------------------------------------------------------------|
-| Messages      | Union by `messageId`; order by Section 9.3                             |
-| Branches      | Union by `threadId`                                                    |
-| Branch status | Last writer wins by (Lamport clock, participant ID) **[Pending Q-24]** |
-| Branch title  | Last writer wins by (Lamport clock, participant ID) **[Pending Q-24]** |
-| Read state    | Union per participant (read state only grows)                          |
-| Assets        | Union by SHA-256                                                       |
-| Roster        | Union by `participantId`; key replacement per Section 8.3              |
+| Data          | Merge rule                                                 |
+|---------------|------------------------------------------------------------|
+| Messages      | Union by `messageId`; order by Section 9.3                 |
+| Branches      | Union by `threadId`                                        |
+| Branch status | Last writer wins by (Lamport clock, participant ID) (D-24) |
+| Branch title  | Last writer wins by (Lamport clock, participant ID) (D-24) |
+| Read state    | Union per participant (read state only grows)              |
+| Assets        | Union by SHA-256                                           |
+| Roster        | Union by `participantId`; key replacement per Section 8.3  |
 
 A message for a branch that is closed on this computer is accepted. The branch stays closed (D-07).
 
@@ -423,16 +462,22 @@ A message for a branch that is closed on this computer is accepted. The branch s
   the existing `documentChanged` message.
 - Remote events go through the same write queue as local changes, so a local save never overwrites a remote change.
 - If no window shows the discussion, the sync service applies events directly to the file.
+- The window also shows loading messages from the local sync state (Section 9.4). They are not in the file yet.
 - Unread highlighting, the window-title count, and the side-panel counts work on remote messages without change.
 - A local change in a synchronized discussion emits an event. A local change in a detached copy does not.
 
 ---
 
-## 11. Application lifecycle and tray (D-16) **[Pending Q-33]**
+## 11. Application lifecycle and tray (D-16, D-33)
 
-- When the last window closes, the app stays in the tray if at least one synchronized discussion exists.
+- When the last window closes, the app stays in the tray if at least one synchronized discussion exists. Otherwise it
+  quits as today.
+- The first time the app closes to the tray, it shows a one-time notice.
 - Tray menu: open a discussion, sync status, "Проверить папки", exit.
-- Settings: "Запускать вместе с Windows".
+- Windows notification for each new message from another member. Setting "Уведомления о новых сообщениях", default
+  on.
+- Setting "Запускать вместе с Windows". Default: **[Pending Q-36]**.
+- Missing registered file at start: warning in the tray menu with "Найти файл…" (D-27).
 - "Exit" from the tray is a normal close. A downloaded update installs then (FR-141).
 - Single instance stays. Double-clicking a `.branchchat` file while the app is in the tray opens a window.
 
@@ -449,9 +494,9 @@ through WhatsApp).
 ### 12.2 Invitation
 
 - An invitation is encrypted to the invitee's public encryption key and signed by the inviting member.
-- It contains: the conversation ID, the roster with public keys, and the current discussion (the full
-  `DocumentContents` plus all image bytes).
-- A large invitation is split into chunks, as images are (Section 9.4) **[Pending Q-30]**.
+- It contains: the conversation ID, the minimum protocol version, the roster with public keys, and the current
+  discussion (the full `DocumentContents` plus all image bytes).
+- A large invitation uses the header-and-parts method of Section 9.4. The join wizard shows the progress.
 - The invitee checks the signature and the fingerprint of the inviting member, creates a local `.branchchat` file
   from the invitation, and starts sync.
 
@@ -463,27 +508,28 @@ through WhatsApp).
 3. Select where to save the local `.branchchat` file (outside the shared folder).
 4. Explain how to create and share a folder in the sync product (for example Google Drive for Desktop), and how to
    make it available offline.
-5. Select the local path of the shared folder. Run a write, read, and delete test in a test subfolder.
+5. Select the local path of the shared folder (a normal Windows drive and path). Run a write, read, and delete test
+   in a test subfolder.
 6. Publish the own public-key bundle. Collect the bundles of the other people (folder, file, or pasted text).
 7. Review each candidate: name and fingerprint. Accept or discard.
 8. Send invitations. Show the roster and the state of each invitee: "invited", "joined".
 
 ### 12.4 Convert wizard (File > "Сделать обсуждение общим…")
 
-Same as the create wizard, but step 3 uses the open discussion. The file becomes schema version 2. If the file is in
-the shared folder, the wizard asks the person to move it first.
+Same as the create wizard, but step 3 uses the open discussion. If the file is in the shared folder, the wizard asks
+the person to move it first.
 
 ### 12.5 Join wizard (File > "Присоединиться к обсуждению…")
 
 1. Create the identity if it does not exist. Publish the public-key bundle.
 2. Select the local path of the shared folder. Run the folder test.
-3. Wait for the invitation. Check the inviter's fingerprint.
+3. Wait for the invitation. Show the progress of a large invitation. Check the inviter's fingerprint.
 4. Select where to save the local `.branchchat` file (outside the shared folder).
 5. Import the discussion and start sync.
 
 ---
 
-## 13. Shared-folder layout
+## 13. Shared-folder layout and cleanup
 
 ```text
 <shared root>/
@@ -491,9 +537,9 @@ the shared folder, the wizard asks the person to move it first.
   keys/<participantId>.bckey      public-key bundles
   inbox/<participantId>/          one folder per member
     <eventId>.bcmsg               encrypted event for this member
-    <eventId>-<n>.bcchunk         encrypted chunk of a large event (image, invitation)
+    <partId>.bcpart               encrypted part of a large message or invitation
     <eventId>.bcrcpt              encrypted receipt for this member
-    <invitationId>.bcinv          encrypted invitation for this member
+    <invitationId>.bcinv          encrypted invitation header for this member
   .test/<random>.tmp              folder test, deleted after the test
 ```
 
@@ -502,29 +548,31 @@ the shared folder, the wizard asks the person to move it first.
 - A sender writes into the inbox of each other member.
 - Write a file under a temporary name in the same folder, then rename it. Ignore `.tmp` files.
 
-Cleanup (D-19) **[Pending Q-34]**:
+Cleanup (D-19, D-34):
 
-- The recipient tries to delete a processed file in its own inbox. If the sync product refuses, the recipient records
-  the file as processed and ignores it on later scans.
-- The sender deletes its own files after it gets the delivery receipt for them.
-- Nobody deletes a file that another member wrote, except the recipient in its own inbox.
+- The owner of an inbox deletes each processed file in it (events, parts, receipts, invitations).
+- If a delete fails, the owner records the file as processed and ignores it on later scans.
+- The sender deletes its own event and part files after the delivery receipt for them.
+- The writer of a receipt deletes it after 7 days if it is still there.
+- The sender deletes its own files that never got a receipt after 30 days.
 
 ---
 
 ## 14. Outgoing flow
 
 1. The user makes a change. The existing domain function changes the local discussion. The file is saved as today.
-2. The sync service builds the event (and `image.data` events for new images). It assigns event IDs and sender
+2. The sync service builds the event and its parts (Section 9.4). It assigns event IDs, part IDs, and sender
    sequence numbers.
-3. The crypto module signs each event once and encrypts it once per recipient.
+3. The crypto module signs each event once and encrypts each event and part once per recipient.
 4. The sync service records each recipient copy in the local outbox.
-5. The transport writes each copy with temp-file-then-rename into the recipient's inbox. The message is written before
-   its image chunks.
-6. The sync service marks each recipient copy as "written". When all copies of a message are written, the message
-   shows one grey check.
+5. The transport writes each copy with temp-file-then-rename into the recipient's inbox. `message.sent` is written
+   before its parts.
+6. The sync service marks each recipient copy as "written". When all copies of a message (header and parts) are
+   written, the message shows one grey check.
 7. On partial failure, retry only the missing copies. Never create a new event ID for a retry.
-8. Unconfirmed copies (D-09): at each start and every 30 minutes, write the copy again, but only if there was other
-   activity from the same recipient in that time. If there was no activity, do not retry. **[Pending Q-29]**
+8. Retry rule (D-29): at start and every 30 minutes, write an unconfirmed copy again only if a valid event or receipt
+   from that recipient arrived since the last write of the copy. No maximum number of retries. Parts use the same
+   rule.
 
 ---
 
@@ -532,15 +580,16 @@ Cleanup (D-19) **[Pending Q-34]**:
 
 1. A watcher event or a scan finds a file in the own inbox.
 2. Wait until the file size is stable. Refuse a file larger than the limit in Settings (D-11).
-3. Decrypt. Verify the signature. Check conversation ID, recipient ID, sender in roster (with the right key),
-   event ID, and sequence.
-4. If the event was already applied, skip step 5.
-5. Apply the event (Section 9). If a dependency is missing, put the event in the pending queue and stop here.
+3. Decrypt. Verify the signature. Check conversation ID, recipient ID, sender in roster (with an accepted key),
+   event ID, and sequence. For a part: check that a known header lists it and that the SHA-256 matches.
+4. If the event or part was already processed, skip step 5.
+5. Apply the event (Section 9). For a message with parts, store the header or part and wait until all parts are
+   present. If a dependency is missing, put the event in the pending queue and stop here.
 6. Save the local file and the local sync state.
 7. Write `receipt.delivered` into the sender's inbox.
 8. Delete the processed file, or record it as processed (Section 13).
-9. After a crash between steps 6 and 8, the next scan finds the file, sees the event as applied, and completes
-   steps 7 and 8.
+9. After a crash between steps 6 and 8, the next scan finds the file, sees it as processed, and completes steps 7
+   and 8.
 
 Invalid files: add a record to a local quarantine list. Do not delete another member's files. Log only safe error
 codes.
@@ -553,12 +602,12 @@ codes.
 
 Delivery state is local to the sender. It is stored in the local sync state, not in the `.branchchat` file.
 
-| Mark            | Meaning                                                                        |
-|-----------------|--------------------------------------------------------------------------------|
-| One grey check  | The encrypted message is written to the local shared folder for all recipients |
-| Two grey checks | All recipients sent a valid delivery receipt for the message                   |
+| Mark            | Meaning                                                                                     |
+|-----------------|---------------------------------------------------------------------------------------------|
+| One grey check  | The header and all parts of the message are written to the shared folder for all recipients |
+| Two grey checks | All recipients sent valid delivery receipts for the header and all parts                    |
 
-The one grey check does not mean that the file reached the cloud. Image chunks do not change the marks.
+The one grey check does not mean that the file reached the cloud.
 
 ### 16.2 Read (D-08)
 
@@ -578,7 +627,7 @@ The message details show, per member: written, delivered, read.
 - Do full scans: at start, when the folder becomes available again, after watcher errors, periodically, and on user
   request ("Проверить папки").
 - Handle duplicates and sync-product conflict copies (for example `name (1).bcmsg`). Deduplicate by authenticated
-  event ID plus recipient ID, never by file name.
+  event ID or part ID plus recipient ID, never by file name.
 
 ---
 
@@ -586,9 +635,11 @@ The message details show, per member: written, delivered, read.
 
 JSON files with the existing atomic write, per synchronized discussion, in the user data folder:
 
-- Outbox: event ID, recipient ID, written / delivered, last write time.
-- Processed events: event ID, sender, sender sequence. Processed files that could not be deleted.
-- Pending queue: events that wait for a dependency. Image chunks that wait for the other chunks.
+- Outbox: event or part ID, recipient ID, written / delivered, last write time.
+- Processed events and parts: ID, sender, sender sequence. Processed files that could not be deleted. Own receipt
+  files with their write time.
+- Loading messages: headers and received parts (part bytes in a local folder, not in the JSON).
+- Pending queue: events that wait for a dependency.
 - Peer state: last sender sequence, last activity time, key history, pending key-replacement requests.
 - Quarantine list and last scan time.
 
@@ -605,9 +656,9 @@ The application has no Drive-specific code. The wizard and the user guide explai
 - Drive for Desktop has two modes: streaming and mirroring.
   [Stream and mirror files](https://support.google.com/drive/answer/13401938),
   [Open files offline](https://support.google.com/drive/answer/16631477).
-- In streaming mode, mark the shared folder "Available offline". Verify that this also applies to new files.
-- A folder shared from another person's My Drive may need a shortcut in your own My Drive before it appears locally.
+- In streaming mode, mark the shared folder "Available offline".
 - Two setups are supported: a folder in a personal My Drive shared with Editor rights, and a shared drive.
+- The shared folder appears as a normal Windows drive and path.
 - Streamed files can be unavailable when Drive for Desktop is closed or signed out.
 - The folder path and access are checked again at each start.
 
@@ -623,12 +674,13 @@ Drive paused, signed out, restarted, updated; permission removed and restored.
 - Treat every file in the shared folder as untrusted. Validate events with zod schemas.
 - Enforce the file size limit before a file is read.
 - Restrict all transport paths to the configured shared root. Refuse path traversal and links.
-- Never log keys, plain text, or decrypted payloads.
+- Never log keys, plain text, or decrypted payloads. Windows notifications show only the author and the discussion
+  name **[Pending Q-38]**.
 - Get a security review of the crypto code before release.
 
-Protected: sync provider reading content; changed events; forged events from a member whose key is not compromised;
-duplicate messages from duplicate files; a member who replaces another member's keys without the fingerprint check of
-the others.
+Protected: sync provider reading content; changed events and parts; forged events from a member whose key is not
+compromised; duplicate messages from duplicate files; a member who replaces another member's keys without the
+fingerprint check of the others.
 
 Not protected: compromised endpoint; participant who shares plain text (including a detached copy); leaked private
 key; metadata analysis; files deleted, held back, or damaged by the provider or by a person with folder access; quota
@@ -645,33 +697,34 @@ automatically).
 - Each event type reaches all members and gives the same discussion on each computer.
 - Branch, nested branch, branch close/reopen, branch title, images, read state, and "who has read" work across
   computers.
-- Image: placeholder first, image after all chunks arrive; images larger than the file size limit.
-- A non-synchronized discussion behaves as before. Existing unit and e2e tests pass.
-- A detached copy opens as a normal discussion and sends no events.
-- An old app version refuses a schema version 2 file without damage.
-- Rejoin after key loss: re-invitation with the old ID, fingerprint checks, future messages arrive.
-- Tray: sync continues with no window; exit from the tray; start with Windows.
+- Large message: loading state with part count, partial message with image placeholders, final message.
+- Images larger than the file size limit.
+- A non-synchronized discussion behaves as before (in version 2). A version 1 file is migrated on open.
+- A detached copy (Explorer copy and "Отправить копию…") opens as a normal discussion and sends no events.
+- Moved file: the app asks and updates the registry.
+- Rejoin after key loss: re-invitation with the old ID, fingerprint checks, future messages arrive; rejection warning.
+- Tray: sync continues with no window; notifications; exit from the tray; start with Windows.
 - No leave, remove, edit, or delete controls exist.
 
 ### Offline and sync
 
 - Recipient offline; one group member offline; sender offline before sync; all offline.
 - Drive paused, restarted, signed out; folder unavailable; drive letter changed; permission removed and restored.
-- Delayed, reordered, duplicated, and conflict-copy files.
+- Delayed, reordered, duplicated, and conflict-copy files; parts before their header.
 - Concurrent messages in the same thread; concurrent branch status changes; a message to a branch closed by another
   member.
-- Recipient cannot delete inbox files (My Drive); sender cleanup works.
+- A delete that fails: the file is recorded as processed.
 
 ### Reliability
 
 - Stop the app during a write; after apply but before receipt; after receipt but before delete.
-- Partial group send. Missing image chunks. Missed watcher events. Windows restart.
-- Retry rule with and without recipient activity.
+- Partial group send. Missing parts. Missed watcher events. Windows restart.
+- Retry rule with and without recipient activity. Cleanup after 7 and 30 days.
 
 ### Security
 
 - Changed ciphertext, changed signed fields, replayed events, unknown sender, discarded candidate key.
-- Image chunks that do not match the signed SHA-256.
+- Parts that do not match the signed SHA-256; parts that no header lists.
 - Key replacement rejected by a member.
 - Malformed and too large files. Hostile file names and path traversal.
 - No private key or plain text in the shared folder or logs.
@@ -682,116 +735,30 @@ automatically).
 
 Write your answer after **Answer:**. A recommendation is only a proposal.
 
-**Q-24. "Last writer wins" for branch status and title.**  
-In revision 2, Q-07 also asked about this rule. The answer "(a)" covered only the closed-branch part.  
-Rule: when two members change the status (or the title) of the same branch at the same time, the change with the
-higher (Lamport clock, participant ID) wins on all computers.  
-Recommendation: yes.  
-**Answer:** yes
-
-**Q-25. Show roster members in the "who has read" indicator before their first write?**  
-In revision 2, Q-13 also asked about this. Today a person is a "known participant" only after the first write
-(FR-124). In a synchronized discussion the roster is known from the start.  
-Options: (a) Yes; all roster members are known participants (a new member shows as "not read" at once). (b) No;
-keep FR-124.  
+**Q-36. Default of "Запускать вместе с Windows".**  
+In revision 3 this was Q-33 b. The answer covered a, c, and d only.  
+Options: (a) On after the first synchronized discussion is created or joined; the wizard says so. (b) Off; the
+person turns it on in Settings. (c) The wizard asks.  
 Recommendation: (a).  
-**Answer:** (a)
+**Answer:**
 
-**Q-26. What happens to the sync data in a detached copy?**  
-A detached copy has schema version 2 and contains the roster and public keys. Old app versions cannot open it (D-03).  
-Options: (a) Keep the copy as it is (version 2, sync data kept but ignored). (b) When the app opens a detached copy,
-it removes the sync data on the first write and saves it as version 1, so old versions can open it. (c) Add an action
-"Отправить копию…" that creates a clean version 1 copy for manual sharing; a copy made in Explorer stays as in (a).  
-Also: should a detached copy get a new `documentId`, so it is clearly a different discussion? Options: (i) Keep the
-same `documentId`; FR-117 warns if both are open. (ii) New `documentId` on the first write.  
-Recommendation: (c) and (i).  
-**Answer:** (c) and (i). But keep version 2 always-  there are no users at this point.
+**Q-37. What can a person do with a loading or partial message?**  
+D-30 says the message is processed only when all parts have arrived. Before that, the message exists only in the
+local sync state.  
+Proposal: until the message is processed, the person cannot mark it read, cannot create a branch from it, and it does
+not count as unread. Sending a message in the same thread does not mark it read. When it is processed, it becomes
+unread as usual. The text of a partial message can be selected and copied.  
+**Answer:**
 
-**Q-27. The owner moves or renames the synchronized local file in Explorer.**  
-The sync registry then points to a missing path, and the moved file looks like a detached copy.  
-Options: (a) When the app opens a file whose `documentId` is registered but whose registered path is missing, it asks:
-"Это ваше общее обсуждение, которое было перемещено?" Yes updates the registry. (b) Treat it as detached; the person
-must join again. (c) When the registered file is missing at start, the tray shows a warning and asks the person to
-find the file.  
-Recommendation: (a) and (c).  
-**Answer:** (a) and (c).
-
-**Q-28. Schema version of non-synchronized discussions.**  
-D-03 sets version 2 for synchronized discussions.  
-Options: (a) Non-synchronized discussions stay version 1, so people with old versions can still open manually shared
-files. Version 2 only when a discussion becomes synchronized. (b) The new app writes all files as version 2.  
-Recommendation: (a).  
-**Answer:** (b) - there are literally no users at this point
-
-**Q-29. Exact meaning of the retry rule.**  
-Your answer: retry at start and every 30 minutes, only if there was other activity from the same recipient in that
-time. Please confirm the details:
-
-- "Activity" = any valid event or receipt from that recipient that this computer received. Do you agree?
-- "In that time" = since the last write of the unconfirmed copy. Do you agree?
-- Is there a maximum number of retries? Recommendation: no maximum, because each retry needs new activity.
-- Do image chunks use the same rule? Recommendation: yes.  
-  **Answer:** yes to all
-
-**Q-30. Image size "no limit" versus the 30 MB file size limit.**  
-D-10 says no image size limit. D-11 says 30 MB per shared-folder file. An image larger than the limit must be split.  
-Proposal: every large payload (image or invitation) is split into chunks of a fixed size (for example 4 MB). Each
-chunk is one encrypted file, so each file stays below the limit. The SHA-256 in the signed `message.sent` (or the
-signed invitation header) protects the full payload.  
-Also: the Settings value can be different on each computer, but the chunk size is fixed. What is the allowed range of
-the setting? Recommendation: 5 MB to 1 000 MB, default 30 MB.  
-**Answer:** allowed range with default ok. for large messages - split - yes. app should send first an event listing all parts. then parts go separately.
-i.e. if there is large message. `message.sent` eveni it sent containing list of files to be downloaded. Then once files (parts) are downloaded - message is processed.
-User sees in UI that message is being loaded (num of parts loaded, partial message, where applicable).
-
-**Q-31. Image placeholder while the image is on its way.**  
-The existing placeholder means "image missing or damaged".  
-Options: (a) Use a separate placeholder "Изображение загружается…" until all chunks arrive, then the image. If the
-SHA-256 does not match, use the existing "damaged" placeholder. (b) Use the existing placeholder for all cases.  
-Recommendation: (a).  
-**Answer:** (a)
-
-**Q-32. Rejoin with the old participant ID (D-15): details.**  
-a) The person's app must take the old participant ID. One identity is shared by all discussions (D-14). If the person
-lost `settings.json`, the app already has a new ID, and it may already be used in other discussions. Options:
-(i) The invitation sets the old ID as the global `participantId` of this Windows user. (ii) The app keeps a
-per-discussion participant ID when it differs from the global one. (iii) A re-invitation is possible only if the new
-ID was not used yet.  
-b) Until a member accepts the new keys, what does that member's app do with events signed by the new keys? Options:
-(i) Hold them in the pending queue and show them after acceptance. (ii) Refuse them. (iii) Show them with a warning.  
-c) Until a member accepts, does that member encrypt messages to the new keys? Recommendation: no.  
-d) What if a member rejects the new keys? Recommendation: that member keeps the old keys for that person, so the
-person gets no messages from that member; the UI shows a warning on both sides.  
-Recommendation: a) (i), b) (i), c) no, d) as above.  
-**Answer:** as recommended
-
-**Q-33. Tray details.**  
-a) Stay in the tray only when at least one synchronized discussion exists? Recommendation: yes.  
-b) Default of "Запускать вместе с Windows"? Recommendation: on after the first synchronized discussion is created or
-joined; the wizard says so.  
-c) Windows notifications for new messages? Options: (i) No in v1. (ii) Yes, with a setting (default on). (iii) Yes,
-with a setting (default off).  
-d) The first time the window closes into the tray, show a one-time notice? Recommendation: yes.  
-**Answer:** (a), (d), (c) - with setting default on. 
-
-**Q-34. Cleanup of receipt files.**  
-A recipient writes a receipt into the sender's inbox. The recipient owns that file, so the sender may not be able to
-delete it (My Drive). The recipient does not know when the sender has read the receipt.  
-Options: (a) The owner deletes its own receipt files after 7 days. (b) The sender confirms receipts with a small
-"receipt acknowledged" event; then the owner deletes the receipt. (c) Receipt files are never deleted.  
-Same question for the sender's own `.bcmsg` files when no receipt ever comes (D-09 says no retry without activity).
-Recommendation: (a), and delete unconfirmed own files after 30 days.  
-**Answer:** as recommended
-
-**Q-35. Notification about blocked or failing sync.**  
-Examples: shared folder missing, permission removed, invalid files, key change requests.  
-Options: (a) Show a status line in the discussion window and in the tray menu. (b) (a) plus a Windows notification.  
-Recommendation: (a), plus a Windows notification for key change requests only.  
-**Answer:** a only
+**Q-38. Content of a Windows notification for a new message.**  
+A notification can be seen by other people near the screen, and Windows can keep it in the notification center.  
+Options: (a) Author and discussion name only. (b) Author, discussion name, and the first characters of the text.  
+Recommendation: (a), with (b) as a setting later.  
+**Answer:**
 
 ---
 
-## 23. Tasks before the implementation plan
+## 23. Tests before the release with sync
 
 The results below are **assumed**. Do the tests and correct the results before the release that adds sync.
 
@@ -806,24 +773,6 @@ The results below are **assumed**. Do the tests and correct the results before t
 
 ---
 
-## 24. Milestones (draft; final plan after the answers)
-
-1. **Requirements and format.** New revision of `requirements.md` and ADR. Event schemas (zod). Schema version 2 and
-   migration 1 → 2.
-2. **Pure sync core (`src/shared/sync/`).** Apply rules, Lamport order, merge rules, dependency queue, chunk assembly.
-   Unit tests only.
-3. **Crypto and keys.** libsodium, `safeStorage` key store, canonical serialization, test vectors, key history.
-4. **Folder transport and sync service.** Temp-then-rename writes, Chokidar and scans, outbox, receipts, retry rule,
-   cleanup, local state, crash recovery.
-5. **Session and lifecycle.** Events from local changes; remote events into open sessions and closed files; detached
-   copies; tray and start with Windows.
-6. **Wizards and UI.** Create, convert, join, re-invite; key-change requests; roster; delivery marks; per-member
-   details; image placeholders; Settings; Russian strings.
-7. **Hardening.** Failure injection, security tests, Drive for Desktop test matrix, user guide (Russian), security
-   review.
-
----
-
 ## Appendix A. Cautions
 
 - Google Drive for Desktop is a file sync client, not a messaging system. Its timing is not guaranteed.
@@ -835,16 +784,25 @@ The results below are **assumed**. Do the tests and correct the results before t
 - Never delete a file that another member wrote, except a processed file in the own inbox.
 - Never invent a cryptographic protocol. Use the libsodium constructions as documented.
 
+## Changes in revision 4
+
+- Recorded answers Q-24 to Q-35 as decisions D-24 to D-35. Removed the answered questions.
+- All files use schema version 2; version 1 files are migrated on open (D-28). No compatibility with version 1.0.
+- Large messages: `message.sent` lists all parts; parts follow; loading and partial message in the UI (D-30). Event
+  `image.data` replaced by `message.part`.
+- Cleanup rules for receipts and unconfirmed files (D-34). Windows notifications for new messages (D-33); no
+  notifications for sync problems (D-35).
+- New questions Q-36 to Q-38.
+
 ## Changes in revision 3
 
-- Recorded answers Q-01 to Q-23 as decisions D-01 to D-23 (Section 4). Removed the answered questions.
-- Added detached copies (Section 7.4), schema version 2 and conversion (Section 7.2, 7.3), image events and chunks
-  (Section 9.4), key replacement (Section 8.3), tray lifecycle (Section 11), and the retry rule (Section 14).
-- Added new questions Q-24 to Q-35 and pre-plan tasks (Section 23).
+- Recorded answers Q-01 to Q-23 as decisions D-01 to D-23.
+- Added detached copies, schema version 2 and conversion, image events and chunks, key replacement, tray lifecycle,
+  and the retry rule.
 
 ## Changes in revision 2
 
-- Added the facts from the current code (Section 2) and the list of conflicts (Section 3).
+- Added the facts from the current code and the list of conflicts.
 - Corrected the description of the read state and of the file format.
 - Added events for all existing changes, ordering, dependency, and merge rules.
 - Mapped components to the code structure. Removed the separate Google Drive adapter and local-only mode.
