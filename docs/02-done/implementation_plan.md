@@ -99,8 +99,9 @@ Implementation decisions made in phase 5:
   so the name prompt comes before the notice.
 - "Mark thread as read" marks the thread's own messages. Unread messages in inherited context belong to their own
   threads and can be marked on the message itself.
-- The read indicator is one grey check (nobody else has read it), two grey checks (some), two accent-colored checks (
-  all); names in the tooltip and in a list that opens on click. Because the local person only becomes a "known
+- The read indicator is one green check (some have read it), two green checks (all), and no mark when nobody else has
+  read it (changed by D-41; before: one grey check, two grey checks, two accent-colored checks); names in the tooltip
+  and in a list that opens on click. Because the local person only becomes a "known
   participant" after their first read-state change, marking one message read can turn other messages from "read by all"
   to "read by some" (they have not read those). This follows FR-124.
 - Three test flakes were fixed in the tests, not the application: the editor test pressed a key before focus returned

@@ -5,6 +5,8 @@ import {
     SYNC_PROTOCOL_VERSION,
     applyAll,
     documentClock,
+    addOwnDelivery,
+    missingOwnDelivery,
     isComplete,
     loadingMessage,
     partRanges,
@@ -115,6 +117,7 @@ const DOCUMENT_TYPES = new Set<EventType>([
     'branch.status.set',
     'branch.title.set',
     'readstate.added',
+    'delivery.added',
     'member.added',
     'profile.updated'
 ])
@@ -154,9 +157,42 @@ export class ConversationSync {
             await this.deps.transport.cleanStaging()
             await this.deps.transport.ensureLayout(this.deps.conversationId, this.deps.ownId)
             await this.flushUnlocked()
+            await this.deliverUnlocked()
             await this.maintainUnlocked()
             await this.state.save()
         })
+    }
+
+    /**
+     * D-41: every message of another author that is in the own copy counts as received by this member; the other
+     * members learn it from `delivery.added`. Covers new messages, the history of an invitation, and recovery.
+     * The event is stored (and the state saved) before the document changes: after a crash between the two steps,
+     * the next scan sends the same IDs again, which does no harm.
+     */
+    private async deliverUnlocked(): Promise<void> {
+        const contents = await this.deps.document.read()
+        const missing = missingOwnDelivery(contents, this.deps.ownId)
+        if (missing.length === 0) return
+        const recipients = (contents.sync?.members ?? [])
+            .map((m) => m.participantId)
+            .filter((id) => id !== this.deps.ownId)
+        for (let i = 0; i < missing.length; i += 10_000)
+            await this.enqueue(
+                {
+                    type: 'delivery.added',
+                    payload: { messageIds: missing.slice(i, i + 10_000) },
+                    clock: documentClock(contents),
+                    createdAt: this.deps.now()
+                },
+                recipients
+            )
+        await this.state.save()
+        await this.deps.document.update((c) => {
+            const next = addOwnDelivery(c, this.deps.ownId, missing)
+            return next === c ? null : { contents: next, images: [] }
+        })
+        await this.flushUnlocked()
+        await this.state.save()
     }
 
     // --- outgoing ---------------------------------------------------------------------------------------------
@@ -549,6 +585,7 @@ export class ConversationSync {
         report.applied += await this.drainPending(confirm, toDelete)
         await this.completeLoading(confirm, toDelete, report)
 
+        await this.deliverUnlocked()
         report.receipts += await this.sendReceipts(confirm)
         for (const entry of toDelete) {
             const r = await this.deps.transport.delete(entry.folder, entry.name)

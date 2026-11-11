@@ -196,8 +196,16 @@ function view(c: DocumentContents): unknown {
     return { ...n, discussion: { ...n.discussion, updatedAt: '' } }
 }
 
-async function scanAll(members: Member[], rounds = 3): Promise<void> {
-    for (let i = 0; i < rounds; i++) for (const m of members) await m.sync.scan()
+/** Scans until a full round changes nothing (deliveries and receipts take an extra round, D-40). */
+async function scanAll(members: Member[], rounds = 8): Promise<void> {
+    for (let i = 0; i < rounds; i++) {
+        let busy = false
+        for (const m of members) {
+            const r = await m.sync.scan()
+            if (r.applied > 0 || r.receipts > 0) busy = true
+        }
+        if (!busy && i > 0) return
+    }
 }
 
 async function filesIn(root: string): Promise<string[]> {
@@ -445,8 +453,10 @@ describe('sync service with three members (design 13 to 18)', () => {
             expect(b.state.data.keptFiles).toHaveLength(1)
             // Anna got the receipt and deleted her own file from Boris's inbox
             await a.sync.scan()
-            expect(await filesIn(join(root, 'inbox', 'p-boris'))).toEqual([])
-            expect(b.writes).toBe(1)
+            const left = await filesIn(join(root, 'inbox', 'p-boris'))
+            expect(left.filter((n) => n.endsWith('.bcmsg'))).toEqual([])
+            // one write for the message, one for Boris's own delivery entry
+            expect(b.writes).toBe(2)
         })
     })
 
@@ -729,14 +739,22 @@ describe('sync service under random faults (implementation plan, phase 7 exit cr
                         const stateFile = join(m.stateDir, 'state.json')
                         const before = await fs.readFile(stateFile).catch(() => null)
                         await m.sync.scan()
-                        if (before) await fs.writeFile(stateFile, before)
+                        // the state is saved before each write, so a crash never gives back a used senderSeq
+                        if (before) {
+                            const after = JSON.parse(await fs.readFile(stateFile, 'utf8'))
+                            const old = JSON.parse(before.toString('utf8'))
+                            await fs.writeFile(
+                                stateFile,
+                                JSON.stringify({ ...old, senderSeq: after.senderSeq })
+                            )
+                        }
                         await connect(m)
                         await m.sync.start()
                     } else await m.sync.scan()
                     clockMs += 1000
                 }
                 for (const h of hidden) await fs.rename(h.to, h.from)
-                await scanAll(members, 4)
+                await scanAll(members, 10)
 
                 for (const m of members) {
                     expect(checkDiscussionIntegrity(m.contents.discussion)).toEqual([])
@@ -783,6 +801,27 @@ describe('delivery marks and sync health (release 1.3: D-09, D-29, D-34, D-35)',
             await c.sync.scan()
             await a.sync.scan()
             expect(a.sync.deliveries()[id]!.state).toBe('delivered')
+        })
+    })
+
+    it('every member tells the others which messages it received (D-41)', async () => {
+        await withTempDir(async (dir) => {
+            const { members } = await group(dir)
+            const [a, b, c] = members as [Member, Member, Member]
+            await say(a, 'доставка для всех')
+            const id = ownMessage(a).messageId
+            await b.sync.scan()
+            expect(b.contents.delivery?.['p-boris']).toEqual([id])
+            // Clara learns that Boris has the message of Anna, before she has it herself
+            await c.sync.scan()
+            expect(c.contents.delivery?.['p-boris']).toEqual([id])
+            expect(c.contents.delivery?.['p-clara']).toEqual([id])
+            await a.sync.scan()
+            await b.sync.scan()
+            for (const m of [a, b, c])
+                expect(m.contents.delivery).toEqual({ 'p-boris': [id], 'p-clara': [id] })
+            // the author does not send a delivery entry for an own message
+            expect(a.contents.delivery?.['p-anna']).toBeUndefined()
         })
     })
 

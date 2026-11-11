@@ -269,14 +269,15 @@ test('every message shows who has read it: all, some or none of the other known 
     )
     const { win } = await open(file, await profile())
     const indicator = (id: string): Locator =>
-        win.locator(`[data-message-id=${id}]`).getByTestId('read-indicator')
+        win.locator(`[data-message-id=${id}]`).getByTestId('message-mark')
 
-    await expect(indicator('x1')).toHaveAttribute('data-state', 'all') // Анна and Клара (the author Борис is not counted)
-    await expect(indicator('x2')).toHaveAttribute('data-state', 'some')
-    await expect(indicator('x3')).toHaveAttribute('data-state', 'none')
-    await expect(indicator('x4')).toHaveAttribute('data-state', 'some') // author Анна excluded: Борис yes, Клара no
+    // D-41: two green checks = read by all, one green check = read by some, no mark = nobody has read
+    await expect(indicator('x1')).toHaveAttribute('data-state', 'read-all') // Анна and Клара (the author Борис is not counted)
+    await expect(indicator('x2')).toHaveAttribute('data-state', 'read-some')
+    await expect(indicator('x3')).toHaveCount(0)
+    await expect(indicator('x4')).toHaveAttribute('data-state', 'read-some') // author Анна excluded: Борис yes, Клара no
     await expect(indicator('x1')).toHaveText('✓✓')
-    await expect(indicator('x3')).toHaveText('✓')
+    await expect(indicator('x2')).toHaveText('✓')
 
     // names on hover (tooltip) and on click (list); the author is never listed
     await expect(indicator('x2')).toHaveAttribute(
@@ -287,15 +288,15 @@ test('every message shows who has read it: all, some or none of the other known 
     await expect(win.getByTestId('read-by')).toHaveText('Анна')
     await expect(win.getByTestId('not-read-by')).toHaveText('Клара')
     await win.keyboard.press('Escape')
-    await expect(win.getByTestId('read-popover')).toHaveCount(0)
+    await expect(win.getByTestId('mark-popover')).toHaveCount(0)
 
     // the local user never wrote to the file, so they are not a known participant and are listed nowhere
     await expect(win.getByText('Вера')).toHaveCount(0)
 
     // after the first change of read state they become one: now they count as someone who has (not) read
     await win.locator('[data-message-id=x3]').getByTestId('mark-read').click()
-    await expect(indicator('x3')).toHaveAttribute('data-state', 'some') // Вера has read it, Анна and Клара have not
-    await expect(indicator('x1')).toHaveAttribute('data-state', 'some') // Вера has not read x1
+    await expect(indicator('x3')).toHaveAttribute('data-state', 'read-some') // Вера has read it, Анна and Клара have not
+    await expect(indicator('x1')).toHaveAttribute('data-state', 'read-some') // Вера has not read x1
     await indicator('x1').click()
     await expect(win.getByTestId('not-read-by')).toHaveText('Вера')
 })
@@ -347,8 +348,8 @@ test('exchange: A writes, B reads and replies, A opens the returned file and see
     const third = await open(file, profileA)
     const question = third.win.locator(`[data-message-id="${questionId}"]`)
     await expect(question).toHaveAttribute('data-unread', 'false') // A wrote it
-    await expect(question.getByTestId('read-indicator')).toHaveAttribute('data-state', 'all') // B read it
-    await question.getByTestId('read-indicator').click()
+    await expect(question.getByTestId('message-mark')).toHaveAttribute('data-state', 'read-all') // B read it
+    await question.getByTestId('message-mark').click()
     await expect(third.win.getByTestId('read-by')).toHaveText('Борис')
     await third.win.keyboard.press('Escape')
 
@@ -358,12 +359,12 @@ test('exchange: A writes, B reads and replies, A opens the returned file and see
     await third.win.getByTestId('panel-branch').click()
     const reply = third.win.getByTestId('message').filter({ hasText: 'Ответ про ёлку' })
     await expect(reply).toHaveAttribute('data-unread', 'true')
-    await expect(reply.getByTestId('read-indicator')).toHaveAttribute('data-state', 'none')
+    await expect(reply.getByTestId('message-mark')).toHaveCount(0)
 
     // A marks it read: A's entry is added, B's entry is untouched (FR-120)
     await reply.getByTestId('mark-read').click()
     await expect(reply).toHaveAttribute('data-unread', 'false')
-    await expect(reply.getByTestId('read-indicator')).toHaveAttribute('data-state', 'all')
+    await expect(reply.getByTestId('message-mark')).toHaveAttribute('data-state', 'read-all')
     await expect
         .poll(async () => Object.keys(await readReadState(file)).sort())
         .toEqual(['p-a', 'p-b'])

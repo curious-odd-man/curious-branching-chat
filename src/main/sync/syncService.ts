@@ -205,38 +205,26 @@ export class SyncService {
         for (const id of this.conversations.keys()) await this.scan(id)
     }
 
-    /** Loading messages, delivery marks, and the status line of the window (D-37, FR-169, FR-172). */
+    /** Loading messages, own copy states, and the status line of the window (D-37, FR-169, FR-172). */
     private async refreshView(conv: Conversation): Promise<void> {
         const session = conv.session
         if (!session) return
         const loading: LoadingMessage[] = await conv.sync.loadingMessages()
-        const names = new Map(
-            (session.current.sync?.members ?? []).map((m) => [m.participantId, m.displayName])
-        )
-        const delivery: DocumentView['delivery'] = {}
+        const copies: DocumentView['copies'] = {}
         for (const [messageId, d] of Object.entries(conv.sync.deliveries()))
-            delivery[messageId] = {
-                state: d.state,
-                members: Object.entries(d.members)
-                    .map(([participantId, state]) => ({
-                        participantId,
-                        displayName: names.get(participantId) ?? participantId,
-                        state
-                    }))
-                    .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'))
-            }
+            copies[messageId] = d.members
         const health = conv.sync.health()
         const syncStatus = { ...health, folderPath: conv.entry.sharedRoot }
         const json = JSON.stringify({
             loading,
-            delivery,
+            copies,
             syncStatus: { ...syncStatus, lastScanAt: null }
         })
         session.syncStatus = syncStatus
         if (json === conv.viewJson) return
         conv.viewJson = json
         session.loading = loading
-        session.delivery = delivery
+        session.copies = copies
         session.onChange()
     }
 

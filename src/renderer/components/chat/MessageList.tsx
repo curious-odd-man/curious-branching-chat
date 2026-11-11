@@ -1,15 +1,13 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { isUnreadIn, readStatusOf } from '@shared/domain'
+import { isUnreadIn, messageMarkOf, type MarkSync } from '@shared/domain'
 import type { Message, Participant, Thread } from '@shared/types'
 import type { LoadingMessage } from '@shared/sync'
 import { ru } from '@shared/i18n/ru'
 import { formatTimestamp } from '../../i18n/format'
 import { BranchBadge } from '../branches/BranchBadge'
 import { RichTextView, type Highlight, type ImageContext } from '../rich/RichTextView'
-import { ReadIndicator } from './ReadIndicator'
-import { DeliveryMark } from './DeliveryMark'
-import type { DeliveryView } from '@shared/types/ipc'
+import { MessageMark } from './MessageMark'
 import { readMessageSelection, type MessageSelection } from './selection'
 
 export type ListRow =
@@ -41,16 +39,8 @@ interface Props {
     onOpenBranch(threadId: string): void
     /** Scroll to this message when the list opens (instead of the newest) and flash it. */
     focusMessageId?: string
-    /** Delivery of own messages in a synchronized discussion (FR-169). */
-    delivery?: Record<string, DeliveryView>
-}
-
-const NO_DELIVERY: Record<string, DeliveryView> = {}
-
-function readersOf(readSets: Map<string, Set<string>>, messageId: string): Set<string> {
-    const out = new Set<string>()
-    for (const [participantId, set] of readSets) if (set.has(messageId)) out.add(participantId)
-    return out
+    /** Delivery data of a synchronized discussion (D-41, FR-169); null for a normal discussion. */
+    sync?: MarkSync | null
 }
 
 /** The user counts as "at the bottom" when closer than this to the end (pixels). */
@@ -87,7 +77,7 @@ export function MessageList({
     onReply,
     onOpenBranch,
     focusMessageId,
-    delivery = NO_DELIVERY
+    sync = null
 }: Props): React.JSX.Element {
     const scroller = useRef<HTMLDivElement>(null)
     const atBottom = useRef(true)
@@ -275,6 +265,7 @@ export function MessageList({
                     const m = row.message
                     const own = m.authorId === localParticipantId
                     const unread = isUnreadIn(readSets, localParticipantId, m)
+                    const mark = messageMarkOf(m, participants, readSets, sync)
                     const classes = [
                         'row',
                         own ? 'own' : '',
@@ -314,18 +305,7 @@ export function MessageList({
                                                 {ru.unread.markRead}
                                             </button>
                                         )}
-                                        {own && delivery[m.messageId] ? (
-                                            // D-40: one mark for delivery and reading of own messages
-                                            <DeliveryMark
-                                                delivery={delivery[m.messageId]!}
-                                                status={readStatusOf(participants, readSets, m)}
-                                                readers={readersOf(readSets, m.messageId)}
-                                            />
-                                        ) : (
-                                            <ReadIndicator
-                                                status={readStatusOf(participants, readSets, m)}
-                                            />
-                                        )}
+                                        {mark && <MessageMark mark={mark} synced={sync !== null} />}
                                         <BranchBadge
                                             branches={branchesByMessage.get(m.messageId) ?? []}
                                             onOpen={onOpenBranch}

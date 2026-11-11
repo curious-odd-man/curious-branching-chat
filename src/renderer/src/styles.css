@@ -631,22 +631,6 @@ mark.quote {
 .read-indicator-wrap {
     position: relative;
 }
-.read-indicator {
-    padding: 0 0.3rem;
-    border: none;
-    background: transparent;
-    font-size: 0.8rem;
-    letter-spacing: -0.12em;
-    opacity: 0.55;
-}
-.read-indicator.some {
-    opacity: 0.85;
-}
-.read-indicator.all {
-    color: var(--accent);
-    opacity: 1;
-    font-weight: 700;
-}
 .read-popover {
     position: absolute;
     right: 0;
@@ -793,9 +777,6 @@ mark.quote {
         forced-color-adjust: none;
         background: Mark;
         color: MarkText;
-    }
-    .read-indicator.all {
-        text-decoration: underline;
     }
 }
 
@@ -1004,7 +985,7 @@ mark.quote {
         text-decoration: underline;
     }
 }
-.delivery-popover .delivery-member {
+.mark-member {
     display: flex;
     justify-content: space-between;
     gap: 0.8rem;

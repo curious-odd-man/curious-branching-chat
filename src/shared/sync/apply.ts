@@ -36,6 +36,7 @@ export type DocumentEventType =
     | 'branch.status.set'
     | 'branch.title.set'
     | 'readstate.added'
+    | 'delivery.added'
     | 'member.added'
     | 'profile.updated'
 
@@ -45,6 +46,7 @@ export const DOCUMENT_EVENT_TYPES: readonly DocumentEventType[] = [
     'branch.status.set',
     'branch.title.set',
     'readstate.added',
+    'delivery.added',
     'member.added',
     'profile.updated'
 ]
@@ -298,6 +300,31 @@ function applyReadState(
     }
 }
 
+function applyDelivery(
+    contents: DocumentContents,
+    e: VerifiedEvent<'delivery.added'>
+): ApplyResult {
+    if (!contents.sync) return { status: 'rejected', reason: 'not a synchronized discussion' }
+    const delivery = contents.delivery ?? {}
+    const current = new Set(delivery[e.senderId] ?? [])
+    // the sender's own messages are never listed (the author has them)
+    const own = new Set(
+        contents.discussion.threads.flatMap((t) =>
+            t.messages.filter((m) => m.authorId === e.senderId).map((m) => m.messageId)
+        )
+    )
+    const added = e.payload.messageIds.filter((id) => !current.has(id) && !own.has(id))
+    if (added.length === 0) return { status: 'duplicate' }
+    return {
+        status: 'applied',
+        contents: {
+            ...contents,
+            delivery: { ...delivery, [e.senderId]: [...current, ...added].sort() }
+        },
+        newAssetIds: []
+    }
+}
+
 function applyMemberAdded(
     contents: DocumentContents,
     e: VerifiedEvent<'member.added'>
@@ -402,10 +429,24 @@ export function normalizeSynced(contents: DocumentContents): DocumentContents {
               byString((m) => m.participantId)
           )
         : undefined
+    let deliveryChanged = false
+    let delivery: ReadState | undefined
+    if (contents.delivery) {
+        delivery = {}
+        for (const key of Object.keys(contents.delivery).sort()) {
+            const list = contents.delivery[key]!
+            const unique = [...new Set(list)].sort()
+            if (unique.length !== list.length || unique.some((v, i) => v !== list[i]))
+                deliveryChanged = true
+            delivery[key] = unique
+        }
+        if (Object.keys(contents.delivery).join() !== Object.keys(delivery).join())
+            deliveryChanged = true
+    }
     const discussionChanged =
         d !== contents.discussion || participants !== d.participants || assets !== d.assets
     const syncChanged = contents.sync !== undefined && members !== contents.sync.members
-    if (!discussionChanged && !rsChanged && !syncChanged) return contents
+    if (!discussionChanged && !rsChanged && !syncChanged && !deliveryChanged) return contents
     return {
         ...contents,
         discussion: discussionChanged
@@ -414,7 +455,8 @@ export function normalizeSynced(contents: DocumentContents): DocumentContents {
         readState: rsChanged ? readState : contents.readState,
         ...(contents.sync
             ? { sync: syncChanged ? { ...contents.sync, members: [...members!] } : contents.sync }
-            : {})
+            : {}),
+        ...(contents.delivery ? { delivery: deliveryChanged ? delivery! : contents.delivery } : {})
     }
 }
 
@@ -436,6 +478,8 @@ function applyEventRaw(contents: DocumentContents, event: VerifiedEvent): ApplyR
             return applyTitle(contents, event as VerifiedEvent<'branch.title.set'>)
         case 'readstate.added':
             return applyReadState(contents, event as VerifiedEvent<'readstate.added'>)
+        case 'delivery.added':
+            return applyDelivery(contents, event as VerifiedEvent<'delivery.added'>)
         case 'member.added':
             return applyMemberAdded(contents, event as VerifiedEvent<'member.added'>)
         case 'profile.updated':

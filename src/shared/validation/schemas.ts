@@ -115,4 +115,9 @@ export interface DocumentContents {
     readState: ReadState
     /** Roster of a synchronized discussion (ZIP entry `sync.json`); absent for a normal discussion (FR-154). */
     sync?: SyncInfo
+    /**
+     * Which messages each member has received (ZIP entry `delivery.json`, D-40): participant ID -> message IDs, the same
+     * shape as the read state. Only in a synchronized discussion.
+     */
+    delivery?: ReadState
 }

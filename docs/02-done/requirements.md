@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements plus synchronized discussions (revision 12)  
+**Status:** MVP requirements plus synchronized discussions (revision 13)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -457,8 +457,9 @@ file when it is exchanged.
 - **FR-122.** Each message must show which other participants have read it, based on the read state in the file. The
   message's author is not listed, because an author has implicitly read their own message. A compact indicator is
   always visible on the message; the names are available on hover or click.
-- **FR-123.** The indicator must distinguish three states: read by all other known participants, read by some, and read
-  by none. "Known participants" are the participants listed in the document.
+- **FR-123.** The indicator must distinguish three states: read by all other known participants (two green checks),
+  read by some (one green check), and read by none (no mark). "Known participants" are the participants listed in the
+  document. A synchronized discussion shows delivery in the same mark (FR-169).
 - **FR-124.** A person who has never written to the file is not a known participant and is therefore not shown as
   having read or not read anything. Read information reflects the file as last saved by each participant; it is not
   live. Once a person has changed their read state, they become a known participant (FR-022), so
@@ -552,11 +553,12 @@ format is in `sync-protocol.md`. The release column says in which release the re
 
 #### Delivery marks and sync health (release 1.3)
 
-- **FR-169.** In a synchronized discussion, the sender's own messages have one combined mark instead of the read
-  indicator (D-09, D-40): one grey check when the message is written to the shared folder for all recipients; two grey
-  checks when all recipients confirmed delivery; one green check when at least one member has read it; two green checks
-  when all members have read it. A read state wins over a delivery state. The message details show per member:
-  written, delivered, or read. Delivery is stored only on the sender's computer.
+- **FR-169.** In a synchronized discussion, every message (own and of others) has one mark for delivery and reading
+  (D-09, D-40, D-41). The author is not counted. A grey clock while an own message is not written yet; one grey check
+  when the message is in the shared folder; two grey checks when all members received it; one green check when at
+  least one member has read it; two green checks when all members have read it. A read state wins over a delivery
+  state. Each member tells all members which messages it received (`delivery.added`, ZIP entry `delivery.json`). The
+  message details show per member: not yet received, received, or read.
 - **FR-170.** An unconfirmed copy is written again at start and every 30 minutes, but only if the recipient has shown
   activity since the last write (D-29).
 - **FR-171.** Old files in the shared folder are cleaned up: receipts after 7 days, unconfirmed own files after 30
@@ -837,6 +839,11 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 13
+
+- One mark for every message (D-41): FR-123 uses green checks and no mark for "none"; FR-169 covers all messages in a
+  synchronized discussion, with shared delivery state.
 
 ## Changes in revision 12
 

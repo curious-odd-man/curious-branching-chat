@@ -82,7 +82,11 @@ The serializer refuses any value that breaks these rules. Test vectors: `tests/s
 `branchchat-sync.json`:
 
 ```json
-{ "format": "branchchat-sync", "protocolVersion": 1, "conversationId": "<documentId>" }
+{
+    "format": "branchchat-sync",
+    "protocolVersion": 1,
+    "conversationId": "<documentId>"
+}
 ```
 
 No names and no content. One shared root holds one conversation.
@@ -108,26 +112,35 @@ A synchronized discussion has a ZIP entry `sync.json` (document schema version 2
 
 ```json
 {
-  "protocolVersion": 1,
-  "members": [
-    {
-      "participantId": "…",
-      "displayName": "…",
-      "signingPublicKey": "<base64, 32 bytes>",
-      "encryptionPublicKey": "<base64, 32 bytes>",
-      "fingerprint": "…",
-      "addedBy": "<participantId>",
-      "addedAt": "…Z",
-      "previousKeys": [
-        { "signingPublicKey": "…", "encryptionPublicKey": "…", "fingerprint": "…", "replacedAt": "…Z" }
-      ]
-    }
-  ]
+    "protocolVersion": 1,
+    "members": [
+        {
+            "participantId": "…",
+            "displayName": "…",
+            "signingPublicKey": "<base64, 32 bytes>",
+            "encryptionPublicKey": "<base64, 32 bytes>",
+            "fingerprint": "…",
+            "addedBy": "<participantId>",
+            "addedAt": "…Z",
+            "previousKeys": [
+                {
+                    "signingPublicKey": "…",
+                    "encryptionPublicKey": "…",
+                    "fingerprint": "…",
+                    "replacedAt": "…Z"
+                }
+            ]
+        }
+    ]
 }
 ```
 
 - The initiator has `addedBy` = own `participantId`.
 - A file without `sync.json` is not synchronized. "Отправить копию…" removes the entry (D-26).
+
+A synchronized discussion can also have a ZIP entry `delivery.json` (D-41). It has the same form as the read state:
+an object with one sorted list of message IDs per `participantId`, the messages that this member has received. Only
+a file with `sync.json` reads or writes it. "Отправить копию…" removes it too.
 
 ### 3.4 Writing files (local staging)
 
@@ -153,15 +166,15 @@ File `keys/<keyFileId>.bckey` or a file the person saves, with this JSON:
 
 ```json
 {
-  "format": "branchchat-key",
-  "version": 1,
-  "participantId": "…",
-  "displayName": "…",
-  "signingPublicKey": "<base64>",
-  "encryptionPublicKey": "<base64>",
-  "fingerprint": "…",
-  "createdAt": "…Z",
-  "signature": "<base64>"
+    "format": "branchchat-key",
+    "version": 1,
+    "participantId": "…",
+    "displayName": "…",
+    "signingPublicKey": "<base64>",
+    "encryptionPublicKey": "<base64>",
+    "fingerprint": "…",
+    "createdAt": "…Z",
+    "signature": "<base64>"
 }
 ```
 
@@ -186,17 +199,17 @@ The first 32 hex characters (128 bits), shown in 8 groups of 4: `3F2A 91C0 7B4E 
 
 ```json
 {
-  "protocolVersion": 1,
-  "eventId": "…",
-  "type": "message.sent",
-  "conversationId": "…",
-  "senderId": "…",
-  "recipientId": "…",
-  "senderSeq": 17,
-  "clock": 245,
-  "createdAt": "…Z",
-  "payload": { },
-  "payloadSha256": "…"
+    "protocolVersion": 1,
+    "eventId": "…",
+    "type": "message.sent",
+    "conversationId": "…",
+    "senderId": "…",
+    "recipientId": "…",
+    "senderSeq": 17,
+    "clock": 245,
+    "createdAt": "…Z",
+    "payload": {},
+    "payloadSha256": "…"
 }
 ```
 
@@ -240,13 +253,36 @@ All payload objects refuse unknown keys (`strict`). A new key needs a new protoc
 
 ```json
 {
-  "message": {
-    "messageId": "…", "threadId": "…", "authorDisplayName": "…", "createdAt": "…Z",
-    "content": { "type": "doc", "content": [] },
-    "assetReferences": ["<sha256>"]
-  },
-  "images": [ { "assetId": "<sha256>", "mediaType": "image/png", "size": 1234 } ],
-  "parts": [ { "partId": "…", "kind": "image", "assetId": "<sha256>", "index": 0, "size": 4194304, "sha256": "…" } ]
+    "message": {
+        "messageId": "…",
+        "threadId": "…",
+        "authorDisplayName": "…",
+        "createdAt": "…Z",
+        "content": {
+            "type": "doc",
+            "content": []
+        },
+        "assetReferences": [
+            "<sha256>"
+        ]
+    },
+    "images": [
+        {
+            "assetId": "<sha256>",
+            "mediaType": "image/png",
+            "size": 1234
+        }
+    ],
+    "parts": [
+        {
+            "partId": "…",
+            "kind": "image",
+            "assetId": "<sha256>",
+            "index": 0,
+            "size": 4194304,
+            "sha256": "…"
+        }
+    ]
 }
 ```
 
@@ -271,8 +307,18 @@ cannot replace or block another member's part by sending a part with the same ID
 ### 7.3 `branch.created`
 
 ```json
-{ "thread": { "threadId": "…", "parentThreadId": "…", "sourceMessageId": "…", "quoteText": "…",
-              "selectionStart": 3, "selectionEnd": 9, "title": "…", "createdAt": "…Z" } }
+{
+    "thread": {
+        "threadId": "…",
+        "parentThreadId": "…",
+        "sourceMessageId": "…",
+        "quoteText": "…",
+        "selectionStart": 3,
+        "selectionEnd": 9,
+        "title": "…",
+        "createdAt": "…Z"
+    }
+}
 ```
 
 `createdBy` = `senderId`, thread clock = envelope `clock`, status = `open`. `selectionStart`, `selectionEnd`, and
@@ -286,6 +332,13 @@ the title). Last writer wins by (`clock`, `senderId`) (D-24).
 ### 7.5 `readstate.added`
 
 `{ "messageIds": ["…"] }`. At most 10 000 IDs per event. Union with the sender's read state.
+
+### 7.5a `delivery.added`
+
+`{ "messageIds": ["…"] }`. At most 10 000 IDs per event. The sender has these messages of other authors in its copy.
+Union with the sender's entry in `delivery.json` (section 3.3). Only the sender's own entry changes. A member sends it
+after each scan for the messages of others that are in its copy but not yet in its own entry (also after joining, for
+the history). Added in protocol version 1 before the first release (D-41).
 
 ### 7.6 `member.added`
 
@@ -311,9 +364,19 @@ Invitation header (`.bcinv`):
 
 ```json
 {
-  "invitationId": "…", "minProtocolVersion": 1, "replacesKeysOf": "<participantId, optional>",
-  "snapshotSize": 123, "snapshotSha256": "…",
-  "parts": [ { "partId": "…", "index": 0, "size": 4194304, "sha256": "…" } ]
+    "invitationId": "…",
+    "minProtocolVersion": 1,
+    "replacesKeysOf": "<participantId, optional>",
+    "snapshotSize": 123,
+    "snapshotSha256": "…",
+    "parts": [
+        {
+            "partId": "…",
+            "index": 0,
+            "size": 4194304,
+            "sha256": "…"
+        }
+    ]
 }
 ```
 

@@ -25,7 +25,15 @@ export const DISCUSSION_ENTRY = 'discussion.json'
 export const READSTATE_ENTRY = 'readstate.json'
 /** Roster of a synchronized discussion (FR-154). Written only when present; never copied through. */
 export const SYNC_ENTRY = 'sync.json'
-const MANAGED_ENTRIES = new Set([MANIFEST_ENTRY, DISCUSSION_ENTRY, READSTATE_ENTRY, SYNC_ENTRY])
+/** Which messages each member has received (D-40). Written only when present; never copied through. */
+export const DELIVERY_ENTRY = 'delivery.json'
+const MANAGED_ENTRIES = new Set([
+    MANIFEST_ENTRY,
+    DISCUSSION_ENTRY,
+    READSTATE_ENTRY,
+    SYNC_ENTRY,
+    DELIVERY_ENTRY
+])
 
 export interface LoadedDocument {
     contents: DocumentContents
@@ -96,6 +104,7 @@ export async function readDocument(path: string): Promise<LoadedDocument> {
 
     const readStateBuf = buffers.get(READSTATE_ENTRY)
     const syncBuf = buffers.get(SYNC_ENTRY)
+    const deliveryBuf = buffers.get(DELIVERY_ENTRY)
     const migrated: RawDocument = migrateToCurrent(
         {
             manifest: manifestObj,
@@ -116,6 +125,9 @@ export async function readDocument(path: string): Promise<LoadedDocument> {
         migrated.sync === undefined
             ? undefined
             : parseWith(syncInfoSchema, migrated.sync, SYNC_ENTRY)
+    const delivery = deliveryBuf
+        ? parseWith(readStateSchema, parseJson(deliveryBuf, DELIVERY_ENTRY), DELIVERY_ENTRY)
+        : undefined
 
     const problems = checkDiscussionIntegrity(discussion)
     if (problems.length > 0)
@@ -135,7 +147,13 @@ export async function readDocument(path: string): Promise<LoadedDocument> {
 
     const missingAssetIds = discussion.assets.filter((a) => !seen.has(a.path)).map((a) => a.assetId)
     return {
-        contents: { manifest, discussion, readState, ...(sync ? { sync } : {}) },
+        contents: {
+            manifest,
+            discussion,
+            readState,
+            ...(sync ? { sync } : {}),
+            ...(sync && delivery ? { delivery } : {})
+        },
         entryNames,
         missingAssetIds
     }
@@ -162,6 +180,8 @@ function validateBeforeWrite(contents: DocumentContents): void {
     parseWith(manifestSchema, contents.manifest, MANIFEST_ENTRY)
     parseWith(discussionSchema, contents.discussion, DISCUSSION_ENTRY)
     parseWith(readStateSchema, contents.readState, READSTATE_ENTRY)
+    if (contents.delivery !== undefined)
+        parseWith(readStateSchema, contents.delivery, DELIVERY_ENTRY)
     if (contents.sync !== undefined) {
         parseWith(syncInfoSchema, contents.sync, SYNC_ENTRY)
         const rosterProblems = checkRosterIntegrity(contents.sync)
@@ -229,6 +249,8 @@ export async function writeDocument(
         zip.addBuffer(json(contents.readState), READSTATE_ENTRY, { mtime, compress: true })
         if (contents.sync !== undefined)
             zip.addBuffer(json(contents.sync), SYNC_ENTRY, { mtime, compress: true })
+        if (contents.sync !== undefined && contents.delivery !== undefined)
+            zip.addBuffer(json(contents.delivery), DELIVERY_ENTRY, { mtime, compress: true })
         for (const asset of newAssets)
             zip.addBuffer(asset.data, asset.path, { mtime, compress: false })
 

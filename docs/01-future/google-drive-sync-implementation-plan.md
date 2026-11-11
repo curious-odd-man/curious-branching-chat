@@ -21,7 +21,7 @@
 | 1.2     | 8 — Session integration                      | Done                                                    | Sessions and closed files, detached copies, moved files, "Отправить копию…", loading bubble with progress                                                                                                                        |
 | 1.2     | 9 — Wizards and invitations                  | Done in code                                            | Create, convert, join, roster; 5 e2e tests with two app instances                                                                                                                                                                |
 | 1.2     | 10 — Hardening of release 1.2                | Done in code; **needs Windows and Google Drive checks** | Security review fixes, performance (5,000 messages: convert and join in 0.4 s), user guide, checklist section M. **Not done:** the Google Drive tests (design Section 23), the manual matrix, and an independent security review |
-| 1.3     | 11 — Delivery marks and sync health          | Done in code; **one open question**                     | Combined mark per message (D-40) and per member, retry rule, 7-day and 30-day cleanup, status line, "Проверить папки"; 7 unit tests and 1 e2e test. Open: Q-41                                                                   |
+| 1.3     | 11 — Delivery marks and sync health          | Done in code                                            | One mark for every message (D-40, D-41), shared delivery state, retry rule, 7-day and 30-day cleanup, status line, "Проверить папки"; unit and e2e tests                                                                         |
 | 1.4     | 12 — Tray, background sync, notifications    | Not started                                             |                                                                                                                                                                                                                                  |
 | 1.5     | 13 — Add members after activation            | Not started                                             |                                                                                                                                                                                                                                  |
 | 1.5     | 14 — Rejoin after key loss                   | Not started                                             |                                                                                                                                                                                                                                  |
@@ -80,8 +80,18 @@ Implementation decisions made in phase 11:
 - Own messages in a synchronized discussion have one combined mark (D-40, answer to Q-40), instead of the read
   indicator: one grey check = written to the shared folder; two grey checks = delivered to all; one green check = read
   by at least one member; two green checks = read by all. A read state wins over a delivery state. While the message
-  is still being written, a grey clock is shown (assumption, Q-41). The list per member (click) shows written,
-  delivered, or read.
+  is still being written, a grey clock is shown (Q-41). The list per member (click) shows written, delivered, or read.
+- D-41 (answer to Q-41): the mark applies to all messages. Each member sends `delivery.added` with the IDs of
+  messages of others that are in its copy; the receiver adds them to the sender's entry in the ZIP entry
+  `delivery.json` (set union, like `readstate.added`). Protocol version stays 1: the old build is not released.
+- The delivery event is stored in the outbox and the sync state is saved before the document changes. After a crash
+  between the two steps, the next scan sends the same IDs again; this does no harm.
+- A message in the own copy counts as received by the local member. A member counts as "delivered" when its
+  `delivery.json` entry has the message, or (own messages) when its receipt arrived.
+- Normal discussions use the same mark without delivery: no mark while nobody has read, one green check some, two
+  green checks all. The old three-state indicator is removed.
+- The rule is one pure function, `messageMarkOf` in `src/shared/domain/messageMark.ts`.
+- "Отправить копию…" also removes `delivery.json`.
 - A retry keeps the time of the first write, so the 30-day limit counts from the first write.
 - Folder health comes from the scan (folder missing) and from writes (EACCES or EPERM: no permission); a successful
   write or scan clears it.
@@ -91,7 +101,7 @@ Implementation decisions made in phase 11:
 **Q-40 (answered → D-40).** One grey check: written; two grey checks: delivered to all; one green check: read by at
 least one member; two green checks: read by all.
 
-**Q-41 (open).** Two details that the answer to Q-40 does not cover:
+**Q-41 (answered → D-41).** Two details that the answer to Q-40 does not cover:
 a) What does an own message show before it is written to the shared folder (usually less than a second; longer if the
 folder is not available)? Implemented: a grey clock 🕓. Options: (i) keep the clock; (ii) no mark; (iii) one grey check
 already.
@@ -101,7 +111,10 @@ shared discussion this means two grey checks have one meaning on own messages ("
 messages ("some read"). Options: (i) keep it as it is; (ii) in synchronized discussions, use the green colors for
 reading on all messages (one green check: some read; two green checks: all read; no mark: nobody read); (iii) the same
 green scheme also in normal discussions. Recommendation: a) (i), b) (ii).
-**Answer:**
+**Answer:** a) keep the clock. b) The table (one grey check written, two grey checks delivered to all, one green check
+read by at least one, two green checks read by all) applies to all messages, own and of others. Delivery of others'
+messages: each member tells all members which messages it received (like the read state). Normal discussions also use
+the green checks.
 
 ---
 

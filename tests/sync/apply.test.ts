@@ -267,6 +267,30 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
         expect(r.duplicates).toEqual([])
     })
 
+    it('delivery.added changes only the entry of the sender and is a set union (D-41)', () => {
+        const start = sharedStart()
+        const r = applyAll(start, [
+            {
+                eventId: 'd1',
+                type: 'delivery.added',
+                senderId: 'p-boris',
+                clock: 3,
+                createdAt: 'x',
+                payload: { messageIds: ['m2', 'm1'] }
+            },
+            {
+                eventId: 'd2',
+                type: 'delivery.added',
+                senderId: 'p-boris',
+                clock: 4,
+                createdAt: 'x',
+                payload: { messageIds: ['m1', 'm3'] }
+            }
+        ] as VerifiedEvent[])
+        expect(r.contents.delivery).toEqual({ 'p-boris': ['m1', 'm2', 'm3'] })
+        expect(r.contents.readState['p-boris']).toBeUndefined()
+    })
+
     it('adds members only when the sender added them, and updates names by clock (D-12, D-13)', () => {
         const start = sharedStart()
         const dora = memberOf({ participantId: 'p-dora', displayName: 'Дора' }, 'p-boris')

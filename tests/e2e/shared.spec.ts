@@ -140,11 +140,10 @@ test('create, join, and write in both directions through the shared folder (FR-1
     await expect(message(a.win, 'Привет, Анна. Я на месте.')).toBeVisible({ timeout: 15_000 })
 
     // Boris answered, so Anna's message is read by him (FR-112)
-    // own messages in a shared discussion have one combined mark: two green checks = read by all (D-40)
-    const ownMark = message(a.win, 'Привет, Борис!').getByTestId('delivery-mark')
+    // one mark for delivery and reading: two green checks = read by all (D-40, D-41)
+    const ownMark = message(a.win, 'Привет, Борис!').getByTestId('message-mark')
     await expect(ownMark).toHaveAttribute('data-state', 'read-all', { timeout: 15_000 })
     await expect(ownMark).toHaveText('✓✓')
-    await expect(message(a.win, 'Привет, Борис!').getByTestId('read-indicator')).toHaveCount(0)
 
     // the shared folder holds only encrypted protocol files; the plain text is never there (FR-160)
     const files = (await fs.readdir(shared, { recursive: true, withFileTypes: true })).filter((e) =>
@@ -298,32 +297,34 @@ test('a moved shared file is recognized after the person confirms it (FR-168)', 
 test('release 1.3: delivery marks, per-member details, and the status line (FR-169, FR-172)', async () => {
     const { a, b, shared } = await createAndJoin()
     await send(a.win, 'Дошло?')
-    const mark = message(a.win, 'Дошло?').getByTestId('delivery-mark')
+    const mark = message(a.win, 'Дошло?').getByTestId('message-mark')
     await expect(mark).toHaveAttribute('data-state', 'delivered', { timeout: 15_000 })
     // two grey checks: delivered to all (D-40)
     await expect(mark).toHaveText('✓✓')
+    // Boris sees the same mark on the message of Anna: he has it, so it is delivered to all (D-41)
+    const atBoris = message(b.win, 'Дошло?').getByTestId('message-mark')
+    await expect(atBoris).toHaveAttribute('data-state', 'delivered')
     // Boris marks it read: two green checks (with two members, "all" comes at once)
     await message(b.win, 'Дошло?').getByTestId('mark-read').click()
+    await expect(atBoris).toHaveAttribute('data-state', 'read-all')
     await expect(mark).toHaveAttribute('data-state', 'read-all', { timeout: 15_000 })
     await mark.click()
-    await expect(a.win.getByTestId('delivery-member').filter({ hasText: 'Борис' })).toHaveAttribute(
+    await expect(a.win.getByTestId('mark-member').filter({ hasText: 'Борис' })).toHaveAttribute(
         'data-state',
         'read'
     )
     await a.win.keyboard.press('Escape')
-    // other people's messages have no delivery mark
-    await expect(message(b.win, 'Дошло?').getByTestId('delivery-mark')).toHaveCount(0)
 
     // Boris is away: the message stays "in the folder"
     await b.t.close()
     apps.splice(apps.indexOf(b.t), 1)
     await send(a.win, 'Пока тебя нет')
-    const away = message(a.win, 'Пока тебя нет').getByTestId('delivery-mark')
+    const away = message(a.win, 'Пока тебя нет').getByTestId('message-mark')
     // one grey check: written to the shared folder
     await expect(away).toHaveAttribute('data-state', 'written', { timeout: 15_000 })
     await expect(away).toHaveText('✓')
     await away.click()
-    await expect(a.win.getByTestId('delivery-member').filter({ hasText: 'Борис' })).toHaveAttribute(
+    await expect(a.win.getByTestId('mark-member').filter({ hasText: 'Борис' })).toHaveAttribute(
         'data-state',
         'written'
     )

@@ -93,7 +93,7 @@ export class DocumentSession {
     /** Messages that are still loading (set by the sync service, D-37). */
     loading: LoadingMessage[] = []
     /** Delivery of own messages and sync health (set by the sync service, FR-169, FR-172). */
-    delivery: DocumentView['delivery'] = {}
+    copies: DocumentView['copies'] = {}
     syncStatus: DocumentView['syncStatus'] = null
 
     private constructor(
@@ -190,7 +190,7 @@ export class DocumentSession {
     /** "Отправить копию…": the same discussion without the roster, for manual sharing (D-26, FR-167). */
     async saveCopyWithoutSync(target: string): Promise<void> {
         await this.flush()
-        const { sync: _roster, ...plain } = this.contents
+        const { sync: _roster, delivery: _delivery, ...plain } = this.contents
         await this.deps.writer(target, plain, { discardExisting: false, copyFrom: this.path })
     }
     get saveError(): string | null {
@@ -409,7 +409,8 @@ export class DocumentSession {
                 ? knownParticipants(this.contents)
                 : this.contents.discussion.participants,
             loading: this.loading,
-            delivery: this.synced ? this.delivery : {},
+            copies: this.synced ? this.copies : {},
+            deliveryState: this.synced ? (this.contents.delivery ?? {}) : {},
             syncStatus: this.synced ? this.syncStatus : null,
             localParticipantId,
             missingAssetIds: this.missingAssetIds,

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import {
     branchesBySourceMessage,
     buildReadSets,
+    type MarkSync,
     findMessage,
     mainThread,
     resolveContext,
@@ -74,6 +75,17 @@ export function DiscussionScreen({
 
     // Unread marks (FR-110, FR-113) and who has read what (FR-122); both come from the read state in the file.
     const readSets = useMemo(() => buildReadSets(view.readState), [view.readState])
+    const markSync = useMemo<MarkSync | null>(
+        () =>
+            view.synced
+                ? {
+                      localId: view.localParticipantId,
+                      deliverySets: buildReadSets(view.deliveryState),
+                      copies: view.copies
+                  }
+                : null,
+        [view.synced, view.localParticipantId, view.deliveryState, view.copies]
+    )
     const unread = useMemo(
         () => unreadSummary(discussion, view.readState, view.localParticipantId),
         [discussion, view.readState, view.localParticipantId]
@@ -242,7 +254,7 @@ export function DiscussionScreen({
                         onOpenLink={(href) => void window.branchchat.openLink(href)}
                         onReply={onReply}
                         onOpenBranch={(id) => onSelectThread(id)}
-                        delivery={view.delivery}
+                        sync={markSync}
                         {...(focusMessageId ? { focusMessageId } : {})}
                     />
                     <Composer

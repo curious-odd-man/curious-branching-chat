@@ -204,3 +204,7 @@ results if needed.
 5. Quit Drive for Desktop on A: the yellow line "Общая папка недоступна" appears after "⟳ Проверить папки". Start Drive
    again: the line goes away.
 6. Remove A's edit permission on the folder and write: the line "Нет прав на запись" appears.
+7. Three members (D-41): A writes. On B, A's message shows one grey check until C has it too, then two grey checks.
+   Click it on B: C is listed as "ещё не получил", then "получил". C reads it: one green check on A and on B.
+8. Normal (not synchronized) discussion: a message nobody has read has no mark; read by some: one green check; read
+   by all: two green checks.

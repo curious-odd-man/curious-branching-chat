@@ -183,18 +183,15 @@ export interface DocumentView {
     knownParticipants: Participant[]
     /** Messages whose header arrived but some parts not yet (FR-165, D-37). */
     loading: LoadingMessage[]
-    /** Delivery of the own messages, by message ID (FR-169); empty for a normal discussion. */
-    delivery: Record<string, DeliveryView>
+    /** Own outbox: the copy state per recipient, by message ID (FR-169); empty for a normal discussion. */
+    copies: Record<string, Record<string, CopyStateView>>
+    /** Which messages each member has received (`delivery.json`, D-41); empty for a normal discussion. */
+    deliveryState: ReadState
     /** Sync health for the status line (FR-172); null for a normal discussion. */
     syncStatus: SyncStatusView | null
 }
 
 export type CopyStateView = 'pending' | 'written' | 'delivered'
-
-export interface DeliveryView {
-    state: CopyStateView
-    members: Array<{ participantId: string; displayName: string; state: CopyStateView }>
-}
 
 export interface SyncStatusView {
     folder: 'ok' | 'missing' | 'no-permission'

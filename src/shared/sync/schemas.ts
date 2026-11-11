@@ -152,6 +152,11 @@ export const readStateAddedPayloadSchema = z
 
 const memberWithoutHistory = rosterMemberSchema.omit({ previousKeys: true }).strict()
 
+/** `delivery.added` (sync-protocol.md 7.11, D-40): messages that the sender has now received. */
+export const deliveryAddedPayloadSchema = z
+    .object({ messageIds: z.array(docId).min(1).max(MAX_READ_IDS_PER_EVENT) })
+    .strict()
+
 export const memberAddedPayloadSchema = z.object({ member: memberWithoutHistory }).strict()
 
 export const memberKeysReplacedPayloadSchema = z
@@ -210,6 +215,7 @@ export const PAYLOAD_SCHEMAS = {
     'branch.status.set': branchStatusSetPayloadSchema,
     'branch.title.set': branchTitleSetPayloadSchema,
     'readstate.added': readStateAddedPayloadSchema,
+    'delivery.added': deliveryAddedPayloadSchema,
     'member.added': memberAddedPayloadSchema,
     'member.keys.replaced': memberKeysReplacedPayloadSchema,
     'profile.updated': profileUpdatedPayloadSchema,

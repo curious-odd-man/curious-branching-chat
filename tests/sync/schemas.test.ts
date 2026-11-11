@@ -75,6 +75,7 @@ const validPayloads: Record<EventType, unknown> = {
     'branch.status.set': { threadId: 't2', status: 'closed' },
     'branch.title.set': { threadId: 't2', title: '' },
     'readstate.added': { messageIds: ['m1', 'm2'] },
+    'delivery.added': { messageIds: ['m1'] },
     'member.added': { member },
     'member.keys.replaced': {
         participantId: 'p-anna',
@@ -122,6 +123,7 @@ describe('sync event schemas (sync-protocol.md 5 and 7)', () => {
                 'branch.created',
                 'branch.status.set',
                 'branch.title.set',
+                'delivery.added',
                 'invitation',
                 'invitation.part',
                 'member.added',

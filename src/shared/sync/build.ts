@@ -121,6 +121,16 @@ export function eventsFromChange(
             payload: { messageIds: added.slice(i, i + 10_000) }
         })
 
+    const wasDelivered = new Set(before.delivery?.[localId] ?? [])
+    const delivered = (after.delivery?.[localId] ?? []).filter((id) => !wasDelivered.has(id))
+    for (let i = 0; i < delivered.length; i += 10_000)
+        events.push({
+            type: 'delivery.added',
+            clock: documentClock(after),
+            createdAt: now,
+            payload: { messageIds: delivered.slice(i, i + 10_000) }
+        })
+
     const oldMember = before.sync?.members.find((m) => m.participantId === localId)
     const newMember = after.sync?.members.find((m) => m.participantId === localId)
     if (oldMember && newMember && oldMember.displayName !== newMember.displayName) {
@@ -134,6 +144,35 @@ export function eventsFromChange(
         })
     }
     return events
+}
+
+/**
+ * D-41: the messages of other authors that are in this copy but not yet in the own delivery entry.
+ */
+export function missingOwnDelivery(contents: DocumentContents, localId: string): string[] {
+    if (!contents.sync) return []
+    const current = new Set(contents.delivery?.[localId] ?? [])
+    const missing: string[] = []
+    for (const t of contents.discussion.threads)
+        for (const m of t.messages)
+            if (m.authorId !== localId && !current.has(m.messageId)) missing.push(m.messageId)
+    return missing.sort()
+}
+
+/** Adds message IDs to the own delivery entry. Returns the same object if nothing changes. */
+export function addOwnDelivery(
+    contents: DocumentContents,
+    localId: string,
+    messageIds: readonly string[]
+): DocumentContents {
+    if (!contents.sync) return contents
+    const current = new Set(contents.delivery?.[localId] ?? [])
+    const added = messageIds.filter((id) => !current.has(id))
+    if (added.length === 0) return contents
+    return {
+        ...contents,
+        delivery: { ...contents.delivery, [localId]: [...current, ...added].sort() }
+    }
 }
 
 /**
