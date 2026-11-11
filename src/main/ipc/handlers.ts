@@ -1,7 +1,7 @@
 import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { ZodError, type ZodType } from 'zod'
 import { DomainError } from '@shared/domain'
-import { describeError } from '@shared/i18n/ru'
+import { describeError, ru } from '@shared/i18n/ru'
 import { IPC, type IpcResult } from '@shared/types/ipc'
 import {
     appendMessageSchema,
@@ -16,6 +16,11 @@ import {
     setAssociationSchema,
     setAutoUpdateSchema,
     setOpenLastSchema,
+    setFileSizeLimitSchema,
+    sharedRootSchema,
+    sharedParseKeySchema,
+    sharedCreateSchema,
+    joinImportSchema,
     setRecentLimitSchema,
     setNameSchema,
     stageImageSchema,
@@ -33,6 +38,13 @@ import type { SettingsStore } from '../local-state/settings'
 import type { UpdateService } from '../updates/updateService'
 import type { AssociationService } from '../windows/associationService'
 import type { IdentityService } from '../crypto/identityService'
+import type { SyncService } from '../sync/syncService'
+import type { Onboarding } from '../sync/onboarding'
+import { groupFingerprint } from '../crypto/identity'
+import { isInside } from '../transport/folderTransport'
+import { resolve } from 'node:path'
+import type { Ui } from '../application/ui'
+import type { RosterView } from '@shared/types/ipc'
 
 /** Only the application's own page may call the main process: the packaged `file:` page, or the dev server. */
 function isAppPage(url: string): boolean {
@@ -57,7 +69,9 @@ export function registerIpcHandlers(
     recent: RecentFilesStore,
     association: AssociationService,
     updates: UpdateService,
-    identity: IdentityService
+    identity: IdentityService,
+    sync?: SyncService,
+    shared?: { onboarding: Onboarding; ui: Ui }
 ): void {
     function handle<P, R>(
         channel: string,
@@ -93,13 +107,110 @@ export function registerIpcHandlers(
 
     handle(IPC.appInfo, noPayloadSchema, () => ({ name: app.getName(), version: app.getVersion() }))
     handle(IPC.identityGet, noPayloadSchema, () => identity.view())
+
+    // ---- synchronized discussions: wizards (FR-158, FR-162) ----
+    const onboarding = (): Onboarding => {
+        if (!shared) throw new AppError('NO_DOCUMENT', 'not available')
+        return shared.onboarding
+    }
+    /** Asks where to save a local file; never inside the shared folder (FR-160). */
+    const pickLocalFile = async (
+        entry: WindowEntry | undefined,
+        root: string,
+        defaultName: string
+    ): Promise<string | null> => {
+        const chosen = await shared!.ui.pickSavePath(entry?.win, defaultName)
+        if (!chosen) return null
+        const path = resolve(/\.branchchat$/i.test(chosen) ? chosen : `${chosen}.branchchat`)
+        if (isInside(root, path))
+            throw new AppError(
+                'FILE_IN_SHARED_FOLDER',
+                'the file must be outside the shared folder'
+            )
+        return path
+    }
+    handle(IPC.sharedPickFolder, noPayloadSchema, async (entry) => {
+        const path = await shared?.ui.pickFolder(entry?.win)
+        if (!path) return null
+        return { path, test: await onboarding().testFolder(path) }
+    })
+    handle(IPC.sharedPublishKey, sharedRootSchema, async (_e, p) => {
+        await onboarding().publishOwnKey(p.root)
+        return null
+    })
+    handle(IPC.sharedCandidates, sharedRootSchema, (_e, p) => onboarding().candidates(p.root))
+    handle(IPC.sharedParseKey, sharedParseKeySchema, (_e, p) => onboarding().parseKey(p.text))
+    handle(IPC.sharedPickKeyFile, noPayloadSchema, async (entry) => {
+        const path = await shared?.ui.pickKeyFile(entry?.win)
+        return path ? onboarding().readKeyFile(path) : null
+    })
+    handle(IPC.sharedCreate, sharedCreateSchema, async (entry, p) => {
+        if (p.mode === 'convert') {
+            const session = requireSession(entry)
+            if (session.current.sync) throw new AppError('FOLDER_IN_USE', 'already shared')
+            if (isInside(p.root, session.path))
+                throw new AppError(
+                    'FILE_IN_SHARED_FOLDER',
+                    'the file must be outside the shared folder'
+                )
+            await onboarding().create({
+                root: p.root,
+                filePath: session.path,
+                keys: p.keys,
+                session
+            })
+            session.onChange()
+            return true
+        }
+        const path = await pickLocalFile(entry, p.root, ru.shared.defaultFileName)
+        if (!path) return false
+        await onboarding().create({ root: p.root, filePath: path, keys: p.keys })
+        await controller.openPath(path, entry)
+        return true
+    })
+    handle(IPC.sharedRoster, noPayloadSchema, (entry): RosterView | null => {
+        const session = entry?.session
+        const roster = session?.current.sync
+        if (!session || !roster || !session.synced) return null
+        const states = sync?.invitationStatus(session.documentId) ?? {}
+        const me = settings.get().participantId
+        return {
+            members: roster.members.map((m) => ({
+                participantId: m.participantId,
+                displayName: m.displayName,
+                fingerprint: groupFingerprint(m.fingerprint),
+                state: m.participantId === me ? 'self' : (states[m.participantId] ?? 'member')
+            }))
+        }
+    })
+    handle(IPC.syncCheckNow, noPayloadSchema, async (entry) => {
+        const session = requireSession(entry)
+        await sync?.checkNow(session)
+        return null
+    })
+    handle(IPC.joinFind, sharedRootSchema, (_e, p) => onboarding().findInvitation(p.root))
+    handle(IPC.joinImport, joinImportSchema, async (entry, p) => {
+        const found = await onboarding().findInvitation(p.root)
+        if (found.state !== 'ready' || found.invitationId !== p.invitationId)
+            throw new AppError('INVITATION_GONE', 'the invitation is not available')
+        const path = await pickLocalFile(entry, p.root, found.title)
+        if (!path) return false
+        await onboarding().importInvitation(p.root, p.invitationId, path)
+        await controller.openPath(path, entry)
+        return true
+    })
     handle(IPC.identityCopyBundle, noPayloadSchema, async () => {
         await identity.copyBundle()
         return null
     })
     handle(IPC.identitySaveBundle, noPayloadSchema, (entry) => identity.saveBundle(entry?.win))
     handle(IPC.settingsGet, noPayloadSchema, () => settings.get())
-    handle(IPC.settingsSetName, setNameSchema, (_e, p) => settings.setDisplayName(p.displayName))
+    handle(IPC.settingsSetName, setNameSchema, async (_e, p) => {
+        const view = await settings.setDisplayName(p.displayName)
+        // D-12: synchronized discussions send the new name to the other members
+        if (view.displayName) await sync?.nameChanged(view.displayName)
+        return view
+    })
 
     handle(IPC.settingsSetAutoUpdate, setAutoUpdateSchema, (_e, p) =>
         settings.setAutoUpdateCheck(p.enabled)
@@ -109,6 +220,9 @@ export function registerIpcHandlers(
         await recent.trim(p.limit)
         return updated
     })
+    handle(IPC.settingsSetFileSizeLimit, setFileSizeLimitSchema, (_e, p) =>
+        settings.setFileSizeLimit(p.mb)
+    )
     handle(IPC.settingsSetOpenLast, setOpenLastSchema, (_e, p) =>
         settings.setOpenLastFileOnStartup(p.enabled)
     )

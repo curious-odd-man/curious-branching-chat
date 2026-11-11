@@ -4,8 +4,12 @@ import type {
     AppInfo,
     AssociationInfo,
     DocumentStatus,
+    CandidateView,
     DocumentView,
     IdentityView,
+    InvitationView,
+    RosterView,
+    SharedFolderChoice,
     IpcResult,
     MenuCommand,
     OpenOutcome,
@@ -17,6 +21,18 @@ import type {
 /** The only surface the renderer can reach (exposed by the preload script as `window.branchchat`). */
 export interface BranchChatApi {
     getAppInfo(): Promise<IpcResult<AppInfo>>
+    /** Wizards of synchronized discussions (FR-158, FR-162). */
+    pickSharedFolder(): Promise<IpcResult<SharedFolderChoice | null>>
+    publishOwnKey(root: string): Promise<IpcResult<null>>
+    listCandidates(root: string): Promise<IpcResult<CandidateView[]>>
+    parseKey(text: string): Promise<IpcResult<CandidateView>>
+    pickKeyFile(): Promise<IpcResult<CandidateView | null>>
+    createShared(root: string, keys: string[], mode: 'new' | 'convert'): Promise<IpcResult<boolean>>
+    getRoster(): Promise<IpcResult<RosterView | null>>
+    findInvitation(root: string): Promise<IpcResult<InvitationView>>
+    importInvitation(root: string, invitationId: string): Promise<IpcResult<boolean>>
+    /** "Проверить папки": scan the shared folder now (FR-172). */
+    checkSyncNow(): Promise<IpcResult<null>>
     /** Encryption key: created on first use; only the fingerprint is returned (FR-155 to FR-157). */
     getIdentity(): Promise<IpcResult<IdentityView>>
     /** Copies the public-key bundle as text to the clipboard. */
@@ -45,6 +61,8 @@ export interface BranchChatApi {
     /** How many recent files are remembered (0 = none). Lowering it forgets the oldest entries. */
     setRecentFilesLimit(limit: number): Promise<IpcResult<SettingsView>>
     setOpenLastFileOnStartup(enabled: boolean): Promise<IpcResult<SettingsView>>
+    /** Largest file read from a shared folder, 5 to 1 000 MB (FR-166). */
+    setFileSizeLimit(mb: number): Promise<IpcResult<SettingsView>>
     getRecentFiles(): Promise<IpcResult<RecentFileView[]>>
     removeRecentFile(path: string): Promise<IpcResult<null>>
     clearRecentFiles(): Promise<IpcResult<null>>

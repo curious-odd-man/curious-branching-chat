@@ -35,6 +35,21 @@ export function buildMenu(
                     )
                 },
                 { type: 'separator' },
+                { label: ru.menu.newShared, click: () => controller.sendMenuCommand('new-shared') },
+                {
+                    label: ru.menu.joinShared,
+                    click: () => controller.sendMenuCommand('join-shared')
+                },
+                {
+                    label: ru.menu.makeShared,
+                    click: () => controller.sendMenuCommand('make-shared')
+                },
+                {
+                    label: ru.menu.sendCopy,
+                    click: () =>
+                        void controller.saveCopy(controller.focusedEntry()).catch(() => undefined)
+                },
+                { type: 'separator' },
                 {
                     label: ru.menu.settings,
                     accelerator: 'CmdOrCtrl+,',

@@ -8,6 +8,7 @@ import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
 import { ReadNotice } from './components/ReadNotice'
 import { SettingsDialog } from './components/SettingsDialog'
+import { SharedWizard, type WizardMode } from './components/SharedWizard'
 import { UpdateDialog } from './components/UpdateDialog'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
 import { useDocumentView, useRecentFiles, useSettings, useUpdateState } from './hooks'
@@ -15,6 +16,9 @@ import { useDocumentView, useRecentFiles, useSettings, useUpdateState } from './
 export function App(): React.JSX.Element {
     const api = window.branchchat
     const view = useDocumentView()
+    // the convert wizard is offered only for an open discussion that is not shared yet (checked when it opens)
+    const viewRef = useRef(view)
+    viewRef.current = view
     const [settings, setSettings] = useSettings()
     const [version, setVersion] = useState('')
     const [error, setError] = useState<string | null>(null)
@@ -27,6 +31,7 @@ export function App(): React.JSX.Element {
     const recent = useRecentFiles()
     const [bannerHidden, setBannerHidden] = useState<string | null>(null)
     const [showSettings, setShowSettings] = useState(false)
+    const [wizard, setWizard] = useState<WizardMode | null>(null)
     const [readNotice, setReadNotice] = useState<{ retry: () => void } | null>(null)
     const settingsRef = useRef(settings)
     settingsRef.current = settings
@@ -59,7 +64,11 @@ export function App(): React.JSX.Element {
             api.onMenuCommand((command) => {
                 if (command === 'new') startNew()
                 else if (command === 'settings') setShowSettings(true)
-                else openDialog()
+                else if (command === 'new-shared') setWizard('new')
+                else if (command === 'join-shared') setWizard('join')
+                else if (command === 'make-shared') {
+                    if (viewRef.current && !viewRef.current.synced) setWizard('convert')
+                } else openDialog()
             }),
         [api, startNew, openDialog]
     )
@@ -232,6 +241,9 @@ export function App(): React.JSX.Element {
                     }}
                     onClose={() => setShowSettings(false)}
                 />
+            )}
+            {wizard && (wizard !== 'convert' || view) && (
+                <SharedWizard mode={wizard} settings={settings} onClose={() => setWizard(null)} />
             )}
             {pending && <NamePrompt onSubmit={submitName} onCancel={() => setPending(null)} />}
             {readNotice && (

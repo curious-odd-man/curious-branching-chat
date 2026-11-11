@@ -552,9 +552,11 @@ format is in `sync-protocol.md`. The release column says in which release the re
 
 #### Delivery marks and sync health (release 1.3)
 
-- **FR-169.** The sender's own messages show one grey check when the message is written to the shared folder for all
-  recipients, and two grey checks when all recipients confirmed delivery. The message details show per member:
-  written, delivered, read. This state is stored only on the sender's computer (D-09).
+- **FR-169.** In a synchronized discussion, the sender's own messages have one combined mark instead of the read
+  indicator (D-09, D-40): one grey check when the message is written to the shared folder for all recipients; two grey
+  checks when all recipients confirmed delivery; one green check when at least one member has read it; two green checks
+  when all members have read it. A read state wins over a delivery state. The message details show per member:
+  written, delivered, or read. Delivery is stored only on the sender's computer.
 - **FR-170.** An unconfirmed copy is written again at start and every 30 minutes, but only if the recipient has shown
   activity since the last write (D-29).
 - **FR-171.** Old files in the shared folder are cleaned up: receipts after 7 days, unconfirmed own files after 30

@@ -59,6 +59,7 @@
     "@tiptap/extensions": "^3.32.2",
     "@tiptap/pm": "^3.32.2",
     "@tiptap/react": "^3.32.2",
+    "chokidar": "^4.0.3",
     "electron-updater": "^6.8.11",
     "libsodium-wrappers": "^0.8.4",
     "react": "^19.3.1",

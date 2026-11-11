@@ -11,6 +11,13 @@ export type AppErrorCode =
     | 'INVALID_REQUEST'
     | 'KEYS_UNAVAILABLE'
     | 'WRITE_FAILED'
+    | 'OWN_KEY'
+    | 'INVALID_KEY'
+    | 'NO_MEMBERS'
+    | 'FILE_IN_SHARED_FOLDER'
+    | 'FOLDER_TEST_FAILED'
+    | 'FOLDER_IN_USE'
+    | 'INVITATION_GONE'
 
 export class AppError extends Error {
     readonly code: AppErrorCode

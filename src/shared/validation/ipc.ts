@@ -28,4 +28,32 @@ export const setAssociationSchema = z.object({ enabled: z.boolean() }).strict()
 export const setAutoUpdateSchema = z.object({ enabled: z.boolean() }).strict()
 export const setRecentLimitSchema = z.object({ limit: z.number().int().nonnegative() }).strict()
 export const setOpenLastSchema = z.object({ enabled: z.boolean() }).strict()
+export const sharedRootSchema = z.object({ root: z.string().min(1) }).strict()
+export const sharedParseKeySchema = z
+    .object({
+        text: z
+            .string()
+            .min(1)
+            .max(64 * 1024)
+    })
+    .strict()
+export const sharedCreateSchema = z
+    .object({
+        root: z.string().min(1),
+        keys: z
+            .array(
+                z
+                    .string()
+                    .min(1)
+                    .max(64 * 1024)
+            )
+            .min(1)
+            .max(100),
+        mode: z.enum(['new', 'convert'])
+    })
+    .strict()
+export const joinImportSchema = z
+    .object({ root: z.string().min(1), invitationId: z.string().min(1) })
+    .strict()
+export const setFileSizeLimitSchema = z.object({ mb: z.number().int().min(5).max(1000) }).strict()
 export const recentPathSchema = z.object({ path: z.string().min(1) }).strict()

@@ -9,22 +9,22 @@
 
 ## Progress
 
-| Release | Phase                                        | Status                                  | Notes                                                                                                                                                            |
-|---------|----------------------------------------------|-----------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1.1     | 1 — Requirements, ADR, and protocol contract | Done                                    | `requirements.md` revision 12 (FR-151 to FR-178), `adr-002-sync.md`, `sync-protocol.md`; event schemas in `src/shared/sync/` with 46 unit tests                  |
-| 1.1     | 2 — Schema version 2                         | Done                                    | Clocks, last-writer stamps, migration 1 → 2, `sync.json` entry; 10 unit tests and 1 e2e test                                                                     |
-| 1.1     | 3 — Identity and key store                   | Done in code; **needs a Windows check** | `libsodium-wrappers` (standard build), key store with `safeStorage`, Settings section; 10 unit tests and 4 e2e tests. DPAPI on real Windows: checklist section L |
-| 1.2     | 4 — Pure sync core                           | Not started                             |                                                                                                                                                                  |
-| 1.2     | 5 — Event cryptography and parts             | Not started                             |                                                                                                                                                                  |
-| 1.2     | 6 — Folder transport and local sync state    | Not started                             |                                                                                                                                                                  |
-| 1.2     | 7 — Sync service                             | Not started                             |                                                                                                                                                                  |
-| 1.2     | 8 — Session integration                      | Not started                             |                                                                                                                                                                  |
-| 1.2     | 9 — Wizards and invitations                  | Not started                             |                                                                                                                                                                  |
-| 1.2     | 10 — Hardening of release 1.2                | Not started                             |                                                                                                                                                                  |
-| 1.3     | 11 — Delivery marks and sync health          | Not started                             |                                                                                                                                                                  |
-| 1.4     | 12 — Tray, background sync, notifications    | Not started                             |                                                                                                                                                                  |
-| 1.5     | 13 — Add members after activation            | Not started                             |                                                                                                                                                                  |
-| 1.5     | 14 — Rejoin after key loss                   | Not started                             |                                                                                                                                                                  |
+| Release | Phase                                        | Status                                                  | Notes                                                                                                                                                                                                                            |
+|---------|----------------------------------------------|---------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1.1     | 1 — Requirements, ADR, and protocol contract | Done                                                    | `requirements.md` revision 12 (FR-151 to FR-178), `adr-002-sync.md`, `sync-protocol.md`; event schemas in `src/shared/sync/` with 46 unit tests                                                                                  |
+| 1.1     | 2 — Schema version 2                         | Done                                                    | Clocks, last-writer stamps, migration 1 → 2, `sync.json` entry; 10 unit tests and 1 e2e test                                                                                                                                     |
+| 1.1     | 3 — Identity and key store                   | Done in code; **needs a Windows check**                 | `libsodium-wrappers` (standard build), key store with `safeStorage`, Settings section; 10 unit tests and 4 e2e tests. DPAPI on real Windows: checklist section L                                                                 |
+| 1.2     | 4 — Pure sync core                           | Done                                                    | Apply, merge, order, pending queue, normalization, builders, loading model; property test: 200 random runs with 3 members converge                                                                                               |
+| 1.2     | 5 — Event cryptography and parts             | Done                                                    | Sealed and signed frames, parts; a 200 MB image in about 3.5 s, about 35 ms per part, so crypto stays in the main process                                                                                                        |
+| 1.2     | 6 — Folder transport and local sync state    | Done                                                    | Staging and move (rename or copy across drives), path and link checks, Chokidar, JSON state, registry, size limit setting                                                                                                        |
+| 1.2     | 7 — Sync service                             | Done                                                    | Outbox, inbox, receipts, cleanup, quarantine, incomplete files, replay check; random fault tests with 3 members                                                                                                                  |
+| 1.2     | 8 — Session integration                      | Done                                                    | Sessions and closed files, detached copies, moved files, "Отправить копию…", loading bubble with progress                                                                                                                        |
+| 1.2     | 9 — Wizards and invitations                  | Done in code                                            | Create, convert, join, roster; 5 e2e tests with two app instances                                                                                                                                                                |
+| 1.2     | 10 — Hardening of release 1.2                | Done in code; **needs Windows and Google Drive checks** | Security review fixes, performance (5,000 messages: convert and join in 0.4 s), user guide, checklist section M. **Not done:** the Google Drive tests (design Section 23), the manual matrix, and an independent security review |
+| 1.3     | 11 — Delivery marks and sync health          | Done in code; **one open question**                     | Combined mark per message (D-40) and per member, retry rule, 7-day and 30-day cleanup, status line, "Проверить папки"; 7 unit tests and 1 e2e test. Open: Q-41                                                                   |
+| 1.4     | 12 — Tray, background sync, notifications    | Not started                                             |                                                                                                                                                                                                                                  |
+| 1.5     | 13 — Add members after activation            | Not started                                             |                                                                                                                                                                                                                                  |
+| 1.5     | 14 — Rejoin after key loss                   | Not started                                             |                                                                                                                                                                                                                                  |
 
 Implementation decisions made in phases 1 to 3:
 
@@ -50,6 +50,58 @@ Implementation decisions made in phases 1 to 3:
   protection. The release workflow checks that release builds do not contain it.
 - The shared code had a syntax error in `src/shared/types/api.ts` (two lines joined); it was fixed first.
 - `package.json` is still version 1.0.0. Set 1.1.0 when release 1.1 is tagged (release process, step 1).
+
+Implementation decisions made in phases 4 to 10:
+
+- In a synchronized discussion the roster is the source of display names; participant lists, assets, roster
+  members, and read-state lists are kept sorted (`normalizeSynced`), so all copies are the same.
+- `senderSeq` of a new local sync state starts at the current time in milliseconds, so a member whose sync state was
+  lost continues with higher numbers; before this change such a member's new events would have been refused as
+  replays (sync-protocol.md section 5).
+- Key files in `keys/` are named by a UUID derived from the participant ID, because participant IDs are not always
+  valid protocol file names (sync-protocol.md section 3).
+- Invitations are verified in two steps: decrypt, then check every frame with the inviter's key from the snapshot's
+  roster; the fingerprint check by the person is the trust anchor (sync-protocol.md 7.10).
+- Received parts are stored by (sender, part ID): a member cannot replace or block another member's part (found in
+  the security review; sync-protocol.md 7.2).
+- A file that does not open is retried; the sender of a file from an unknown member (whose `member.added` has not
+  arrived) is retried without quarantine.
+- A complete message whose thread has not arrived waits in the pending queue; its image bytes wait in the local parts
+  store.
+- The sync service applies remote events through the open window's document session (same write queue), or directly
+  to the file when no window shows the discussion. A window that opens a registered file waits for a running write.
+- Release 1.2 still quits when the last window closes; sync then stops until the next start (tray: release 1.4).
+- "Сделать обсуждение общим…" is offered only for an open discussion that is not shared yet.
+- The crypto review in phase 10 was done by the same developer; an independent review is still needed before the
+  release (plan, phase 10, task 4).
+
+Implementation decisions made in phase 11:
+
+- Own messages in a synchronized discussion have one combined mark (D-40, answer to Q-40), instead of the read
+  indicator: one grey check = written to the shared folder; two grey checks = delivered to all; one green check = read
+  by at least one member; two green checks = read by all. A read state wins over a delivery state. While the message
+  is still being written, a grey clock is shown (assumption, Q-41). The list per member (click) shows written,
+  delivered, or read.
+- A retry keeps the time of the first write, so the 30-day limit counts from the first write.
+- Folder health comes from the scan (folder missing) and from writes (EACCES or EPERM: no permission); a successful
+  write or scan clears it.
+- "Проверить папки" is a button in the window header; it scans, runs the retry rule and cleanup, and refreshes the
+  view.
+
+**Q-40 (answered → D-40).** One grey check: written; two grey checks: delivered to all; one green check: read by at
+least one member; two green checks: read by all.
+
+**Q-41 (open).** Two details that the answer to Q-40 does not cover:
+a) What does an own message show before it is written to the shared folder (usually less than a second; longer if the
+folder is not available)? Implemented: a grey clock 🕓. Options: (i) keep the clock; (ii) no mark; (iii) one grey check
+already.
+b) Other people's messages in a synchronized discussion, and all messages in a normal discussion, keep the existing
+read indicator (one grey check: nobody read; two grey checks: some read; two accent-colored checks: all read). In a
+shared discussion this means two grey checks have one meaning on own messages ("delivered") and another on other
+messages ("some read"). Options: (i) keep it as it is; (ii) in synchronized discussions, use the green colors for
+reading on all messages (one green check: some read; two green checks: all read; no mark: nobody read); (iii) the same
+green scheme also in normal discussions. Recommendation: a) (i), b) (ii).
+**Answer:**
 
 ---
 

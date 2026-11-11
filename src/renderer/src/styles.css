@@ -882,3 +882,139 @@ mark.quote {
         border-style: dashed;
     }
 }
+
+/* ---- synchronized discussions: loading messages (D-30, D-37) ------------------------------------------------ */
+.message.loading {
+    opacity: 0.85;
+    border-style: dashed;
+}
+.loading-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.3rem 0 0.4rem;
+    font-size: 0.85rem;
+}
+.loading-progress progress {
+    flex: 1 1 auto;
+    max-width: 16rem;
+    height: 0.6rem;
+}
+.loading-text-placeholder {
+    height: 0.9rem;
+    width: 60%;
+    border-radius: 4px;
+    background: color-mix(in srgb, CanvasText 12%, transparent);
+    animation: loading-pulse 1.4s ease-in-out infinite;
+}
+.image-loading {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.image-loading progress {
+    width: 10rem;
+}
+@keyframes loading-pulse {
+    50% {
+        opacity: 0.4;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .loading-text-placeholder {
+        animation: none;
+    }
+}
+
+/* ---- synchronized discussions: wizards and roster (FR-158, FR-162) --------------------------------------- */
+.dialog.wizard {
+    width: min(36rem, 94vw);
+}
+.dialog.wizard .path {
+    margin-right: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 22rem;
+}
+.dialog.wizard textarea {
+    width: 100%;
+    font-family: Consolas, 'Cascadia Mono', monospace;
+    font-size: 0.8rem;
+}
+.candidates {
+    list-style: none;
+    margin: 0.4rem 0;
+    padding: 0;
+}
+.candidates li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.8rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 10%, transparent);
+}
+.candidates .candidate-name {
+    font-weight: 600;
+    min-width: 6rem;
+}
+.candidates .fingerprint {
+    font-family: Consolas, 'Cascadia Mono', monospace;
+    font-size: 0.85rem;
+}
+.candidates .candidate-actions,
+.candidates .roster-state {
+    margin-left: auto;
+}
+.roster-button {
+    font-size: 0.85rem;
+    padding: 0.15rem 0.5rem;
+}
+
+/* ---- synchronized discussions: delivery marks and status line (FR-169, FR-172) ------------------------- */
+.message-mark {
+    padding: 0 0.3rem;
+    border: none;
+    background: transparent;
+    font-size: 0.8rem;
+    letter-spacing: -0.12em;
+    color: GrayText;
+}
+.message-mark.pending {
+    letter-spacing: normal;
+    opacity: 0.7;
+}
+/* D-40: green for reading, grey for delivery */
+.message-mark.read-some,
+.message-mark.read-all {
+    color: #1e8e3e;
+    font-weight: 700;
+}
+@media (prefers-color-scheme: dark) {
+    .message-mark.read-some,
+    .message-mark.read-all {
+        color: #5bd27f;
+    }
+}
+@media (forced-colors: active) {
+    .message-mark.read-some,
+    .message-mark.read-all {
+        color: CanvasText;
+        text-decoration: underline;
+    }
+}
+.delivery-popover .delivery-member {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+}
+.sync-status {
+    padding: 0.35rem 1rem;
+    font-size: 0.85rem;
+    background: color-mix(in srgb, #e0a100 18%, Canvas);
+    border-bottom: 1px solid color-mix(in srgb, #e0a100 45%, Canvas);
+}
+.sync-status p {
+    margin: 0.1rem 0;
+}

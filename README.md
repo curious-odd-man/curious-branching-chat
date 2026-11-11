@@ -31,11 +31,15 @@ src/
   shared/      pure TypeScript, no Electron/React/Node: domain rules, schemas, types
     domain/      discussion, branching, context resolution, read-state rules
     validation/  zod schemas, rich-text subset, editor-to-stored conversion, link input rules, integrity checks
+    sync/        sync protocol: event schemas, canonical JSON, frames, apply and merge rules (pure)
   main/        Electron main process
     document/    .branchchat ZIP reading/writing, atomic save, images, migrations
     windows/     launch arguments, process-wide security
     application/ controller (windows, open/new/close), document session (autosave queue), menu, dialogs
     local-state/ participant settings (name, ID)
+    crypto/      encryption identity, key store (safeStorage), signed and encrypted events, parts
+    transport/   the shared folder: staging, move, listing, path safety, watching
+    sync/        synchronized discussions: registry, local sync state, sync service, wizards (onboarding)
     e2e/         test hooks, compiled only into `--mode e2e` builds
     ipc/         validated IPC handlers
   preload/     the narrow contextBridge API

@@ -106,6 +106,24 @@ export class KeyStore {
         )
     }
 
+    /**
+     * Opens a sealed box addressed to this identity (sync-protocol.md section 6). Returns null if it does not open
+     * (wrong recipient, damaged, or incomplete file).
+     */
+    async openSealed(participantId: string, sealed: Uint8Array): Promise<Uint8Array | null> {
+        const sodium = await getSodium()
+        const { identity } = await this.ensure(participantId)
+        if (identity.state !== 'ready') throw new Error('encryption keys are not available')
+        const publicKey = identity.identity.encryptionPublicKey
+        return this.withSecrets(participantId, (s) => {
+            try {
+                return sodium.crypto_box_seal_open(sealed, publicKey, s.encryptionSecretKey)
+            } catch {
+                return null
+            }
+        })
+    }
+
     private async withSecrets<T>(participantId: string, fn: (s: Secrets) => T): Promise<T> {
         const { identity } = await this.ensure(participantId)
         if (identity.state !== 'ready') throw new Error('encryption keys are not available')

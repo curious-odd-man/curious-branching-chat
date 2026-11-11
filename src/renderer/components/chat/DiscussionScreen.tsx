@@ -17,6 +17,8 @@ import { BranchPanel } from '../branches/BranchPanel'
 import { Composer } from './Composer'
 import { ImageViewer } from './ImageViewer'
 import { MessageList, type ListRow } from './MessageList'
+import { RosterDialog } from '../SharedWizard'
+import { formatTimestamp } from '../../i18n/format'
 
 interface Props {
     view: DocumentView
@@ -50,6 +52,8 @@ export function DiscussionScreen({
     onRetrySave
 }: Props): React.JSX.Element {
     const [dismissed, setDismissed] = useState<string[]>([])
+    const [showRoster, setShowRoster] = useState(false)
+    const [checking, setChecking] = useState(false)
     const [viewer, setViewer] = useState<{ assetId: string; alt: string } | null>(null)
     const discussion = view.discussion
     const mainId = mainThread(discussion).threadId
@@ -92,10 +96,19 @@ export function DiscussionScreen({
             }
             out.push({ kind: 'divider', id: 'context-end', label: ru.branches.contextDivider })
         }
-        for (const message of context.own)
+        // loading messages of this thread take their place in the clock order (FR-152, D-37)
+        const loading = view.loading
+            .filter((l) => l.threadId === thread.threadId)
+            .sort((a, b) => compareByClock(a, b))
+        let li = 0
+        for (const message of context.own) {
+            while (li < loading.length && compareByClock(loading[li]!, message) < 0)
+                out.push({ kind: 'loading', loading: loading[li++]! })
             out.push({ kind: 'message', message, inherited: false, highlight: null })
+        }
+        while (li < loading.length) out.push({ kind: 'loading', loading: loading[li++]! })
         return out
-    }, [context, isBranch, thread])
+    }, [context, isBranch, thread, view.loading])
 
     const closed = isBranch && thread.status === 'closed'
     const goToSource = (): void => {
@@ -114,6 +127,39 @@ export function DiscussionScreen({
         <div className="discussion">
             <header className="discussion-header">
                 <h1 title={view.filePath}>{view.fileName}</h1>
+                {view.synced && (
+                    <button
+                        type="button"
+                        className="roster-button"
+                        data-testid="roster-button"
+                        title={ru.shared.rosterTitle}
+                        onClick={() => setShowRoster(true)}
+                    >
+                        👥 {view.knownParticipants.length}
+                    </button>
+                )}
+                {view.synced && (
+                    <button
+                        type="button"
+                        className="roster-button"
+                        data-testid="sync-check"
+                        title={
+                            view.syncStatus?.lastScanAt
+                                ? ru.syncStatus.lastScan(
+                                      formatTimestamp(view.syncStatus.lastScanAt)
+                                  )
+                                : ru.syncStatus.check
+                        }
+                        disabled={checking}
+                        onClick={() => {
+                            setChecking(true)
+                            void window.branchchat.checkSyncNow().finally(() => setChecking(false))
+                        }}
+                    >
+                        {checking ? ru.syncStatus.checking : `⟳ ${ru.syncStatus.check}`}
+                    </button>
+                )}
+                {showRoster && <RosterDialog onClose={() => setShowRoster(false)} />}
                 {status && (
                     <span className="status" data-testid="status">
                         {status}
@@ -128,6 +174,7 @@ export function DiscussionScreen({
                     </span>
                 )}
             </header>
+            <SyncStatusLine status={view.syncStatus} />
 
             {view.saveError && (
                 <div className="banner error" role="alert" data-testid="save-error">
@@ -187,7 +234,7 @@ export function DiscussionScreen({
                         key={threadId}
                         rows={rows}
                         localParticipantId={view.localParticipantId}
-                        participants={discussion.participants}
+                        participants={view.knownParticipants}
                         readSets={readSets}
                         onMarkRead={onMarkMessageRead}
                         images={images}
@@ -195,6 +242,7 @@ export function DiscussionScreen({
                         onOpenLink={(href) => void window.branchchat.openLink(href)}
                         onReply={onReply}
                         onOpenBranch={(id) => onSelectThread(id)}
+                        delivery={view.delivery}
                         {...(focusMessageId ? { focusMessageId } : {})}
                     />
                     <Composer
@@ -220,6 +268,42 @@ export function DiscussionScreen({
                     onClose={closeViewer}
                 />
             )}
+        </div>
+    )
+}
+
+/** The same order as messages in a thread (FR-152): clock, then author ID, then message ID. */
+function compareByClock(
+    a: { clock: number; authorId: string; messageId: string },
+    b: { clock: number; authorId: string; messageId: string }
+): number {
+    const s = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0)
+    return a.clock - b.clock || s(a.authorId, b.authorId) || s(a.messageId, b.messageId)
+}
+
+/** Problems of a synchronized discussion (FR-172, D-35): only in this line and the tray menu, no notifications. */
+function SyncStatusLine({
+    status
+}: {
+    status: DocumentView['syncStatus']
+}): React.JSX.Element | null {
+    if (!status) return null
+    const lines: string[] = []
+    if (status.folder === 'missing') lines.push(ru.syncStatus.missing(status.folderPath))
+    if (status.folder === 'no-permission') lines.push(ru.syncStatus.noPermission)
+    if (status.needsUpdate) lines.push(ru.syncStatus.needsUpdate)
+    if (status.quarantined > 0) lines.push(ru.syncStatus.quarantined(status.quarantined))
+    if (lines.length === 0) return null
+    return (
+        <div
+            className="sync-status"
+            role="status"
+            data-testid="sync-status"
+            data-folder={status.folder}
+        >
+            {lines.map((l) => (
+                <p key={l}>{l}</p>
+            ))}
         </div>
     )
 }

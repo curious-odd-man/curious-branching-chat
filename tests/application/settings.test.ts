@@ -7,6 +7,21 @@ import { pathKey } from '../../src/main/application/paths'
 import { withTempDir } from '../helpers/fixtures'
 
 describe('SettingsStore', () => {
+    it('keeps the shared-folder file size limit between 5 and 1000 MB (FR-166)', async () => {
+        await withTempDir(async (dir) => {
+            const store = new SettingsStore(dir, () => 'id')
+            await store.load()
+            expect(store.get().fileSizeLimitMb).toBe(30)
+            expect((await store.setFileSizeLimit(5)).fileSizeLimitMb).toBe(5)
+            expect((await store.setFileSizeLimit(1000)).fileSizeLimitMb).toBe(1000)
+            for (const bad of [4, 1001, 2.5])
+                await expect(store.setFileSizeLimit(bad)).rejects.toThrow()
+            const again = new SettingsStore(dir, () => 'other')
+            await again.load()
+            expect(again.get().fileSizeLimitMb).toBe(1000)
+        })
+    })
+
     it('generates the participant ID once and remembers the name (FR-017, FR-020)', async () => {
         await withTempDir(async (dir) => {
             let n = 0
@@ -19,7 +34,8 @@ describe('SettingsStore', () => {
                 associationAsked: false,
                 autoUpdateCheck: true,
                 recentFilesLimit: 10,
-                openLastFileOnStartup: true
+                openLastFileOnStartup: true,
+                fileSizeLimitMb: 30
             })
             expect(await a.setDisplayName('  Анна  ')).toEqual({
                 participantId: 'id-1',
@@ -28,7 +44,8 @@ describe('SettingsStore', () => {
                 associationAsked: false,
                 autoUpdateCheck: true,
                 recentFilesLimit: 10,
-                openLastFileOnStartup: true
+                openLastFileOnStartup: true,
+                fileSizeLimitMb: 30
             })
 
             const b = new SettingsStore(dir, () => `id-${++n}`) // e.g. next application start
@@ -40,7 +57,8 @@ describe('SettingsStore', () => {
                 associationAsked: false,
                 autoUpdateCheck: true,
                 recentFilesLimit: 10,
-                openLastFileOnStartup: true
+                openLastFileOnStartup: true,
+                fileSizeLimitMb: 30
             })
         })
     })

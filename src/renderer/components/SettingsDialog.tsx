@@ -68,6 +68,20 @@ export function SettingsDialog({
 
     const hasName = Boolean(settings?.displayName)
 
+    const [sizeText, setSizeText] = useState(String(settings?.fileSizeLimitMb ?? 30))
+    const applySize = (): void => {
+        const value = Number(sizeText)
+        if (!Number.isInteger(value) || value < 5 || value > 1000) {
+            setSizeText(String(settings?.fileSizeLimitMb ?? 30)) // outside 5..1000: keep the old value
+            return
+        }
+        if (value === settings?.fileSizeLimitMb) return
+        void api.setFileSizeLimit(value).then((r) => {
+            if (r.ok) onSettingsChanged(r.data)
+            else setError(r.error.message)
+        })
+    }
+
     const saveName = useCallback(() => {
         if (name.trim().length === 0) return
         void api.setDisplayName(name).then((r) => {
@@ -204,6 +218,21 @@ export function SettingsDialog({
                             </div>
                         </>
                     )}
+                    <label>
+                        {ru.identity.sizeLimitLabel}
+                        <input
+                            type="number"
+                            min={5}
+                            max={1000}
+                            step={1}
+                            data-testid="settings-size-limit"
+                            value={sizeText}
+                            onChange={(e) => setSizeText(e.target.value)}
+                            onBlur={applySize}
+                            onKeyDown={(e) => e.key === 'Enter' && applySize()}
+                        />
+                    </label>
+                    <p className="hint">{ru.identity.sizeLimitHint}</p>
                 </section>
 
                 <section>

@@ -1,6 +1,6 @@
 # Design: Encrypted Synchronized BranchChat Discussions over a Shared Folder
 
-**Status:** Ready for implementation, revision 7 (all questions Q-01 to Q-39 answered)  
+**Status:** Ready for implementation, revision 8 (all questions Q-01 to Q-39 answered)  
 **Platform:** Windows 10 and Windows 11 (same as the MVP)  
 **Transport model:** A shared local folder that a sync product (for example Google Drive for Desktop) keeps in sync  
 **Backend:** None  
@@ -201,6 +201,7 @@ The application refuses to load or save a file that breaks these rules:
 | D-37 | Loading or partial message  | Until it is processed: it cannot be marked read, it cannot be a branch source, it does not count as unread, and sending in the same thread does not mark it read. Its text can be selected and copied. When processed, it becomes unread as usual. The UI shows the loading clearly, with a progress bar (Section 9.4)                                                          |
 | D-38 | Notification content        | Author, discussion name, and the first characters of the text. Setting "Показывать текст в уведомлениях" (default on) turns the text off. Text: up to 100 characters of plain text, cut at a word boundary, with "…"; images as "[изображение]". A loading message raises a notification only when it is processed                                                              |
 | D-39 | Temporary files             | Temporary files are never created in the shared folder. Each file is written and closed in a local staging folder, then moved into the shared folder under its final name. Across drives the move is a copy, so readers treat a file that does not open as possibly incomplete and quarantine it only after 10 unchanged minutes. Protocol version stays 1                      |
+| D-40 | Message mark                | Own messages in a synchronized discussion have one mark: one grey check written, two grey checks delivered to all, one green check read by at least one member, two green checks read by all (answer to Q-40)                                                                                                                                                                   |
 
 Settled from revision 1, still valid:
 
@@ -625,10 +626,12 @@ codes.
 
 Delivery state is local to the sender. It is stored in the local sync state, not in the `.branchchat` file.
 
-| Mark            | Meaning                                                                                     |
-|-----------------|---------------------------------------------------------------------------------------------|
-| One grey check  | The header and all parts of the message are written to the shared folder for all recipients |
-| Two grey checks | All recipients sent valid delivery receipts for the header and all parts                    |
+| Mark             | Meaning                                                                                     |
+|------------------|---------------------------------------------------------------------------------------------|
+| One grey check   | The header and all parts of the message are written to the shared folder for all recipients |
+| Two grey checks  | All recipients sent valid delivery receipts for the header and all parts                    |
+| One green check  | At least one member has read the message (D-40)                                             |
+| Two green checks | All members have read the message (D-40)                                                    |
 
 The one grey check does not mean that the file reached the cloud.
 
@@ -636,7 +639,8 @@ The one grey check does not mean that the file reached the cloud.
 
 - The existing read rules stay (FR-112).
 - When the local read state grows, the app sends `readstate.added` to all members.
-- The existing three-state "who has read" indicator (FR-122, FR-123) is the read mark. No green checkmark.
+- Own messages show one combined mark for delivery and reading (D-40, Section 16.1). Other messages keep the
+  existing three-state "who has read" indicator (FR-122, FR-123) (open question Q-41 in the implementation plan).
 
 ### 16.3 Group details
 
@@ -787,6 +791,10 @@ The results below are **assumed**. Do the tests and correct the results before t
 - Never put private keys, plain text, or local state in the shared folder.
 - Never delete a file that another member wrote, except a processed file in the own inbox.
 - Never invent a cryptographic protocol. Use the libsodium constructions as documented.
+
+## Changes in revision 8
+
+- D-40: one combined mark for own messages (grey checks for delivery, green checks for reading).
 
 ## Changes in revision 7
 

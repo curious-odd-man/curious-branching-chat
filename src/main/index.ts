@@ -14,6 +14,9 @@ import { e2eKeyProtector, e2eRegistry, e2eUpdaterConfig, installE2eHooks } from 
 import { IdentityService } from './crypto/identityService'
 import { KeyStore } from './crypto/keyStore'
 import { safeStorageProtector } from './crypto/protector'
+import { SyncRegistry } from './sync/registry'
+import { SyncService } from './sync/syncService'
+import { Onboarding } from './sync/onboarding'
 import { registerIpcHandlers } from './ipc/handlers'
 import { RecentFilesStore } from './local-state/recentFiles'
 import { SettingsStore } from './local-state/settings'
@@ -60,9 +63,36 @@ if (!gotLock) {
         await settings.load()
         const recent = new RecentFilesStore(app.getPath('userData'))
         await recent.load()
+        // Encryption identity (FR-155 to FR-157): keys in the user data folder, protected by Windows DPAPI.
+        const keys = new KeyStore(
+            join(app.getPath('userData'), 'keys'),
+            __E2E_HOOKS__ ? e2eKeyProtector() : safeStorageProtector,
+            systemContext.now
+        )
+        // Synchronized discussions (release 1.2): the registry says which file and shared folder belong together.
+        const registry = new SyncRegistry(join(app.getPath('userData'), 'sync'))
+        await registry.load()
+        const sync = new SyncService({
+            userData: app.getPath('userData'),
+            registry,
+            keys,
+            settings,
+            now: systemContext.now,
+            newId: randomUUID,
+            appVersion: app.getVersion(),
+            ...(__E2E_HOOKS__ && process.env['BRANCHCHAT_E2E_SCAN_MS']
+                ? {
+                      scanIntervalMs: Number(process.env['BRANCHCHAT_E2E_SCAN_MS']),
+                      stableMs: 300
+                  }
+                : {}),
+            log: (message) => console.log(`[sync] ${message}`)
+        })
         controller = new AppController({
             settings,
             recent,
+            sync,
+            registry,
             ui: electronUi,
             ctx: systemContext,
             appVersion: app.getVersion(),
@@ -95,12 +125,6 @@ if (!gotLock) {
             () => void updates.checkAutomatically(),
             testUpdates?.intervalMs ?? 6 * 60 * 60 * 1000
         )
-        // Encryption identity (FR-155 to FR-157): keys in the user data folder, protected by Windows DPAPI.
-        const keys = new KeyStore(
-            join(app.getPath('userData'), 'keys'),
-            __E2E_HOOKS__ ? e2eKeyProtector() : safeStorageProtector,
-            systemContext.now
-        )
         const identity = new IdentityService({
             keys,
             settings,
@@ -118,7 +142,19 @@ if (!gotLock) {
                 return result.canceled || !result.filePath ? null : result.filePath
             }
         })
-        registerIpcHandlers(controller, settings, recent, association, updates, identity)
+        const onboarding = new Onboarding({
+            userData: app.getPath('userData'),
+            keys,
+            settings,
+            registry,
+            sync,
+            ctx: systemContext,
+            appVersion: app.getVersion()
+        })
+        registerIpcHandlers(controller, settings, recent, association, updates, identity, sync, {
+            onboarding,
+            ui: electronUi
+        })
         // The File > Open recent menu, the taskbar jump list and every window follow the recent files list.
         const refreshRecent = async (): Promise<void> => {
             const files = await describeRecent(recent.list())
@@ -136,6 +172,7 @@ if (!gotLock) {
             const [view] = await describeRecent([last])
             if (view?.exists) initialPaths = [last.path]
         }
+        await sync.start()
         await controller.openPaths(initialPaths)
         void association.offerAtStartup()
 

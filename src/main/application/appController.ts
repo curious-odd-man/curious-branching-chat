@@ -18,6 +18,8 @@ import { DocumentSession } from './documentSession'
 import { AppError } from './errors'
 import { pathKey } from './paths'
 import type { Ui } from './ui'
+import type { SyncService } from '../sync/syncService'
+import type { SyncRegistry } from '../sync/registry'
 
 export interface WindowEntry {
     readonly id: number
@@ -36,6 +38,9 @@ export interface ControllerDeps {
     ctx: DomainContext
     appVersion: string
     createWindow: () => BrowserWindow
+    /** Synchronized discussions (release 1.2); absent in tests that do not need them. */
+    sync?: SyncService
+    registry?: SyncRegistry
 }
 
 /**
@@ -66,7 +71,10 @@ export class AppController {
             event.preventDefault()
             void this.requestClose(entry)
         })
-        win.on('closed', () => this.entries.delete(entry.id))
+        win.on('closed', () => {
+            this.entries.delete(entry.id)
+            if (entry.session) void this.deps.sync?.detach(entry.session)
+        })
         this.updateTitle(entry)
         return entry
     }
@@ -202,6 +210,8 @@ export class AppController {
     ): Promise<OpenOutcome> {
         let session: DocumentSession
         try {
+            // a write of the sync service to this file finishes first (design section 10)
+            await this.deps.sync?.beforeOpen(path)
             session = await DocumentSession.open(path, { ctx: this.deps.ctx })
         } catch (err) {
             const code = err instanceof DocumentError ? err.code : 'UNKNOWN'
@@ -221,8 +231,74 @@ export class AppController {
         if (sameDocument?.session && pathKey(sameDocument.session.path) !== key) {
             session.notices.push(ru.notices.twoCopies(sameDocument.session.path, path))
         }
-        this.bind(this.targetFor(from), session)
+        const entry = this.targetFor(from)
+        await this.connectSync(entry, session, path)
+        this.bind(entry, session)
         return { status: 'opened' }
+    }
+
+    /**
+     * FR-154, FR-168: the registered copy of a synchronized discussion is synchronized; if the registered file is
+     * missing, the person is asked whether this is the moved file; any other copy is detached.
+     */
+    private async connectSync(
+        entry: WindowEntry,
+        session: DocumentSession,
+        path: string
+    ): Promise<void> {
+        const sync = this.deps.sync
+        if (!sync || !session.current.sync) return
+        const registered = this.deps.registry?.get(session.documentId)
+        if (
+            registered &&
+            pathKey(registered.filePath) !== pathKey(path) &&
+            (await sync.registeredFileMissing(session.documentId)) &&
+            (await this.deps.ui.confirmMovedDiscussion(entry.win))
+        )
+            await sync.adoptMovedFile(session.documentId, path)
+        const result = await sync.attach(session)
+        if (result === 'detached') session.notices.push(ru.notices.detached)
+    }
+
+    /** "Отправить копию…": a copy without the roster, for manual sharing (FR-167). */
+    async saveCopy(from: WindowEntry | undefined): Promise<boolean> {
+        const session = from?.session
+        if (!session) throw new AppError('NO_DOCUMENT', 'No open discussion')
+        const chosen = await this.deps.ui.pickCopyPath(
+            from.win,
+            ru.dialogs.copyDefaultName(session.fileName.replace(/\.branchchat$/i, ''))
+        )
+        if (!chosen) return false
+        const target = resolve(/\.branchchat$/i.test(chosen) ? chosen : `${chosen}.branchchat`)
+        if (pathKey(target) === pathKey(session.path) || this.findByKey(pathKey(target))) {
+            await this.deps.ui.showError(
+                from.win,
+                ru.dialogs.copyFailedTitle,
+                ru.dialogs.fileAlreadyOpen
+            )
+            return false
+        }
+        try {
+            await session.saveCopyWithoutSync(target)
+            return true
+        } catch (err) {
+            const code = err instanceof DocumentError ? err.code : 'WRITE_FAILED'
+            await this.deps.ui.showError(
+                from.win,
+                ru.dialogs.copyFailedTitle,
+                describeError(code),
+                target
+            )
+            return false
+        }
+    }
+
+    /** The focused window's discussion (menu commands handled in the main process). */
+    focusedEntry(): WindowEntry | undefined {
+        const focused = BrowserWindow.getFocusedWindow()
+        return focused
+            ? this.entries.get(focused.webContents.id)
+            : this.entries.values().next().value
     }
 
     // ---- state shown to windows ---------------------------------------------------------------------------------

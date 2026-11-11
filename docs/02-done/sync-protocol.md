@@ -55,7 +55,7 @@ The serializer refuses any value that breaks these rules. Test vectors: `tests/s
 ```text
 <shared root>/
   branchchat-sync.json            conversation marker (plain JSON, Section 3.1)
-  keys/<participantId>.bckey      public-key bundles (Section 4)
+  keys/<keyFileId>.bckey          public-key bundles (Section 4)
   inbox/<participantId>/          one folder per member
     <eventId>.bcmsg               event (all types except invitation and receipts)
     <partId>.bcpart               part of a message or an invitation
@@ -64,7 +64,9 @@ The serializer refuses any value that breaks these rules. Test vectors: `tests/s
   .test/<random>.bctest           folder test (deleted after the test)
 ```
 
-- `<participantId>`, `<eventId>`, `<partId>`, `<receiptId>`, `<invitationId>`: IDs as in Section 2.1. A name that
+- `<eventId>`, `<partId>`, `<receiptId>`, `<invitationId>`: IDs as in Section 2.1. `<keyFileId>`: the first 32 hex
+  characters of SHA-256(`branchchat-key-file-v1` || 0x00 || participantId), written as a UUID version 4 (one file per
+  member, the same on every computer). `<participantId>` in `inbox/` is the participant ID itself. A name that
   does not match `^[0-9a-f-]{36}\.(bcmsg|bcpart|bcrcpt|bcinv|bckey)$` is ignored. Sync-product conflict copies (for
   example `<id> (1).bcmsg`) are also read, because the event ID comes from the authenticated content, not from the
   name.
@@ -140,14 +142,14 @@ A synchronized discussion has a ZIP entry `sync.json` (document schema version 2
 5. At start, delete every file in `<staging>`. The outbox (local state) still lists those copies as not written, so
    they are encrypted and written again with the same event ID.
 
-The same steps apply to `branchchat-sync.json`, `keys/<participantId>.bckey`, and the folder test file. These files
+The same steps apply to `branchchat-sync.json`, `keys/<keyFileId>.bckey`, and the folder test file. These files
 are plain JSON, so step 1 writes them without encryption.
 
 ---
 
 ## 4. Public-key bundle
 
-File `keys/<participantId>.bckey` or a file the person saves, with this JSON:
+File `keys/<keyFileId>.bckey` or a file the person saves, with this JSON:
 
 ```json
 {
@@ -198,15 +200,15 @@ The first 32 hex characters (128 bits), shown in 8 groups of 4: `3F2A 91C0 7B4E 
 }
 ```
 
-| Field             | Rule                                                                                       |
-|-------------------|--------------------------------------------------------------------------------------------|
-| `protocolVersion` | 1 for this document                                                                        |
-| `eventId`         | Random. The same for all recipient copies of one event, and for a retry                    |
-| `type`            | One of Section 7                                                                           |
-| `senderSeq`       | Per sender and conversation: 1, 2, 3, … with no gaps, over all event types except receipts |
-| `clock`           | Sender's Lamport clock after the change (Section 8)                                        |
-| `payload`         | Type-specific object (Section 7)                                                           |
-| `payloadSha256`   | Only for parts: SHA-256 of the binary payload of the frame                                 |
+| Field             | Rule                                                                                                                                                                                                              |
+|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `protocolVersion` | 1 for this document                                                                                                                                                                                               |
+| `eventId`         | Random. The same for all recipient copies of one event, and for a retry                                                                                                                                           |
+| `type`            | One of Section 7                                                                                                                                                                                                  |
+| `senderSeq`       | Per sender and conversation: strictly increasing over all event types except receipts. A new local state starts at the current time in milliseconds, so a member who lost the state continues with higher numbers |
+| `clock`           | Sender's Lamport clock after the change (Section 8)                                                                                                                                                               |
+| `payload`         | Type-specific object (Section 7)                                                                                                                                                                                  |
+| `payloadSha256`   | Only for parts: SHA-256 of the binary payload of the frame                                                                                                                                                        |
 
 Receipts (`receipt.delivered`) have `senderSeq` = 0 and do not change the sender's sequence.
 
@@ -263,6 +265,9 @@ Payload: `{ "messageId": "…", "partId": "…" }`. Binary payload: at most 4 Mi
 `size`, and `sha256` must match an entry in the signed `message.sent` of that `messageId`. A part can arrive before
 its header; it waits in the local store.
 
+A part counts only for a message of the same sender. The receiver stores parts by (sender, part ID), so a member
+cannot replace or block another member's part by sending a part with the same ID.
+
 ### 7.3 `branch.created`
 
 ```json
@@ -315,7 +320,14 @@ Invitation header (`.bcinv`):
 - The snapshot is a complete `.branchchat` file (schema version 2, with `sync.json` and all images). Its bytes are
   split into `invitation.part` events (payload `{ "invitationId": "…", "partId": "…" }`), each at most 4 MiB.
 - `replacesKeysOf` is present for a re-invitation after key loss (D-15).
-- The invitee checks the inviter's fingerprint before it imports the snapshot.
+- The invitee does not know the inviter's key before it has read the snapshot. It decrypts the header and the parts,
+  joins and checks the snapshot (SHA-256, full file validation), takes the inviter's signing key from the snapshot's
+  roster, and verifies every frame with it. The snapshot's roster must contain the invitee with the invitee's own
+  fingerprint.
+- The invitee then compares the inviter's fingerprint with what the inviter tells them (FR-162). This check is the
+  protection against a person with folder access who makes an invitation in someone else's name.
+- After the import, the invitee confirms the invitation with `receipt.delivered` (`ids`: invitation ID and part IDs).
+  The inviter shows the member as "joined".
 
 ---
 

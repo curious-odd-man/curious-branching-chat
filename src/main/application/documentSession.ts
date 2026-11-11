@@ -19,6 +19,12 @@ import {
     type Author,
     type DomainContext
 } from '@shared/domain'
+import {
+    knownParticipants,
+    normalizeSynced,
+    withLocalDisplayName,
+    type LoadingMessage
+} from '@shared/sync'
 import type { ReadState, ThreadStatus } from '@shared/validation'
 import { collectImageAssetIds, type RichDoc } from '@shared/validation'
 import type { StagedImage } from '@shared/types/assets'
@@ -38,7 +44,7 @@ import {
 export type DocumentWriter = (
     path: string,
     contents: DocumentContents,
-    options?: { discardExisting?: boolean; newAssets?: PreparedImage[] }
+    options?: { discardExisting?: boolean; newAssets?: PreparedImage[]; copyFrom?: string }
 ) => Promise<void>
 
 /** What a caller is about to do, to find out beforehand whether it will change the person's read state. */
@@ -79,6 +85,16 @@ export class DocumentSession {
     private readonly staged = new Map<string, PreparedImage>()
     /** Images used by sent messages but not yet written to the file. */
     private pendingAssets: PreparedImage[] = []
+    /**
+     * Set by the sync service when this window shows the registered copy of a synchronized discussion: called after
+     * every local change with the discussion before and after it (design section 10). Null for every other file.
+     */
+    syncHook: ((before: DocumentContents, after: DocumentContents) => void) | null = null
+    /** Messages that are still loading (set by the sync service, D-37). */
+    loading: LoadingMessage[] = []
+    /** Delivery of own messages and sync health (set by the sync service, FR-169, FR-172). */
+    delivery: DocumentView['delivery'] = {}
+    syncStatus: DocumentView['syncStatus'] = null
 
     private constructor(
         readonly path: string,
@@ -117,6 +133,65 @@ export class DocumentSession {
 
     get documentId(): string {
         return this.contents.manifest.documentId
+    }
+    /** The current discussion (read by the sync service). */
+    get current(): DocumentContents {
+        return this.contents
+    }
+    get synced(): boolean {
+        return this.syncHook !== null
+    }
+
+    /**
+     * Applies remote events (design section 10): in the same write queue as local changes, so a local save never
+     * overwrites a remote change. `images` are bytes of images that the change registers. No events are sent.
+     */
+    applyRemote(
+        change: (contents: DocumentContents) => {
+            contents: DocumentContents
+            images: Array<{ assetId: string; data: Uint8Array }>
+        } | null
+    ): void {
+        const r = change(this.contents)
+        if (!r) return
+        for (const image of r.images) {
+            const info = r.contents.discussion.assets.find((a) => a.assetId === image.assetId)
+            if (!info || this.pendingAssets.some((a) => a.sha256 === image.assetId)) continue
+            const data = Buffer.from(image.data)
+            this.pendingAssets.push({
+                data,
+                sha256: info.sha256,
+                size: info.size,
+                mediaType: info.mediaType,
+                path: info.path
+            })
+        }
+        this.contents = r.contents
+        this.scheduleSave()
+        this.onChange()
+    }
+
+    /**
+     * "Сделать обсуждение общим…" (D-02): the discussion gets its roster. Called before the session is attached, so
+     * the existing history is not sent as events; it travels inside the invitations.
+     */
+    adoptSync(sync: NonNullable<DocumentContents['sync']>): DocumentContents {
+        this.commit(normalizeSynced({ ...this.contents, sync }))
+        return this.contents
+    }
+
+    /** The person's name changed in Settings: in a synchronized discussion it becomes `profile.updated` (D-12). */
+    renameLocal(author: Author): void {
+        if (!this.syncHook) return
+        const next = withLocalDisplayName(this.contents, author.participantId, author.displayName)
+        if (next !== this.contents) this.commit(next)
+    }
+
+    /** "Отправить копию…": the same discussion without the roster, for manual sharing (D-26, FR-167). */
+    async saveCopyWithoutSync(target: string): Promise<void> {
+        await this.flush()
+        const { sync: _roster, ...plain } = this.contents
+        await this.deps.writer(target, plain, { discardExisting: false, copyFrom: this.path })
     }
     get saveError(): string | null {
         return this._saveError
@@ -329,6 +404,13 @@ export class DocumentSession {
             fileName: this.fileName,
             discussion: this.contents.discussion,
             readState: this.contents.readState,
+            synced: this.synced,
+            knownParticipants: this.synced
+                ? knownParticipants(this.contents)
+                : this.contents.discussion.participants,
+            loading: this.loading,
+            delivery: this.synced ? this.delivery : {},
+            syncStatus: this.synced ? this.syncStatus : null,
             localParticipantId,
             missingAssetIds: this.missingAssetIds,
             saveError: this._saveError,
@@ -349,9 +431,13 @@ export class DocumentSession {
     }
 
     private commit(next: DocumentContents): void {
-        this.contents = next
+        const before = this.contents
+        const hook = this.syncHook
+        // a synchronized discussion keeps the same order of lists on every computer (normalizeSynced)
+        this.contents = hook ? normalizeSynced(next) : next
         this.scheduleSave()
         this.onChange()
+        hook?.(before, this.contents)
     }
 
     private scheduleSave(): void {

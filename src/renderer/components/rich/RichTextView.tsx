@@ -15,6 +15,8 @@ export interface ImageContext {
     url(assetId: string): string
     /** Images the file lists but has no data for: shown as placeholders. */
     missing: ReadonlySet<string>
+    /** Images of a loading message that are still on their way: received and total parts (D-31). */
+    loading?: ReadonlyMap<string, { received: number; total: number }>
     /** The person clicked an image: open the larger view. */
     onOpen(assetId: string, alt: string | undefined): void
     /** An image finished loading (its size changes the height of the message). */
@@ -219,6 +221,19 @@ function ChatImage({
     images: ImageContext
 }): React.JSX.Element {
     const [failed, setFailed] = useState(false)
+    const loading = images.loading?.get(assetId)
+    if (loading)
+        return (
+            <span
+                className="image-placeholder image-loading"
+                role="img"
+                aria-label={ru.images.loading}
+                data-testid="image-loading"
+            >
+                🖼 {ru.images.loadingProgress(loading.received, loading.total)}
+                <progress max={loading.total} value={loading.received} />
+            </span>
+        )
     if (failed || images.missing.has(assetId))
         return (
             <span

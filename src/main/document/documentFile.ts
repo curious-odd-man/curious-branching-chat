@@ -154,6 +154,8 @@ export interface WriteOptions {
     newAssets?: PreparedImage[]
     /** Ignore whatever is currently at the target path (used when creating a new file). */
     discardExisting?: boolean
+    /** Copy images and unknown entries from this file instead of the target (used for "Отправить копию…"). */
+    copyFrom?: string
 }
 
 function validateBeforeWrite(contents: DocumentContents): void {
@@ -205,7 +207,8 @@ export async function writeDocument(
 ): Promise<void> {
     validateBeforeWrite(contents)
     const newAssets = [...new Map((options.newAssets ?? []).map((a) => [a.path, a])).values()]
-    const copyExisting = !options.discardExisting && (await exists(targetPath))
+    const source = options.copyFrom ?? targetPath
+    const copyExisting = !options.discardExisting && (await exists(source))
 
     await writeFileAtomically(targetPath, async (tempPath) => {
         const zip = new yazl.ZipFile()
@@ -231,7 +234,7 @@ export async function writeDocument(
 
         if (copyExisting) {
             const skip = new Set<string>([...MANAGED_ENTRIES, ...newAssets.map((a) => a.path)])
-            await scanZip(targetPath, async (entry, zf) => {
+            await scanZip(source, async (entry, zf) => {
                 const name = entry.fileName
                 if (name.endsWith('/') || skip.has(name)) return
                 skip.add(name)

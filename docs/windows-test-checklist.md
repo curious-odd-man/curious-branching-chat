@@ -164,3 +164,43 @@ Releases of a **public** repository.
 6. Install the update over 1.1 (silent update): the fingerprint stays the same.
 7. Log in as another Windows user (or copy `identity.json` to another user's profile): BranchChat cannot read the key
    (DPAPI belongs to the account), creates a new one, and Settings says that the earlier key could not be read.
+
+## M. Release 1.2: synchronized discussions (two Windows users or two computers, Google Drive for Desktop)
+
+Before this section, do the three Google Drive tests in the design document, Section 23, and correct the assumed
+results if needed.
+
+1. Account A makes a folder in Google Drive and shares it with account B (Editor). Repeat later with a shared drive
+   ("Content manager").
+2. Both computers: Drive for Desktop in streaming mode, folder marked "Available offline". The folder appears as a
+   normal path in Explorer on both computers.
+3. B: Файл > Присоединиться к обсуждению…, choose the folder. A: Файл > Новое общее обсуждение…, choose the folder,
+   Обновить список: B appears. Compare B's fingerprint by phone; accept; create; save the file in Documents (a path
+   inside the shared folder is refused).
+4. B: the invitation appears with A's name and fingerprint; compare; save. A's roster shows B as "присоединился".
+5. Messages, a branch, a nested branch, close and reopen, a branch title, "Отметить прочитанным", and a name change in
+   Settings reach the other computer. Order is the same on both computers.
+6. A picture of 20 MB: B sees the message as loading with a progress bar, then the picture.
+7. The shared folder in Explorer contains only `.bcmsg`, `.bcpart`, `.bcrcpt`, `.bcinv`, `.bckey`, and
+   `branchchat-sync.json`. No `.tmp` files appear at any time. After both computers have been online, the inboxes are
+   empty.
+8. B offline (network off) for a day while A writes; B back online: everything arrives once, no duplicates.
+9. Drive for Desktop paused, then resumed; signed out and in again; restarted: nothing is lost.
+10. Remove B's permission on the folder, write, give it back: messages arrive after the permission is back.
+11. Файл > Отправить копию…: the copy opens on a third computer as a normal discussion; the version 1.0 app is not
+    needed.
+12. Move A's file to another folder in Explorer and open it: the app asks whether it is the moved discussion; "Да":
+    sync continues.
+
+## N. Release 1.3: delivery marks and sync health
+
+1. A writes while B is online: A's message shows one grey check, then two grey checks. Click it: B is listed as
+   "получил". B marks it read: two green checks; B is listed as "прочитал".
+2. B offline: A's new message stays at one grey check. B online again: two grey checks.
+3. Three members: when one of the two others reads A's message, it shows one green check; when both have read it,
+   two green checks. The green is readable in light and dark Windows themes and in high contrast.
+4. Delete A's file from B's inbox in Explorer before B's app reads it. B writes something. Within 30 minutes (or after
+   "⟳ Проверить папки" on A), A writes the copy again, and B gets the message.
+5. Quit Drive for Desktop on A: the yellow line "Общая папка недоступна" appears after "⟳ Проверить папки". Start Drive
+   again: the line goes away.
+6. Remove A's edit permission on the folder and write: the line "Нет прав на запись" appears.

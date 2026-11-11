@@ -1,4 +1,5 @@
-import type { DiscussionData, ReadState } from '../validation/schemas'
+import type { DiscussionData, Participant, ReadState } from '../validation/schemas'
+import type { LoadingMessage } from '../sync/loading'
 
 /** IPC channel names shared by main and preload. */
 export const IPC = {
@@ -20,6 +21,7 @@ export const IPC = {
     settingsSetAutoUpdate: 'settings:set-auto-update',
     settingsSetRecentLimit: 'settings:set-recent-limit',
     settingsSetOpenLast: 'settings:set-open-last',
+    settingsSetFileSizeLimit: 'settings:set-file-size-limit',
     recentGet: 'recent:get',
     recentRemove: 'recent:remove',
     recentClear: 'recent:clear',
@@ -41,6 +43,16 @@ export const IPC = {
     documentChanged: 'document:changed',
     /** main -> renderer: only the save status changed (a save finished); sent instead of the whole discussion. */
     documentStatusChanged: 'document:status-changed',
+    sharedPickFolder: 'shared:pick-folder',
+    sharedPublishKey: 'shared:publish-key',
+    sharedCandidates: 'shared:candidates',
+    sharedParseKey: 'shared:parse-key',
+    sharedPickKeyFile: 'shared:pick-key-file',
+    sharedCreate: 'shared:create',
+    sharedRoster: 'shared:roster',
+    joinFind: 'join:find',
+    joinImport: 'join:import',
+    syncCheckNow: 'sync:check-now',
     identityGet: 'identity:get',
     identityCopyBundle: 'identity:copy-bundle',
     identitySaveBundle: 'identity:save-bundle',
@@ -68,6 +80,8 @@ export interface SettingsView {
     recentFilesLimit: number
     /** Open the most recently used discussion when the application starts without a file. On by default. */
     openLastFileOnStartup: boolean
+    /** Largest file read from a shared folder, in MB (FR-166). */
+    fileSizeLimitMb: number
 }
 
 /** A recently opened discussion, as shown on the start screen and in menus. */
@@ -92,6 +106,46 @@ export type AssociationState = 'on' | 'off' | 'other-app' | 'unsupported'
 
 export interface AssociationInfo {
     state: AssociationState
+}
+
+/** Result of the folder test (design 12.3, step 5). */
+export type FolderTestView =
+    { ok: true } | { ok: false; step: 'root' | 'write' | 'read' | 'delete'; code: string }
+
+export interface SharedFolderChoice {
+    path: string
+    test: FolderTestView
+}
+
+/** A public key that could become a member: name and fingerprint to check (FR-162). */
+export interface CandidateView {
+    participantId: string
+    displayName: string
+    fingerprint: string
+    /** The bundle in text form; sent back when the person accepts the candidate. */
+    text: string
+}
+
+export type InvitationView =
+    | { state: 'waiting' }
+    | { state: 'incomplete'; received: number; total: number }
+    | {
+          state: 'ready'
+          invitationId: string
+          conversationId: string
+          title: string
+          inviterName: string
+          inviterFingerprint: string
+      }
+    | { state: 'already'; conversationId: string }
+
+export interface RosterView {
+    members: Array<{
+        participantId: string
+        displayName: string
+        fingerprint: string
+        state: 'self' | 'invited' | 'joined' | 'member'
+    }>
 }
 
 /** The encryption key section of Settings (FR-155 to FR-157). Never contains private keys. */
@@ -123,6 +177,31 @@ export interface DocumentView {
     /** True while a write is pending or running. */
     saving: boolean
     notices: string[]
+    /** This window's file is the registered copy of a synchronized discussion (FR-158 to FR-168). */
+    synced: boolean
+    /** Participants who count for the read indicator; roster members in a synchronized discussion (FR-163). */
+    knownParticipants: Participant[]
+    /** Messages whose header arrived but some parts not yet (FR-165, D-37). */
+    loading: LoadingMessage[]
+    /** Delivery of the own messages, by message ID (FR-169); empty for a normal discussion. */
+    delivery: Record<string, DeliveryView>
+    /** Sync health for the status line (FR-172); null for a normal discussion. */
+    syncStatus: SyncStatusView | null
+}
+
+export type CopyStateView = 'pending' | 'written' | 'delivered'
+
+export interface DeliveryView {
+    state: CopyStateView
+    members: Array<{ participantId: string; displayName: string; state: CopyStateView }>
+}
+
+export interface SyncStatusView {
+    folder: 'ok' | 'missing' | 'no-permission'
+    folderPath: string
+    quarantined: number
+    needsUpdate: boolean
+    lastScanAt: string | null
 }
 
 /** The part of a DocumentView that changes when a save finishes. */
@@ -141,7 +220,7 @@ export interface OpenOutcome {
     errorCode?: string
 }
 
-export type MenuCommand = 'new' | 'open' | 'settings'
+export type MenuCommand = 'new' | 'open' | 'settings' | 'new-shared' | 'join-shared' | 'make-shared'
 
 /** What the person is told about an available update (FR-098). Notes are plain text. */
 export interface UpdateInfoView {

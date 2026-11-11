@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { SettingsView } from '@shared/types/ipc'
+import { FILE_SIZE_LIMIT_MB } from '@shared/sync'
 import { writeFileAtomically } from '../document/atomicWrite'
 
 const settingsSchema = z
@@ -16,12 +17,19 @@ const settingsSchema = z
         autoUpdateCheck: z.boolean().optional(),
         /** Number of recent files kept; 0 = no list. */
         recentFilesLimit: z.number().int().nonnegative().optional(),
-        openLastFileOnStartup: z.boolean().optional()
+        openLastFileOnStartup: z.boolean().optional(),
+        /** Largest file read from a shared folder, in MB (FR-166). */
+        fileSizeLimitMb: z.number().int().optional()
     })
     .passthrough()
 type Settings = z.infer<typeof settingsSchema>
 
 export const DEFAULT_RECENT_FILES_LIMIT = 10
+
+function clampLimit(mb: number | undefined): number {
+    if (mb === undefined || !Number.isInteger(mb)) return FILE_SIZE_LIMIT_MB.default
+    return Math.min(FILE_SIZE_LIMIT_MB.max, Math.max(FILE_SIZE_LIMIT_MB.min, mb))
+}
 
 /**
  * Local, per-Windows-user settings (NFR-017): the participant ID (generated once, FR-020) and display name (FR-017).
@@ -71,7 +79,8 @@ export class SettingsStore {
             associationAsked: this.data.associationAsked ?? false,
             autoUpdateCheck: this.data.autoUpdateCheck ?? true,
             recentFilesLimit: this.data.recentFilesLimit ?? DEFAULT_RECENT_FILES_LIMIT,
-            openLastFileOnStartup: this.data.openLastFileOnStartup ?? true
+            openLastFileOnStartup: this.data.openLastFileOnStartup ?? true,
+            fileSizeLimitMb: clampLimit(this.data.fileSizeLimitMb)
         }
     }
 
@@ -117,6 +126,16 @@ export class SettingsStore {
     async setOpenLastFileOnStartup(enabled: boolean): Promise<SettingsView> {
         if (!this.data) throw new Error('SettingsStore.load() has not been called')
         this.data = { ...this.data, openLastFileOnStartup: enabled }
+        await this.persist()
+        return this.get()
+    }
+
+    /** FR-166: 5 MB to 1 000 MB; other values are refused. */
+    async setFileSizeLimit(mb: number): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        if (!Number.isInteger(mb) || mb < FILE_SIZE_LIMIT_MB.min || mb > FILE_SIZE_LIMIT_MB.max)
+            throw new Error('invalid file size limit')
+        this.data = { ...this.data, fileSizeLimitMb: mb }
         await this.persist()
         return this.get()
     }

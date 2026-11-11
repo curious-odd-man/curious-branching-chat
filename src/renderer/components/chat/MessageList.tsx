@@ -2,11 +2,14 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { isUnreadIn, readStatusOf } from '@shared/domain'
 import type { Message, Participant, Thread } from '@shared/types'
+import type { LoadingMessage } from '@shared/sync'
 import { ru } from '@shared/i18n/ru'
 import { formatTimestamp } from '../../i18n/format'
 import { BranchBadge } from '../branches/BranchBadge'
 import { RichTextView, type Highlight, type ImageContext } from '../rich/RichTextView'
 import { ReadIndicator } from './ReadIndicator'
+import { DeliveryMark } from './DeliveryMark'
+import type { DeliveryView } from '@shared/types/ipc'
 import { readMessageSelection, type MessageSelection } from './selection'
 
 export type ListRow =
@@ -19,6 +22,8 @@ export type ListRow =
           highlight: Highlight | null
       }
     | { kind: 'divider'; id: string; label: string }
+    /** A message of a synchronized discussion whose parts are still arriving (D-30, D-37). */
+    | { kind: 'loading'; loading: LoadingMessage }
 
 interface Props {
     rows: ListRow[]
@@ -36,12 +41,29 @@ interface Props {
     onOpenBranch(threadId: string): void
     /** Scroll to this message when the list opens (instead of the newest) and flash it. */
     focusMessageId?: string
+    /** Delivery of own messages in a synchronized discussion (FR-169). */
+    delivery?: Record<string, DeliveryView>
+}
+
+const NO_DELIVERY: Record<string, DeliveryView> = {}
+
+function readersOf(readSets: Map<string, Set<string>>, messageId: string): Set<string> {
+    const out = new Set<string>()
+    for (const [participantId, set] of readSets) if (set.has(messageId)) out.add(participantId)
+    return out
 }
 
 /** The user counts as "at the bottom" when closer than this to the end (pixels). */
 const STICK_THRESHOLD = 80
 
-const rowKey = (row: ListRow): string => (row.kind === 'message' ? row.message.messageId : row.id)
+const rowKey = (row: ListRow): string =>
+    row.kind === 'message'
+        ? row.message.messageId
+        : row.kind === 'loading'
+          ? `loading-${row.loading.messageId}`
+          : row.id
+
+const mb = (bytes: number): string => (bytes / (1024 * 1024)).toFixed(1).replace('.', ',')
 
 /**
  * Virtualized message list (NFR-004): only the messages near the viewport are in the page, so a discussion of
@@ -64,7 +86,8 @@ export function MessageList({
     onOpenLink,
     onReply,
     onOpenBranch,
-    focusMessageId
+    focusMessageId,
+    delivery = NO_DELIVERY
 }: Props): React.JSX.Element {
     const scroller = useRef<HTMLDivElement>(null)
     const atBottom = useRef(true)
@@ -191,6 +214,64 @@ export function MessageList({
                                 </div>
                             </div>
                         )
+                    if (row.kind === 'loading') {
+                        const l = row.loading
+                        const loadingImages = new Map(
+                            l.images
+                                .filter((i) => i.partsReceived < i.partsTotal)
+                                .map((i) => [
+                                    i.assetId,
+                                    { received: i.partsReceived, total: i.partsTotal }
+                                ])
+                        )
+                        return (
+                            <div key={item.key} {...common} className="row loading-row">
+                                <article
+                                    className="message loading"
+                                    data-testid="loading-message"
+                                    // not data-message-id: a loading message offers no "Reply to this" (D-37)
+                                    data-loading-id={l.messageId}
+                                    aria-busy="true"
+                                    title={ru.loadingMessage.hint}
+                                >
+                                    <header>
+                                        <strong>{l.authorDisplayName}</strong>
+                                        <time dateTime={l.createdAt}>
+                                            {formatTimestamp(l.createdAt)}
+                                        </time>
+                                    </header>
+                                    <div className="loading-progress">
+                                        <progress
+                                            data-testid="loading-progress"
+                                            max={Math.max(1, l.bytesTotal)}
+                                            value={l.bytesReceived}
+                                        />
+                                        <span data-testid="loading-text">
+                                            {ru.loadingMessage.progress(
+                                                l.partsReceived,
+                                                l.partsTotal,
+                                                mb(l.bytesReceived),
+                                                mb(l.bytesTotal)
+                                            )}
+                                        </span>
+                                    </div>
+                                    {l.content ? (
+                                        <RichTextView
+                                            doc={l.content}
+                                            onOpenLink={onOpenLink}
+                                            highlight={null}
+                                            images={{ ...imageContext, loading: loadingImages }}
+                                        />
+                                    ) : (
+                                        <div
+                                            className="loading-text-placeholder"
+                                            aria-label={ru.loadingMessage.noText}
+                                        />
+                                    )}
+                                </article>
+                            </div>
+                        )
+                    }
                     const m = row.message
                     const own = m.authorId === localParticipantId
                     const unread = isUnreadIn(readSets, localParticipantId, m)
@@ -233,9 +314,18 @@ export function MessageList({
                                                 {ru.unread.markRead}
                                             </button>
                                         )}
-                                        <ReadIndicator
-                                            status={readStatusOf(participants, readSets, m)}
-                                        />
+                                        {own && delivery[m.messageId] ? (
+                                            // D-40: one mark for delivery and reading of own messages
+                                            <DeliveryMark
+                                                delivery={delivery[m.messageId]!}
+                                                status={readStatusOf(participants, readSets, m)}
+                                                readers={readersOf(readSets, m.messageId)}
+                                            />
+                                        ) : (
+                                            <ReadIndicator
+                                                status={readStatusOf(participants, readSets, m)}
+                                            />
+                                        )}
                                         <BranchBadge
                                             branches={branchesByMessage.get(m.messageId) ?? []}
                                             onOpen={onOpenBranch}

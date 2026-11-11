@@ -121,3 +121,15 @@ export async function parseKeyBundle(text: string): Promise<KeyBundle> {
 export function keyBundleToFile(bundle: KeyBundle): string {
     return `${JSON.stringify(bundle, null, 2)}\n`
 }
+
+/**
+ * Name of a member's key file in `keys/` (sync-protocol.md section 3): the same for a participant on every computer,
+ * and always a valid protocol file name, whatever characters the participant ID has.
+ */
+export function keyFileName(participantId: string): string {
+    const h = createHash('sha256')
+        .update(`branchchat-key-file-v1\u0000${participantId}`)
+        .digest('hex')
+    const variant = ((parseInt(h[16]!, 16) & 0x3) | 0x8).toString(16)
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}.bckey`
+}
