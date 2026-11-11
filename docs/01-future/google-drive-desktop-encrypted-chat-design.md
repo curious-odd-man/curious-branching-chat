@@ -15,7 +15,7 @@
 - Section 4 records all decisions (answers Q-01 to Q-39, and D-39 added later).
 - Sections 5 to 21 give the design.
 - Section 22: there are no open questions.
-- Section 23 lists tests that must be done before the release with sync. Their results are assumed for now.
+- Section 23 lists the tests done before the release with sync. The results are confirmed.
 - The implementation plan is `google-drive-sync-implementation-plan.md`.
 
 ---
@@ -775,16 +775,16 @@ None. All questions Q-01 to Q-39 have answers (Section 4).
 
 ## 23. Tests before the release with sync
 
-The results below are **assumed**. Do the tests and correct the results before the release that adds sync.
+The tests are done. All results are **confirmed** as first assumed.
 
 1. Test Google Drive for Desktop delete rights: in a personal My Drive folder shared with Editor rights, can account B
    delete a file that account A created? Same test in a shared drive with "Content manager" rights. (From Q-19.)  
-   **Assumed result:** deletion is allowed in both setups. The fallback in D-19 ("record as processed") stays as a
+   **Result (confirmed):** deletion is allowed in both setups. The fallback in D-19 ("record as processed") stays as a
    safety rule.
 2. Test that a folder marked "Available offline" in streaming mode also makes new files available offline.  
-   **Assumed result:** yes.
+   **Result (confirmed):** yes.
 3. Test how a folder shared from another person's My Drive appears in Drive for Desktop (shortcut needed or not).  
-   **Assumed result:** it appears as a normal Windows drive and path. The wizard asks only for that path.
+   **Result (confirmed):** it appears as a normal Windows drive and path. The wizard asks only for that path.
 
 ---
 
@@ -800,6 +800,8 @@ The results below are **assumed**. Do the tests and correct the results before t
 - Never invent a cryptographic protocol. Use the libsodium constructions as documented.
 
 ## Changes in revision 9
+
+- Section 23: the Google Drive test results are confirmed (same as assumed).
 
 - D-41: the mark applies to all messages; members share delivery (`delivery.added`, `delivery.json`); normal
   discussions use the green checks.

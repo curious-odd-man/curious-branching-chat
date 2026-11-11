@@ -167,8 +167,7 @@ Releases of a **public** repository.
 
 ## M. Release 1.2: synchronized discussions (two Windows users or two computers, Google Drive for Desktop)
 
-Before this section, do the three Google Drive tests in the design document, Section 23, and correct the assumed
-results if needed.
+The three Google Drive tests in the design document, Section 23, are done. The results are confirmed.
 
 1. Account A makes a folder in Google Drive and shares it with account B (Editor). Repeat later with a shared drive
    ("Content manager").

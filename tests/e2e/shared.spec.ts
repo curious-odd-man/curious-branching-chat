@@ -295,7 +295,7 @@ test('a moved shared file is recognized after the person confirms it (FR-168)', 
 })
 
 test('release 1.3: delivery marks, per-member details, and the status line (FR-169, FR-172)', async () => {
-    const { a, b, shared } = await createAndJoin()
+    const { a, b, shared, fileA } = await createAndJoin()
     await send(a.win, 'Дошло?')
     const mark = message(a.win, 'Дошло?').getByTestId('message-mark')
     await expect(mark).toHaveAttribute('data-state', 'delivered', { timeout: 15_000 })
@@ -330,14 +330,29 @@ test('release 1.3: delivery marks, per-member details, and the status line (FR-1
     )
     await a.win.keyboard.press('Escape')
 
-    // the shared folder disappears (for example Drive for Desktop is closed): the status line says so
+    // the shared folder disappears (for example Drive for Desktop is closed): the status line says so.
+    // Windows refuses to rename a folder that the running app watches, so Anna's app is closed for the rename.
+    const annaData = a.t.userData
+    const reopen = async (): Promise<{ t: TestApp; win: Page }> => {
+        const next = await start(annaData, [fileA])
+        apps.push(next.t)
+        await expect(next.win.getByTestId('composer')).toBeVisible()
+        return next
+    }
+    await a.t.close()
+    apps.splice(apps.indexOf(a.t), 1)
     await fs.rename(shared, `${shared}-away`)
-    await a.win.getByTestId('sync-check').click()
-    await expect(a.win.getByTestId('sync-status')).toHaveAttribute('data-folder', 'missing', {
+    const away1 = await reopen()
+    await away1.win.getByTestId('sync-check').click()
+    await expect(away1.win.getByTestId('sync-status')).toHaveAttribute('data-folder', 'missing', {
         timeout: 10_000
     })
-    await expect(a.win.getByTestId('sync-status')).toContainText('Общая папка недоступна')
+    await expect(away1.win.getByTestId('sync-status')).toContainText('Общая папка недоступна')
+
+    await away1.t.close()
+    apps.splice(apps.indexOf(away1.t), 1)
     await fs.rename(`${shared}-away`, shared)
-    await a.win.getByTestId('sync-check').click()
-    await expect(a.win.getByTestId('sync-status')).toHaveCount(0, { timeout: 10_000 })
+    const back = await reopen()
+    await back.win.getByTestId('sync-check').click()
+    await expect(back.win.getByTestId('sync-status')).toHaveCount(0, { timeout: 10_000 })
 })

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import type { SettingsView } from '@shared/types/ipc'
 import { FILE_SIZE_LIMIT_MB } from '@shared/sync'
-import { writeFileAtomically } from '../document/atomicWrite'
+import { StateFileWriter } from '../document/atomicWrite'
 
 const settingsSchema = z
     .object({
@@ -42,6 +42,8 @@ export class SettingsStore {
         private readonly dir: string,
         private readonly newId: () => string
     ) {}
+
+    private readonly writer = new StateFileWriter(() => this.file)
 
     private get file(): string {
         return join(this.dir, 'settings.json')
@@ -141,7 +143,6 @@ export class SettingsStore {
     }
 
     private async persist(): Promise<void> {
-        const text = JSON.stringify(this.data, null, 2)
-        await writeFileAtomically(this.file, (tmp) => fs.writeFile(tmp, text, 'utf8'))
+        await this.writer.write(() => JSON.stringify(this.data, null, 2))
     }
 }

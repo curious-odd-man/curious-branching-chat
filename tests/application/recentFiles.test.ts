@@ -15,6 +15,21 @@ const view = (name: string, exists = true) => ({
 })
 
 describe('RecentFilesStore', () => {
+    it('quick adds without waiting keep the newest list in the file', async () => {
+        await withTempDir(async (dir) => {
+            const store = new RecentFilesStore(dir)
+            await store.load()
+            await Promise.all(
+                ['/a/1.branchchat', '/a/2.branchchat', '/a/3.branchchat'].map((p) =>
+                    store.add(p, 2)
+                )
+            )
+            const again = new RecentFilesStore(dir)
+            await again.load()
+            expect(again.list().map((e) => e.path)).toEqual(['/a/3.branchchat', '/a/2.branchchat'])
+        })
+    })
+
     it('keeps the newest first, moves a reopened file to the top, and remembers it across starts', async () => {
         await withTempDir(async (dir) => {
             const store = new RecentFilesStore(dir)

@@ -59,3 +59,22 @@ export async function writeFileAtomically(
         )
     }
 }
+
+/**
+ * Writes one small state file (settings, recent list, sync state) in call order. Each write takes the newest text
+ * when it starts, so an older text can never replace a newer one. Without this, two quick writes run at the same
+ * time; on Windows a rename can wait for a lock and finish last, so the older content wins.
+ */
+export class StateFileWriter {
+    private chain: Promise<void> = Promise.resolve()
+
+    constructor(private readonly path: () => string) {}
+
+    write(text: () => string): Promise<void> {
+        const next = this.chain.then(() =>
+            writeFileAtomically(this.path(), (tmp) => fs.writeFile(tmp, text(), 'utf8'))
+        )
+        this.chain = next.catch(() => undefined)
+        return next
+    }
+}

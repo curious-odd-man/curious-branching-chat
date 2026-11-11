@@ -9,22 +9,22 @@
 
 ## Progress
 
-| Release | Phase                                        | Status                                                  | Notes                                                                                                                                                                                                                            |
-|---------|----------------------------------------------|---------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1.1     | 1 — Requirements, ADR, and protocol contract | Done                                                    | `requirements.md` revision 12 (FR-151 to FR-178), `adr-002-sync.md`, `sync-protocol.md`; event schemas in `src/shared/sync/` with 46 unit tests                                                                                  |
-| 1.1     | 2 — Schema version 2                         | Done                                                    | Clocks, last-writer stamps, migration 1 → 2, `sync.json` entry; 10 unit tests and 1 e2e test                                                                                                                                     |
-| 1.1     | 3 — Identity and key store                   | Done in code; **needs a Windows check**                 | `libsodium-wrappers` (standard build), key store with `safeStorage`, Settings section; 10 unit tests and 4 e2e tests. DPAPI on real Windows: checklist section L                                                                 |
-| 1.2     | 4 — Pure sync core                           | Done                                                    | Apply, merge, order, pending queue, normalization, builders, loading model; property test: 200 random runs with 3 members converge                                                                                               |
-| 1.2     | 5 — Event cryptography and parts             | Done                                                    | Sealed and signed frames, parts; a 200 MB image in about 3.5 s, about 35 ms per part, so crypto stays in the main process                                                                                                        |
-| 1.2     | 6 — Folder transport and local sync state    | Done                                                    | Staging and move (rename or copy across drives), path and link checks, Chokidar, JSON state, registry, size limit setting                                                                                                        |
-| 1.2     | 7 — Sync service                             | Done                                                    | Outbox, inbox, receipts, cleanup, quarantine, incomplete files, replay check; random fault tests with 3 members                                                                                                                  |
-| 1.2     | 8 — Session integration                      | Done                                                    | Sessions and closed files, detached copies, moved files, "Отправить копию…", loading bubble with progress                                                                                                                        |
-| 1.2     | 9 — Wizards and invitations                  | Done in code                                            | Create, convert, join, roster; 5 e2e tests with two app instances                                                                                                                                                                |
-| 1.2     | 10 — Hardening of release 1.2                | Done in code; **needs Windows and Google Drive checks** | Security review fixes, performance (5,000 messages: convert and join in 0.4 s), user guide, checklist section M. **Not done:** the Google Drive tests (design Section 23), the manual matrix, and an independent security review |
-| 1.3     | 11 — Delivery marks and sync health          | Done in code                                            | One mark for every message (D-40, D-41), shared delivery state, retry rule, 7-day and 30-day cleanup, status line, "Проверить папки"; unit and e2e tests                                                                         |
-| 1.4     | 12 — Tray, background sync, notifications    | Not started                                             |                                                                                                                                                                                                                                  |
-| 1.5     | 13 — Add members after activation            | Not started                                             |                                                                                                                                                                                                                                  |
-| 1.5     | 14 — Rejoin after key loss                   | Not started                                             |                                                                                                                                                                                                                                  |
+| Release | Phase                                        | Status                                                  | Notes                                                                                                                                                                                                                                                |
+|---------|----------------------------------------------|---------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1.1     | 1 — Requirements, ADR, and protocol contract | Done                                                    | `requirements.md` revision 12 (FR-151 to FR-178), `adr-002-sync.md`, `sync-protocol.md`; event schemas in `src/shared/sync/` with 46 unit tests                                                                                                      |
+| 1.1     | 2 — Schema version 2                         | Done                                                    | Clocks, last-writer stamps, migration 1 → 2, `sync.json` entry; 10 unit tests and 1 e2e test                                                                                                                                                         |
+| 1.1     | 3 — Identity and key store                   | Done in code; **needs a Windows check**                 | `libsodium-wrappers` (standard build), key store with `safeStorage`, Settings section; 10 unit tests and 4 e2e tests. DPAPI on real Windows: checklist section L                                                                                     |
+| 1.2     | 4 — Pure sync core                           | Done                                                    | Apply, merge, order, pending queue, normalization, builders, loading model; property test: 200 random runs with 3 members converge                                                                                                                   |
+| 1.2     | 5 — Event cryptography and parts             | Done                                                    | Sealed and signed frames, parts; a 200 MB image in about 3.5 s, about 35 ms per part, so crypto stays in the main process                                                                                                                            |
+| 1.2     | 6 — Folder transport and local sync state    | Done                                                    | Staging and move (rename or copy across drives), path and link checks, Chokidar, JSON state, registry, size limit setting                                                                                                                            |
+| 1.2     | 7 — Sync service                             | Done                                                    | Outbox, inbox, receipts, cleanup, quarantine, incomplete files, replay check; random fault tests with 3 members                                                                                                                                      |
+| 1.2     | 8 — Session integration                      | Done                                                    | Sessions and closed files, detached copies, moved files, "Отправить копию…", loading bubble with progress                                                                                                                                            |
+| 1.2     | 9 — Wizards and invitations                  | Done in code                                            | Create, convert, join, roster; 5 e2e tests with two app instances                                                                                                                                                                                    |
+| 1.2     | 10 — Hardening of release 1.2                | Done in code; **needs Windows and Google Drive checks** | Security review fixes, performance (5,000 messages: convert and join in 0.4 s), user guide, checklist section M. Google Drive tests (design Section 23) done: results as assumed. **Not done:** the manual matrix and an independent security review |
+| 1.3     | 11 — Delivery marks and sync health          | Done in code                                            | One mark for every message (D-40, D-41), shared delivery state, retry rule, 7-day and 30-day cleanup, status line, "Проверить папки"; unit and e2e tests                                                                                             |
+| 1.4     | 12 — Tray, background sync, notifications    | Not started                                             |                                                                                                                                                                                                                                                      |
+| 1.5     | 13 — Add members after activation            | Not started                                             |                                                                                                                                                                                                                                                      |
+| 1.5     | 14 — Rejoin after key loss                   | Not started                                             |                                                                                                                                                                                                                                                      |
 
 Implementation decisions made in phases 1 to 3:
 
@@ -120,15 +120,15 @@ the green checks.
 
 ## 1. Assumptions
 
-### 1.1 Google Drive test results (design Section 23, assumed)
+### 1.1 Google Drive test results (design Section 23, confirmed)
 
-| Test                                     | Assumed result                     | Used in        |
+| Test                                     | Result (confirmed)                 | Used in        |
 |------------------------------------------|------------------------------------|----------------|
 | Delete rights (Editor, Content manager)  | Deletion is allowed in both setups | Phase 7        |
 | "Available offline" applies to new files | Yes                                | Phase 9 (text) |
 | Shared folder location                   | Normal Windows drive and path      | Phase 9        |
 
-Do the real tests before release 1.2 (Phase 10, task 1).
+The real tests were done (Phase 10, task 1). All results are as assumed. No change to the code or the design.
 
 ### 1.2 Design questions
 
@@ -462,7 +462,7 @@ Decisions: D-02, D-20, D-21, D-22, D-23.
 
 Tasks
 
-1. Do the three Google Drive tests (design Section 23). Correct Section 1.1 if a result differs.
+1. ~~Do the three Google Drive tests (design Section 23).~~ Done: all results as assumed (Section 1.1).
 2. Manual test matrix on real Windows machines with Google Drive for Desktop: My Drive folder and shared drive;
    streaming with offline pinning; mirroring; Drive paused, signed out, restarted; permission removed and restored;
    recipient offline for a day.
@@ -605,17 +605,17 @@ Decisions: D-15, D-32.
 
 ## 10. Risks and mitigations
 
-| Risk                                                                    | Mitigation                                                                                   |
-|-------------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
-| Assumed Google Drive results are wrong                                  | Phase 10 task 1 before release 1.2; the "record as processed" fallback exists from the start |
-| `safeStorage` not available or keys lost after a Windows profile change | Release 1.1 tests it early; release 1.5 adds rejoin                                          |
-| Large messages or invitations slow down sync                            | 4 MB parts; loading state in the UI; crypto in a utility process if needed (Phase 5)         |
-| Members on different releases                                           | Compatibility rules (Section 2.2); minimum protocol version in invitations                   |
-| A late message appears above already-read messages                      | It stays highlighted as unread; user guide explains it                                       |
-| Writes from the sync service and a window to the same file              | One write queue per file; the sync service uses the open session when a window exists        |
-| Chokidar misses events on cloud drives                                  | Periodic scans are the source of truth (Phase 7)                                             |
-| Detached copies confuse users                                           | FR-117 warning; "Отправить копию…" makes a clean copy                                        |
-| Notifications show private information                                  | Setting to hide the text (D-38); Settings text and user guide explain it                     |
+| Risk                                                                    | Mitigation                                                                                      |
+|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| Google Drive behaves differently later (product change)                 | Results confirmed in Phase 10 task 1; the "record as processed" fallback stays as a safety rule |
+| `safeStorage` not available or keys lost after a Windows profile change | Release 1.1 tests it early; release 1.5 adds rejoin                                             |
+| Large messages or invitations slow down sync                            | 4 MB parts; loading state in the UI; crypto in a utility process if needed (Phase 5)            |
+| Members on different releases                                           | Compatibility rules (Section 2.2); minimum protocol version in invitations                      |
+| A late message appears above already-read messages                      | It stays highlighted as unread; user guide explains it                                          |
+| Writes from the sync service and a window to the same file              | One write queue per file; the sync service uses the open session when a window exists           |
+| Chokidar misses events on cloud drives                                  | Periodic scans are the source of truth (Phase 7)                                                |
+| Detached copies confuse users                                           | FR-117 warning; "Отправить копию…" makes a clean copy                                           |
+| Notifications show private information                                  | Setting to hide the text (D-38); Settings text and user guide explain it                        |
 
 ---
 

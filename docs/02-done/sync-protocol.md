@@ -82,11 +82,7 @@ The serializer refuses any value that breaks these rules. Test vectors: `tests/s
 `branchchat-sync.json`:
 
 ```json
-{
-    "format": "branchchat-sync",
-    "protocolVersion": 1,
-    "conversationId": "<documentId>"
-}
+{ "format": "branchchat-sync", "protocolVersion": 1, "conversationId": "<documentId>" }
 ```
 
 No names and no content. One shared root holds one conversation.
@@ -112,26 +108,21 @@ A synchronized discussion has a ZIP entry `sync.json` (document schema version 2
 
 ```json
 {
-    "protocolVersion": 1,
-    "members": [
-        {
-            "participantId": "…",
-            "displayName": "…",
-            "signingPublicKey": "<base64, 32 bytes>",
-            "encryptionPublicKey": "<base64, 32 bytes>",
-            "fingerprint": "…",
-            "addedBy": "<participantId>",
-            "addedAt": "…Z",
-            "previousKeys": [
-                {
-                    "signingPublicKey": "…",
-                    "encryptionPublicKey": "…",
-                    "fingerprint": "…",
-                    "replacedAt": "…Z"
-                }
-            ]
-        }
-    ]
+  "protocolVersion": 1,
+  "members": [
+    {
+      "participantId": "…",
+      "displayName": "…",
+      "signingPublicKey": "<base64, 32 bytes>",
+      "encryptionPublicKey": "<base64, 32 bytes>",
+      "fingerprint": "…",
+      "addedBy": "<participantId>",
+      "addedAt": "…Z",
+      "previousKeys": [
+        { "signingPublicKey": "…", "encryptionPublicKey": "…", "fingerprint": "…", "replacedAt": "…Z" }
+      ]
+    }
+  ]
 }
 ```
 
@@ -166,15 +157,15 @@ File `keys/<keyFileId>.bckey` or a file the person saves, with this JSON:
 
 ```json
 {
-    "format": "branchchat-key",
-    "version": 1,
-    "participantId": "…",
-    "displayName": "…",
-    "signingPublicKey": "<base64>",
-    "encryptionPublicKey": "<base64>",
-    "fingerprint": "…",
-    "createdAt": "…Z",
-    "signature": "<base64>"
+  "format": "branchchat-key",
+  "version": 1,
+  "participantId": "…",
+  "displayName": "…",
+  "signingPublicKey": "<base64>",
+  "encryptionPublicKey": "<base64>",
+  "fingerprint": "…",
+  "createdAt": "…Z",
+  "signature": "<base64>"
 }
 ```
 
@@ -199,17 +190,17 @@ The first 32 hex characters (128 bits), shown in 8 groups of 4: `3F2A 91C0 7B4E 
 
 ```json
 {
-    "protocolVersion": 1,
-    "eventId": "…",
-    "type": "message.sent",
-    "conversationId": "…",
-    "senderId": "…",
-    "recipientId": "…",
-    "senderSeq": 17,
-    "clock": 245,
-    "createdAt": "…Z",
-    "payload": {},
-    "payloadSha256": "…"
+  "protocolVersion": 1,
+  "eventId": "…",
+  "type": "message.sent",
+  "conversationId": "…",
+  "senderId": "…",
+  "recipientId": "…",
+  "senderSeq": 17,
+  "clock": 245,
+  "createdAt": "…Z",
+  "payload": { },
+  "payloadSha256": "…"
 }
 ```
 
@@ -253,36 +244,13 @@ All payload objects refuse unknown keys (`strict`). A new key needs a new protoc
 
 ```json
 {
-    "message": {
-        "messageId": "…",
-        "threadId": "…",
-        "authorDisplayName": "…",
-        "createdAt": "…Z",
-        "content": {
-            "type": "doc",
-            "content": []
-        },
-        "assetReferences": [
-            "<sha256>"
-        ]
-    },
-    "images": [
-        {
-            "assetId": "<sha256>",
-            "mediaType": "image/png",
-            "size": 1234
-        }
-    ],
-    "parts": [
-        {
-            "partId": "…",
-            "kind": "image",
-            "assetId": "<sha256>",
-            "index": 0,
-            "size": 4194304,
-            "sha256": "…"
-        }
-    ]
+  "message": {
+    "messageId": "…", "threadId": "…", "authorDisplayName": "…", "createdAt": "…Z",
+    "content": { "type": "doc", "content": [] },
+    "assetReferences": ["<sha256>"]
+  },
+  "images": [ { "assetId": "<sha256>", "mediaType": "image/png", "size": 1234 } ],
+  "parts": [ { "partId": "…", "kind": "image", "assetId": "<sha256>", "index": 0, "size": 4194304, "sha256": "…" } ]
 }
 ```
 
@@ -307,18 +275,8 @@ cannot replace or block another member's part by sending a part with the same ID
 ### 7.3 `branch.created`
 
 ```json
-{
-    "thread": {
-        "threadId": "…",
-        "parentThreadId": "…",
-        "sourceMessageId": "…",
-        "quoteText": "…",
-        "selectionStart": 3,
-        "selectionEnd": 9,
-        "title": "…",
-        "createdAt": "…Z"
-    }
-}
+{ "thread": { "threadId": "…", "parentThreadId": "…", "sourceMessageId": "…", "quoteText": "…",
+              "selectionStart": 3, "selectionEnd": 9, "title": "…", "createdAt": "…Z" } }
 ```
 
 `createdBy` = `senderId`, thread clock = envelope `clock`, status = `open`. `selectionStart`, `selectionEnd`, and
@@ -364,19 +322,9 @@ Invitation header (`.bcinv`):
 
 ```json
 {
-    "invitationId": "…",
-    "minProtocolVersion": 1,
-    "replacesKeysOf": "<participantId, optional>",
-    "snapshotSize": 123,
-    "snapshotSha256": "…",
-    "parts": [
-        {
-            "partId": "…",
-            "index": 0,
-            "size": 4194304,
-            "sha256": "…"
-        }
-    ]
+  "invitationId": "…", "minProtocolVersion": 1, "replacesKeysOf": "<participantId, optional>",
+  "snapshotSize": 123, "snapshotSha256": "…",
+  "parts": [ { "partId": "…", "index": 0, "size": 4194304, "sha256": "…" } ]
 }
 ```
 

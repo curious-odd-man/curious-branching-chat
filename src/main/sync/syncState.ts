@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import type { Envelope } from '@shared/sync'
 import type { VerifiedEvent } from '@shared/sync'
-import { writeFileAtomically } from '../document/atomicWrite'
+import { StateFileWriter } from '../document/atomicWrite'
 
 /**
  * Local sync state of one conversation (design section 18). JSON with the existing atomic write; bulky bytes
@@ -229,10 +229,9 @@ export class SyncState {
         await fs.rm(join(this.outParts, file), { force: true })
     }
 
+    private readonly writer = new StateFileWriter(() => join(this.dir, 'state.json'))
+
     async save(): Promise<void> {
-        const text = JSON.stringify(this.data)
-        await writeFileAtomically(join(this.dir, 'state.json'), (tmp) =>
-            fs.writeFile(tmp, text, 'utf8')
-        )
+        await this.writer.write(() => JSON.stringify(this.data))
     }
 }

@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeFileAtomically } from '../document/atomicWrite'
+import { StateFileWriter } from '../document/atomicWrite'
 import { pathKey } from '../application/paths'
 
 const fileSchema = z
@@ -23,6 +23,7 @@ export interface RecentEntry {
 export class RecentFilesStore {
     private entries: RecentEntry[] = []
     private readonly listeners = new Set<() => void>()
+    private readonly writer = new StateFileWriter(() => this.file)
 
     constructor(
         private readonly dir: string,
@@ -84,9 +85,8 @@ export class RecentFilesStore {
     }
 
     private async commit(): Promise<void> {
-        const text = JSON.stringify({ version: 1, files: this.entries }, null, 2)
         await fs.mkdir(this.dir, { recursive: true })
-        await writeFileAtomically(this.file, (tmp) => fs.writeFile(tmp, text, 'utf8'))
+        await this.writer.write(() => JSON.stringify({ version: 1, files: this.entries }, null, 2))
         for (const listener of this.listeners) listener()
     }
 }

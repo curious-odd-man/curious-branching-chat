@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeFileAtomically } from '../document/atomicWrite'
+import { StateFileWriter } from '../document/atomicWrite'
 
 /**
  * Synchronized discussions on this computer (design section 18): which local `.branchchat` file and which shared
@@ -24,6 +24,8 @@ export class SyncRegistry {
     private listeners: Array<() => void> = []
 
     constructor(private readonly dir: string) {}
+
+    private readonly writer = new StateFileWriter(() => this.path)
 
     private get path(): string {
         return join(this.dir, 'registry.json')
@@ -67,8 +69,9 @@ export class SyncRegistry {
 
     private async persist(): Promise<void> {
         await fs.mkdir(this.dir, { recursive: true })
-        const text = JSON.stringify({ version: 1, entries: this.entries }, null, 2)
-        await writeFileAtomically(this.path, (tmp) => fs.writeFile(tmp, text, 'utf8'))
+        await this.writer.write(() =>
+            JSON.stringify({ version: 1, entries: this.entries }, null, 2)
+        )
         for (const l of this.listeners) l()
     }
 }
