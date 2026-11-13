@@ -116,3 +116,14 @@ authentication) are in [`docs/release-process.md`](docs/02-done/release-process.
   build ignores the isolated test profile and test dialogs).
 - Release builds must not contain test hooks (CI and the release workflow search for them).
 - Offline spell check uses the Windows spell checker (Russian and English); it needs the Russian language pack.
+- Dependency overrides (`overrides` in `package.json`) replace deprecated packages that come through other packages:
+    - `@electron/asar` 4 (with fixed `glob` and `minimatch`) instead of 3.4.1 in `electron-builder`: no `glob@7` or
+      `inflight` in packaging.
+    - `global-agent` 4 instead of 3 in `@electron/get`: no `boolean`.
+    - `lodash.isequal` (used by `electron-updater`) is a local package in `shims/lodash.isequal` that calls
+      `node:util` `isDeepStrictEqual`. It is also a direct dependency, because npm resolves a `file:` override only
+      through a `$` reference.
+    - Still in the tree: `rimraf@2`, `glob@7`, and `inflight` from `electron-builder-squirrel-windows` (a peer that npm
+      installs automatically). BranchChat builds NSIS only and never runs that code.
+    - Check the overrides when `electron-builder` or `electron-updater` is updated; remove each when it is no longer
+      needed.

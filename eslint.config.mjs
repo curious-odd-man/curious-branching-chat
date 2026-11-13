@@ -30,6 +30,15 @@ export default tseslint.config(
     js.configs.recommended,
     ...tseslint.configs.recommended,
     {
+        // local replacements for deprecated packages (package.json overrides): plain CommonJS for Node
+        files: ['shims/**/*.js'],
+        languageOptions: {
+            sourceType: 'commonjs',
+            globals: { require: 'readonly', module: 'writable' }
+        },
+        rules: { '@typescript-eslint/no-require-imports': 'off' }
+    },
+    {
         rules: {
             '@typescript-eslint/no-unused-vars': [
                 'error',

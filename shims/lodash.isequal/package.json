@@ -1,0 +1,7 @@
+{
+  "name": "lodash.isequal",
+  "version": "4.5.0-shim.1",
+  "description": "Local replacement for the deprecated lodash.isequal (used by electron-updater). Calls node:util isDeepStrictEqual.",
+  "license": "MIT",
+  "main": "index.js"
+}
