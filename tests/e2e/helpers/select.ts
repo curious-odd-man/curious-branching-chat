@@ -1,4 +1,4 @@
-import type { Locator } from '@playwright/test'
+import { expect, type Locator } from '@playwright/test'
 
 /**
  * Selects text inside a message the way a person drags the mouse: from the first occurrence of `from` to the end of
@@ -10,6 +10,15 @@ export async function selectText(
     from: string,
     to: string = from
 ): Promise<string> {
+    // The message field takes the focus once its editor is ready (autofocus). If that happens after the selection,
+    // the selection collapses and "Ответить на это" goes away. Wait until something has the focus (on a slow machine
+    // the field gets it some time after the window shows).
+    await expect
+        .poll(() => message.page().evaluate(() => document.activeElement !== document.body), {
+            timeout: 5_000
+        })
+        .toBe(true)
+        .catch(() => undefined)
     return message.locator('.rich').evaluate(
         (root, { from, to }) => {
             const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
