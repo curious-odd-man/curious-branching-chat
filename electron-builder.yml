@@ -45,5 +45,5 @@ extraResources:
 publish:
   - provider: github
     owner: curious-odd-man
-    repo: branchchat
+    repo: curious-branching-chat
     releaseType: release

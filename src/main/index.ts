@@ -38,7 +38,11 @@ import { AssociationService } from './windows/associationService'
 import { createFileAssociation } from './windows/createAssociation'
 import { applyJumpList } from './windows/jumpList'
 import { extractDiscussionPaths } from './windows/launchArgs'
+import { guardConsoleStreams } from './windows/safeConsole'
 import { applyGlobalSecurity } from './windows/security'
+
+// A closed console pipe must not end the app (EPIPE from a log line).
+guardConsoleStreams()
 
 // Test builds only (`--mode e2e`): stub native dialogs and use an isolated profile (own settings and own
 // single-instance lock). Release builds contain none of this.
