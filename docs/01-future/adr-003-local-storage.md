@@ -24,11 +24,11 @@ How a save works now (`src/main/document/documentFile.ts`, `documentSession.ts`)
 
 Measured (`performance.md`, Linux container):
 
-| Discussion                           | Send a message: saved in file |
-|--------------------------------------|-------------------------------|
-| 5,000 messages, 63 KB file           | 0.18 s                        |
-| 20,000 messages, 251 KB file         | 0.49 s                        |
-| Hundreds of MB of images             | not measured; the whole file is rewritten each time |
+| Discussion                   | Send a message: saved in file                       |
+|------------------------------|-----------------------------------------------------|
+| 5,000 messages, 63 KB file   | 0.18 s                                              |
+| 20,000 messages, 251 KB file | 0.49 s                                              |
+| Hundreds of MB of images     | not measured; the whole file is rewritten each time |
 
 The cost grows with the size of the discussion, and it is worst for discussions with many images: one new message
 rewrites all images. A discussion file in a cloud folder (Google Drive, OneDrive) is uploaded completely again after
@@ -89,17 +89,17 @@ record.
 
 ## 4. Comparison
 
-| Driver                         | A: ZIP in parts                  | B: SQLite file                         | C: SQLite library + ZIP export          | D: folder           | E: event log            |
-|--------------------------------|----------------------------------|----------------------------------------|-----------------------------------------|---------------------|-------------------------|
-| 1. Write cost                  | Medium: JSON still complete      | Low                                    | Low                                     | Low                 | Low                     |
-| 2. Crash safety                | Weak: in-place append has no atomic replace; needs own recovery | Strong (transactions)                  | Strong (transactions)                   | Weak across files   | Medium: own checksums   |
-| 3. Search                      | In memory only                   | FTS5                                   | FTS5, also across all discussions       | In memory only      | In memory only          |
-| 4. Sharing by file             | Unchanged                        | The file changes format; older versions cannot open it; a copy taken while the app writes can be broken | Unchanged ZIP format; export is explicit (C1) or automatic (C2) | Needs a ZIP to send | New format              |
-| 5. Untrusted input             | Unchanged (zod)                  | Hard: a crafted database can hold triggers and views; needs a defensive mode and a schema check | Unchanged: import reads the ZIP with zod | Unchanged           | New parser              |
-| 6. No native module            | Yes                              | Yes (`node:sqlite`)                    | Yes (`node:sqlite`)                     | Yes                 | Yes                     |
-| 7. Migration                   | None                             | Each file is converted                 | Each file is imported once              | Each file converted | Each file converted     |
-| 8. Backup                      | The file is in Documents         | The file is in Documents               | **The data is in AppData**: needs a backup feature (C1); C2 keeps a copy in Documents | In Documents        | In Documents            |
-| Effort                         | M                                | L                                      | L (C1) to XL (C2)                       | M                   | L                       |
+| Driver              | A: ZIP in parts                                                 | B: SQLite file                                                                                          | C: SQLite library + ZIP export                                                        | D: folder           | E: event log          |
+|---------------------|-----------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------|---------------------|-----------------------|
+| 1. Write cost       | Medium: JSON still complete                                     | Low                                                                                                     | Low                                                                                   | Low                 | Low                   |
+| 2. Crash safety     | Weak: in-place append has no atomic replace; needs own recovery | Strong (transactions)                                                                                   | Strong (transactions)                                                                 | Weak across files   | Medium: own checksums |
+| 3. Search           | In memory only                                                  | FTS5                                                                                                    | FTS5, also across all discussions                                                     | In memory only      | In memory only        |
+| 4. Sharing by file  | Unchanged                                                       | The file changes format; older versions cannot open it; a copy taken while the app writes can be broken | Unchanged ZIP format; export is explicit (C1) or automatic (C2)                       | Needs a ZIP to send | New format            |
+| 5. Untrusted input  | Unchanged (zod)                                                 | Hard: a crafted database can hold triggers and views; needs a defensive mode and a schema check         | Unchanged: import reads the ZIP with zod                                              | Unchanged           | New parser            |
+| 6. No native module | Yes                                                             | Yes (`node:sqlite`)                                                                                     | Yes (`node:sqlite`)                                                                   | Yes                 | Yes                   |
+| 7. Migration        | None                                                            | Each file is converted                                                                                  | Each file is imported once                                                            | Each file converted | Each file converted   |
+| 8. Backup           | The file is in Documents                                        | The file is in Documents                                                                                | **The data is in AppData**: needs a backup feature (C1); C2 keeps a copy in Documents | In Documents        | In Documents          |
+| Effort              | M                                                               | L                                                                                                       | L (C1) to XL (C2)                                                                     | M                   | L                     |
 
 Notes:
 
@@ -144,15 +144,15 @@ copy while it is open. Option A keeps most of today's cost and needs its own cra
 
 ### What changes in the code
 
-| Area                                | Change                                                                                              |
-|-------------------------------------|-----------------------------------------------------------------------------------------------------|
-| `src/main/document/`                | Stays for import and export (ZIP read and write, migrations, validation)                            |
-| New `src/main/library/`             | Database schema, migrations, queries, search index, blob storage for images and attachments          |
-| `documentSession.ts`                | Reads and writes through the library; small transactions instead of whole-file writes               |
-| Sync (`syncService`, registry)      | The registry links a discussion ID to a shared folder, not a file path; moved-file handling (FR-168) and the detached copy (FR-154) are not needed for library discussions |
-| Recent files, file association      | Recent files become the discussion list; the association imports (C1) or opens (C2)                 |
-| FR-117 (copy changed elsewhere)     | Replaced by the import rule: an import of a discussion that is already in the library asks what to do (Q-03) |
-| Tests                               | Library unit tests; e2e tests move from "file on disk" to "library" plus export and import           |
+| Area                            | Change                                                                                                                                                                     |
+|---------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `src/main/document/`            | Stays for import and export (ZIP read and write, migrations, validation)                                                                                                   |
+| New `src/main/library/`         | Database schema, migrations, queries, search index, blob storage for images and attachments                                                                                |
+| `documentSession.ts`            | Reads and writes through the library; small transactions instead of whole-file writes                                                                                      |
+| Sync (`syncService`, registry)  | The registry links a discussion ID to a shared folder, not a file path; moved-file handling (FR-168) and the detached copy (FR-154) are not needed for library discussions |
+| Recent files, file association  | Recent files become the discussion list; the association imports (C1) or opens (C2)                                                                                        |
+| FR-117 (copy changed elsewhere) | Replaced by the import rule: an import of a discussion that is already in the library asks what to do (Q-03)                                                               |
+| Tests                           | Library unit tests; e2e tests move from "file on disk" to "library" plus export and import                                                                                 |
 
 ### Database outline (to be refined in the design)
 
@@ -170,13 +170,13 @@ copy while it is open. Option A keeps most of today's cost and needs its own cra
 
 ## 7. Risks
 
-| Risk                                                         | Mitigation                                                                                   |
-|--------------------------------------------------------------|----------------------------------------------------------------------------------------------|
-| Data loss when Windows is reinstalled (the data is in AppData) | C2 keeps a file in Documents; C1 needs automatic backups (requirement FR-2xx, Q-02)           |
-| A damaged library file loses all discussions at once         | Automatic backups of the database; `PRAGMA integrity_check` at start; export of each discussion |
-| `node:sqlite` API changes in a later Electron                | A thin adapter; library tests run with each Electron update; fallback `better-sqlite3`         |
-| Large BLOBs make the database big                            | Images and attachments in a separate table; optional later: files in a folder by sha256        |
-| Two app instances (two Windows users) never share one library | Each Windows user has an own library, as now with keys                                       |
+| Risk                                                           | Mitigation                                                                                      |
+|----------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+| Data loss when Windows is reinstalled (the data is in AppData) | C2 keeps a file in Documents; C1 needs automatic backups (requirement FR-2xx, Q-02)             |
+| A damaged library file loses all discussions at once           | Automatic backups of the database; `PRAGMA integrity_check` at start; export of each discussion |
+| `node:sqlite` API changes in a later Electron                  | A thin adapter; library tests run with each Electron update; fallback `better-sqlite3`          |
+| Large BLOBs make the database big                              | Images and attachments in a separate table; optional later: files in a folder by sha256         |
+| Two app instances (two Windows users) never share one library  | Each Windows user has an own library, as now with keys                                          |
 
 ## 8. Alternatives kept for later
 
@@ -194,7 +194,7 @@ copy while it is open. Option A keeps most of today's cost and needs its own cra
 - Recommendation: (a). It is simpler and it matches "export/import to share". (b) keeps the old habit "the file is the
   discussion", but costs more and keeps the moved-file and copy problems of today.
 
-**Answer:**
+**Answer:** a
 
 **Q-02.** Backups of the library (if Q-01 = a):
 
@@ -203,7 +203,7 @@ copy while it is open. Option A keeps most of today's cost and needs its own cra
 - (c) only manual "Резервная копия…".
 - Recommendation: (b).
 
-**Answer:**
+**Answer:** b
 
 **Q-03.** Import of a discussion that is already in the library (same document ID):
 
@@ -213,19 +213,19 @@ copy while it is open. Option A keeps most of today's cost and needs its own cra
 - Recommendation: (c) for messages and read marks, because messages have stable IDs and clocks; then (a) only if the
   two copies have conflicting branch titles or states.
 
-**Answer:**
+**Answer:** c
 
 **Q-04.** Journal mode of the library: WAL (faster, two more files next to the database) or rollback journal (one
 file)? The library is in AppData, not shared, so recommendation: WAL.
 
-**Answer:**
+**Answer:** WAL
 
 **Q-05.** Images and attachments: BLOBs in the database, or files in a `blobs` folder by sha256? Recommendation: decide
 in the design after a test with 1 GB of images; start with BLOBs in a separate table.
 
-**Answer:**
+**Answer:** files in a blobs folder
 
 **Q-06.** Migration: import all known files automatically at the first start, or ask the person file by file?
 Recommendation: one question with a list ("Импортировать эти обсуждения?"), all selected.
 
-**Answer:**
+**Answer:** as recommended

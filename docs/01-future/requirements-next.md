@@ -15,21 +15,21 @@ Size: S 1–2 days, M 3–7 days, L 1–3 weeks, XL more than 3 weeks (one devel
 
 ## 1. Summary
 
-| Area | Feature                                   | Item | Size | File format | Sync protocol |
-|------|-------------------------------------------|------|------|-------------|---------------|
-| 2.1  | Local storage, export and import          | ADR  | L    | —           | —             |
-| 2.2  | Search in a discussion                    | 1    | M    | —           | —             |
-| 2.3  | Several discussions in one window         | 3    | L    | —           | —             |
-| 2.4  | Reactions                                 | 8    | M    | yes         | yes           |
-| 2.5  | Day separators and "jump to date"         | 11   | S    | —           | —             |
-| 2.6  | Drafts kept after a restart               | 12   | S    | —           | —             |
-| 2.7  | File attachments                          | 14   | L    | yes         | —             |
-| 2.8  | Branch map                                | 15   | M    | —           | —             |
-| 2.9  | Same person on two computers              | 21   | XL   | yes         | yes           |
-| 2.10 | English user interface                    | 23   | M    | —           | —             |
-| 2.11 | Text size                                 | 24   | S    | —           | —             |
-| 2.12 | List of keyboard shortcuts                | 25   | S    | —           | —             |
-| 2.13 | Log file and diagnostics report           | 30   | S    | —           | —             |
+| Area | Feature                           | Item | Size | File format | Sync protocol |
+|------|-----------------------------------|------|------|-------------|---------------|
+| 2.1  | Local storage, export and import  | ADR  | L    | —           | —             |
+| 2.2  | Search in a discussion            | 1    | M    | —           | —             |
+| 2.3  | Several discussions in one window | 3    | L    | —           | —             |
+| 2.4  | Reactions                         | 8    | M    | yes         | yes           |
+| 2.5  | Day separators and "jump to date" | 11   | S    | —           | —             |
+| 2.6  | Drafts kept after a restart       | 12   | S    | —           | —             |
+| 2.7  | File attachments                  | 14   | L    | yes         | —             |
+| 2.8  | Branch map                        | 15   | M    | —           | —             |
+| 2.9  | Same person on two computers      | 21   | XL   | yes         | yes           |
+| 2.10 | English user interface            | 23   | M    | —           | —             |
+| 2.11 | Text size                         | 24   | S    | —           | —             |
+| 2.12 | List of keyboard shortcuts        | 25   | S    | —           | —             |
+| 2.13 | Log file and diagnostics report   | 30   | S    | —           | —             |
 
 "File format" means a new schema version of the `.branchchat` file (export format) is needed. Older versions must
 refuse such a file with the existing "made by a newer version" message (FR-016).
@@ -181,62 +181,62 @@ This item needs its own design document before requirements can be final. The po
 
 ## 4. Proposed order
 
-| Step | Content                                   | Why first                                               |
-|------|-------------------------------------------|---------------------------------------------------------|
-| 1    | 2.13 log file, 2.11 text size, 2.12 shortcuts, 2.5 day separators | Small, independent, useful at once          |
-| 2    | 2.1 local storage (after ADR-003 is accepted) | Search, the discussion list, drafts, and attachments build on it |
-| 3    | 2.6 drafts, 2.2 search, 2.3 several discussions | Use the library                                    |
-| 4    | 2.8 branch map, 2.4 reactions             | Reactions need a new file schema and sync event         |
-| 5    | 2.7 file attachments                      | New file schema; security review of opening files       |
-| 6    | 2.10 English interface                    | Best after the texts of steps 1–5 are written           |
-| 7    | 2.9 same person on two computers          | Needs its own design and a security review               |
+| Step | Content                                                           | Why first                                                        |
+|------|-------------------------------------------------------------------|------------------------------------------------------------------|
+| 1    | 2.13 log file, 2.11 text size, 2.12 shortcuts, 2.5 day separators | Small, independent, useful at once                               |
+| 2    | 2.1 local storage (after ADR-003 is accepted)                     | Search, the discussion list, drafts, and attachments build on it |
+| 3    | 2.6 drafts, 2.2 search, 2.3 several discussions                   | Use the library                                                  |
+| 4    | 2.8 branch map, 2.4 reactions                                     | Reactions need a new file schema and sync event                  |
+| 5    | 2.7 file attachments                                              | New file schema; security review of opening files                |
+| 6    | 2.10 English interface                                            | Best after the texts of steps 1–5 are written                    |
+| 7    | 2.9 same person on two computers                                  | Needs its own design and a security review                       |
 
 ## 5. Questions
 
 **Q-01.** Accept ADR-003 (local library, `.branchchat` for export and import)? Answer the questions of ADR-003 first.
 
-**Answer:**
+**Answer:** Option C (a local SQLite library with `node:sqlite`; `.branchchat` ZIP for export and import).
 
 **Q-02.** Search (2.2): is a search across **all** discussions needed in release 2 (simple with the library), or only
 inside the open discussion?
 
-**Answer:**
+**Answer:** yes
 
 **Q-03.** Several discussions (2.3): one window only, or may the person still open a discussion in a second window
 (for example to see two side by side)? Recommendation: one main window, and "Открыть в новом окне" in the list.
 
-**Answer:**
+**Answer:** as recommended
 
 **Q-04.** Reactions (2.4): which emoji? Recommendation: 👍 👎 ❤️ 😂 😮 😢 ✅. Or any emoji from a picker?
 
-**Answer:**
+**Answer:** recommended
 
 **Q-05.** Attachments (2.7): the largest file? Recommendation: 100 MB per file, and the sync limit (FR-166) for
 synchronized discussions.
 
-**Answer:**
+**Answer:** as recommended. make it configurable
 
 **Q-06.** Attachments (2.7): which files get a warning before "Открыть" (for example `.exe`, `.bat`, `.cmd`, `.ps1`,
 `.js`, `.vbs`, `.msi`, `.lnk`, `.docm`, `.xlsm`)? Must some types be blocked completely, or only warned?
 
-**Answer:**
+**Answer:** only warnings. all in example
 
 **Q-07.** Language (2.10): the default when Windows has another language than Russian or English (for example
 Latvian): English? And may a language change need a restart of the window?
 
-**Answer:**
+**Answer:** ok to require restart. use always russian by default. 
 
 **Q-08.** Language (2.10): must the documents in `docs/` (in English now) and the user guide (Russian now) exist in
 both languages, or only the user guide?
 
-**Answer:**
+**Answer:** no need to adjust user guide. it will be done separately. all docs stay as they are.
 
 **Q-09.** Diagnostics (2.13): may the log contain file paths (they can contain the person's Windows name) and
 participant IDs? Recommendation: yes, and the report dialog says so.
 
-**Answer:**
+**Answer:** yes
 
 **Q-10.** Two computers (2.9): is this needed in release 2, or later after a separate design? Recommendation: later; it
 is the largest and the riskiest item.
 
-**Answer:**
+**Answer:** keep it later.
