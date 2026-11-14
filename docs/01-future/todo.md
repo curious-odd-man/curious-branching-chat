@@ -1,2 +1,0 @@
-- multiple files support in same window
-- fix outdated packages
