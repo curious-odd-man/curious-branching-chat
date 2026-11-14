@@ -1,6 +1,6 @@
 {
   "name": "branchchat",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "BranchChat — offline-first branching discussions for Windows",
   "private": true,
   "main": "./out/main/index.js",
