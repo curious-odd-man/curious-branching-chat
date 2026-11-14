@@ -55,6 +55,8 @@ const api: BranchChatApi = {
     setRecentFilesLimit: (limit) => invoke(IPC.settingsSetRecentLimit, { limit }),
     setOpenLastFileOnStartup: (enabled) => invoke(IPC.settingsSetOpenLast, { enabled }),
     setFileSizeLimit: (mb) => invoke(IPC.settingsSetFileSizeLimit, { mb }),
+    setBackgroundFlag: (flag, enabled) => invoke(IPC.settingsSetBackgroundFlag, { flag, enabled }),
+    takeFocusRequest: () => invoke(IPC.focusTake),
     getRecentFiles: () => invoke(IPC.recentGet),
     removeRecentFile: (path) => invoke(IPC.recentRemove, { path }),
     clearRecentFiles: () => invoke(IPC.recentClear),
@@ -77,6 +79,7 @@ const api: BranchChatApi = {
     onDocumentStatusChanged: (callback) =>
         subscribe<DocumentStatus>(IPC.documentStatusChanged, callback),
     onMenuCommand: (callback) => subscribe<MenuCommand>(IPC.menuCommand, callback),
+    onFocusRequest: (callback) => subscribe<undefined>(IPC.focusRequest, () => callback()),
     getPathForFile: (file) => webUtils.getPathForFile(file as File)
 }
 

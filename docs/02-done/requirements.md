@@ -570,13 +570,16 @@ format is in `sync-protocol.md`. The release column says in which release the re
 
 - **FR-173.** When the last window closes and a synchronized discussion exists, the application stays in the
   notification area (tray) and keeps syncing. It shows a one-time notice the first time. "Выход" in the tray menu
-  closes it (D-16, D-33).
+  closes it (D-16, D-33). A left click on the tray icon shows a window or opens the most recently used synchronized
+  discussion. Closing a window (also Alt+F4) keeps the app in the tray; "Выход" in the tray or the File menu ends it
+  (D-42).
 - **FR-174.** "Запускать вместе с Windows" is turned on after the first synchronized discussion is created or joined;
   the wizard says so. The person can turn it off (D-36).
 - **FR-175.** A new message from another member raises a Windows notification with the author, the discussion name, and
   up to 100 characters of the text (images as "[изображение]"). A loading message raises it only when it is complete.
   Settings: "Уведомления о новых сообщениях" (default on) and "Показывать текст в уведомлениях" (default on) (D-33,
-  D-38).
+  D-38). No notification when the window of that discussion is active. More than 3 new messages of one discussion in
+  one scan give one notification "Новых сообщений: N" (D-42).
 
 #### Membership changes (release 1.5)
 
@@ -841,6 +844,8 @@ The application is distributed as a single installer `.exe` that needs no admini
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
 
 ## Changes in revision 13
+
+- FR-173 and FR-175: tray and notification details (D-42).
 
 - One mark for every message (D-41): FR-123 uses green checks and no mark for "none"; FR-169 covers all messages in a
   synchronized discussion, with shared delivery state.

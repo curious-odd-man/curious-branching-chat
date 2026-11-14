@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { ru } from '@shared/i18n/ru'
-import type { AssociationInfo, IdentityView, SettingsView } from '@shared/types/ipc'
+import type { AssociationInfo, BackgroundFlag, IdentityView, SettingsView } from '@shared/types/ipc'
 
 interface Props {
     settings: SettingsView | undefined
@@ -67,6 +67,34 @@ export function SettingsDialog({
     }
 
     const hasName = Boolean(settings?.displayName)
+
+    /** Notifications and start with Windows (release 1.4): the box changes at once; an error puts it back. */
+    const [flags, setFlags] = useState<Partial<Record<BackgroundFlag, boolean>>>({})
+    const flag = (name: BackgroundFlag, label: string, hint: string): React.JSX.Element => (
+        <>
+            <label className="check">
+                <input
+                    type="checkbox"
+                    data-testid={`settings-${name}`}
+                    checked={flags[name] ?? settings?.[name] ?? false}
+                    disabled={!settings}
+                    onChange={(e) => {
+                        const enabled = e.target.checked
+                        setFlags((f) => ({ ...f, [name]: enabled }))
+                        void api.setBackgroundFlag(name, enabled).then((r) => {
+                            if (r.ok) onSettingsChanged(r.data)
+                            else {
+                                setFlags((f) => ({ ...f, [name]: !enabled }))
+                                setError(r.error.message)
+                            }
+                        })
+                    }}
+                />
+                <span>{label}</span>
+            </label>
+            <p className="hint">{hint}</p>
+        </>
+    )
 
     const [sizeText, setSizeText] = useState(String(settings?.fileSizeLimitMb ?? 30))
     const applySize = (): void => {
@@ -256,6 +284,17 @@ export function SettingsDialog({
                         >
                             {stateText[state]}
                         </p>
+                    )}
+                </section>
+
+                <section data-testid="settings-background">
+                    <h3>{ru.settings.backgroundHeading}</h3>
+                    {flag('notifyNewMessages', ru.settings.notifyNew, ru.settings.notifyNewHint)}
+                    {flag('notifyShowText', ru.settings.notifyText, ru.settings.notifyTextHint)}
+                    {flag(
+                        'startWithWindows',
+                        ru.settings.startWithWindows,
+                        ru.settings.startWithWindowsHint
                     )}
                 </section>
 

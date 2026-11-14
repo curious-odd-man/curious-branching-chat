@@ -8,6 +8,7 @@ import {
     IPC,
     type DocumentStatus,
     type DocumentView,
+    type FocusRequest,
     type MenuCommand,
     type OpenOutcome
 } from '@shared/types/ipc'
@@ -29,6 +30,8 @@ export interface WindowEntry {
     hasDraft: boolean
     closeRequested: boolean
     closing: boolean
+    /** A message to show once the window's page asks for it (a click on a notification, D-33). */
+    pendingFocus: FocusRequest | null
 }
 
 export interface ControllerDeps {
@@ -41,6 +44,8 @@ export interface ControllerDeps {
     /** Synchronized discussions (release 1.2); absent in tests that do not need them. */
     sync?: SyncService
     registry?: SyncRegistry
+    /** The person cancelled the close of a window (the app must not quit, release 1.4). */
+    onCloseCancelled?: () => void
 }
 
 /**
@@ -63,7 +68,8 @@ export class AppController {
             session: null,
             hasDraft: false,
             closeRequested: false,
-            closing: false
+            closing: false,
+            pendingFocus: null
         }
         this.entries.set(entry.id, entry)
         win.on('close', (event) => {
@@ -111,6 +117,60 @@ export class AppController {
     focusAny(): void {
         const first = this.entries.values().next().value as WindowEntry | undefined
         if (first) focusWindow(first.win)
+    }
+
+    /** True if a window shows this file and that window is active (D-42: then no notification). */
+    isActive(filePath: string): boolean {
+        const entry = this.findByKey(pathKey(resolve(filePath)))
+        if (!entry || entry.win.isDestroyed()) return false
+        return entry.win.isFocused() && entry.win.isVisible() && !entry.win.isMinimized()
+    }
+
+    /**
+     * "Открыть" in the tray and a left click on the tray icon (D-42): shows a window; with no window, opens the most
+     * recently used synchronized discussion, or the start screen.
+     */
+    async showAny(): Promise<void> {
+        if (this.entries.size > 0) return this.focusAny()
+        const registered = (this.deps.registry?.list() ?? []).filter(
+            (e) => e.ownId === this.deps.settings.get().participantId
+        )
+        const keys = new Set(registered.map((e) => pathKey(e.filePath)))
+        const candidates = [
+            ...this.deps.recent
+                .list()
+                .map((r) => r.path)
+                .filter((p) => keys.has(pathKey(p))),
+            ...registered.map((e) => e.filePath)
+        ]
+        for (const path of candidates) {
+            const exists = await fs
+                .access(path)
+                .then(() => true)
+                .catch(() => false)
+            if (!exists) continue
+            const outcome = await this.openPath(path, undefined)
+            if (outcome.status === 'opened' || outcome.status === 'focused') return
+        }
+        if (this.entries.size === 0) focusWindow(this.createWindow().win)
+    }
+
+    /** A click on a notification (D-33): opens the discussion and shows the message. */
+    async showMessage(filePath: string, threadId: string, messageId: string): Promise<void> {
+        const outcome = await this.openPath(filePath, undefined)
+        if (outcome.status !== 'opened' && outcome.status !== 'focused') return
+        const entry = this.findByKey(pathKey(resolve(filePath)))
+        if (!entry?.session || entry.win.isDestroyed()) return
+        entry.pendingFocus = { documentId: entry.session.documentId, threadId, messageId }
+        entry.win.webContents.send(IPC.focusRequest)
+    }
+
+    /** The page takes the waiting message to show (once). */
+    takeFocusRequest(entry: WindowEntry | undefined): FocusRequest | null {
+        if (!entry) return null
+        const request = entry.pendingFocus
+        entry.pendingFocus = null
+        return request
     }
 
     sendMenuCommand(command: MenuCommand): void {
@@ -373,7 +433,10 @@ export class AppController {
             }
             if (problems.unsentDraft || problems.saveFailed) {
                 const closeAnyway = await this.deps.ui.confirmClose(entry.win, problems)
-                if (!closeAnyway) return
+                if (!closeAnyway) {
+                    this.deps.onCloseCancelled?.()
+                    return
+                }
             }
             entry.closing = true
             if (!entry.win.isDestroyed()) entry.win.close()

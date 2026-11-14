@@ -17,7 +17,12 @@ import {
     type MessageSentPayload,
     type VerifiedEvent
 } from '@shared/sync'
-import type { DocumentContents, RichDoc } from '@shared/validation'
+import {
+    compareMessages,
+    type DocumentContents,
+    type Message,
+    type RichDoc
+} from '@shared/validation'
 import { openEvent, sealEvent, sha256Hex, type OpenedEvent } from '../crypto/envelope'
 import { fromB64 } from '../crypto/identity'
 import { PartsError, joinContent, joinImage, planMessageParts } from '../crypto/parts'
@@ -61,6 +66,11 @@ export interface ConversationSyncDeps {
     stableMs?: number
     /** Called when the loading messages or the sync status change (for the window). */
     onChange?: () => void
+    /**
+     * Messages of other members that a scan added to the discussion (complete, with all parts), in the order of
+     * the discussion (D-33, D-38). Not called for the history of an invitation.
+     */
+    onNewMessages?: (messages: Message[], contents: DocumentContents) => void
     log?: (message: string) => void
 }
 
@@ -132,6 +142,8 @@ export class ConversationSync {
     private seen = new Map<string, { size: number; mtimeMs: number; at: number }>()
     private readonly stableMs: number
     private folder: FolderHealth = 'ok'
+    /** IDs of messages of others that the running scan applied (for notifications). */
+    private arrived = new Set<string>()
 
     constructor(private readonly deps: ConversationSyncDeps) {
         this.stableMs = deps.stableMs ?? STABLE_FILE_SECONDS * 1000
@@ -596,7 +608,26 @@ export class ConversationSync {
         report.held = Object.keys(s.held).length
         await this.state.save()
         this.deps.onChange?.()
+        await this.reportArrived()
         return report
+    }
+
+    private noteArrived(event: VerifiedEvent): void {
+        if (event.type !== 'message.sent' || event.senderId === this.deps.ownId) return
+        this.arrived.add((event.payload as MessageSentPayload).message.messageId)
+    }
+
+    private async reportArrived(): Promise<void> {
+        if (this.arrived.size === 0) return
+        const ids = this.arrived
+        this.arrived = new Set()
+        if (!this.deps.onNewMessages) return
+        const contents = await this.deps.document.read()
+        const messages = contents.discussion.threads
+            .flatMap((t) => t.messages)
+            .filter((m) => ids.has(m.messageId) && m.authorId !== this.deps.ownId)
+            .sort(compareMessages)
+        if (messages.length > 0) this.deps.onNewMessages(messages, contents)
     }
 
     private isStable(entry: SharedEntry, nowMs: number): boolean {
@@ -793,6 +824,7 @@ export class ConversationSync {
             finished.push(...[...r.applied.map((a) => a.event), ...r.duplicates].map(eventKey))
             rejected.push(...r.rejected.map((x) => ({ key: eventKey(x.event), reason: x.reason })))
             applied = r.applied.length
+            for (const a of r.applied) this.noteArrived(a.event)
             s.pending = r.pending
             if (r.applied.length === 0) return null
             const images: Array<{ assetId: string; data: Uint8Array }> = []
@@ -918,6 +950,7 @@ export class ConversationSync {
             const r = applyAll(contents, [event])
             if (r.applied.length > 0) {
                 status = 'applied'
+                this.noteArrived(event)
                 const wanted = new Set(r.applied[0]!.newAssetIds)
                 return { contents: r.contents, images: images.filter((i) => wanted.has(i.assetId)) }
             }

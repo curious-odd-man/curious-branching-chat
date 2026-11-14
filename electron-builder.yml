@@ -38,6 +38,9 @@ nsis:
 extraResources:
   - from: build/document.ico
     to: document.ico
+  # the notification-area icon (release 1.4, src/main/background/electronPorts.ts)
+  - from: build/icon.ico
+    to: tray.ico
 # Updates come from GitHub Releases (stable only). Set the real owner before the first release.
 publish:
   - provider: github

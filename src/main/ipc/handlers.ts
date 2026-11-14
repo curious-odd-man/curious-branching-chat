@@ -17,6 +17,7 @@ import {
     setAutoUpdateSchema,
     setOpenLastSchema,
     setFileSizeLimitSchema,
+    setBackgroundFlagSchema,
     sharedRootSchema,
     sharedParseKeySchema,
     sharedCreateSchema,
@@ -45,6 +46,7 @@ import { isInside } from '../transport/folderTransport'
 import { resolve } from 'node:path'
 import type { Ui } from '../application/ui'
 import type { RosterView } from '@shared/types/ipc'
+import type { BackgroundService } from '../background/backgroundService'
 
 /** Only the application's own page may call the main process: the packaged `file:` page, or the dev server. */
 function isAppPage(url: string): boolean {
@@ -71,7 +73,7 @@ export function registerIpcHandlers(
     updates: UpdateService,
     identity: IdentityService,
     sync?: SyncService,
-    shared?: { onboarding: Onboarding; ui: Ui }
+    shared?: { onboarding: Onboarding; ui: Ui; background?: BackgroundService }
 ): void {
     function handle<P, R>(
         channel: string,
@@ -159,12 +161,14 @@ export function registerIpcHandlers(
                 keys: p.keys,
                 session
             })
+            await shared?.background?.discussionAdded()
             session.onChange()
             return true
         }
         const path = await pickLocalFile(entry, p.root, ru.shared.defaultFileName)
         if (!path) return false
         await onboarding().create({ root: p.root, filePath: path, keys: p.keys })
+        await shared?.background?.discussionAdded()
         await controller.openPath(path, entry)
         return true
     })
@@ -196,6 +200,7 @@ export function registerIpcHandlers(
         const path = await pickLocalFile(entry, p.root, found.title)
         if (!path) return false
         await onboarding().importInvitation(p.root, p.invitationId, path)
+        await shared?.background?.discussionAdded()
         await controller.openPath(path, entry)
         return true
     })
@@ -220,6 +225,12 @@ export function registerIpcHandlers(
         await recent.trim(p.limit)
         return updated
     })
+    handle(IPC.settingsSetBackgroundFlag, setBackgroundFlagSchema, (_e, p) =>
+        shared?.background
+            ? shared.background.setFlag(p.flag, p.enabled)
+            : settings.setFlag(p.flag, p.enabled)
+    )
+    handle(IPC.focusTake, noPayloadSchema, (entry) => controller.takeFocusRequest(entry))
     handle(IPC.settingsSetFileSizeLimit, setFileSizeLimitSchema, (_e, p) =>
         settings.setFileSizeLimit(p.mb)
     )

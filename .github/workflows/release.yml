@@ -41,7 +41,7 @@ jobs:
       - name: The release build contains no test hooks
         shell: bash
         run: |
-          if grep -rEl "__dialogLog|__answers|__registry|__installRequests|InMemoryRegistry|BRANCHCHAT_E2E|E2E-PROTECTED" out; then
+          if grep -rEl "__dialogLog|__answers|__registry|__installRequests|__notifications|__loginItem|InMemoryRegistry|BRANCHCHAT_E2E|E2E-PROTECTED" out; then
             echo "Test hooks found in the release build" >&2
             exit 1
           fi

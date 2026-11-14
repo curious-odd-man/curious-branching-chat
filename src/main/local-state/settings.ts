@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { SettingsView } from '@shared/types/ipc'
+import type { BackgroundFlag, SettingsView } from '@shared/types/ipc'
 import { FILE_SIZE_LIMIT_MB } from '@shared/sync'
 import { StateFileWriter } from '../document/atomicWrite'
 
@@ -19,7 +19,14 @@ const settingsSchema = z
         recentFilesLimit: z.number().int().nonnegative().optional(),
         openLastFileOnStartup: z.boolean().optional(),
         /** Largest file read from a shared folder, in MB (FR-166). */
-        fileSizeLimitMb: z.number().int().optional()
+        fileSizeLimitMb: z.number().int().optional(),
+        notifyNewMessages: z.boolean().optional(),
+        notifyShowText: z.boolean().optional(),
+        startWithWindows: z.boolean().optional(),
+        /** FR-174: the automatic switch-on of "start with Windows" has happened (it happens only once). */
+        startWithWindowsSettled: z.boolean().optional(),
+        /** FR-173: the one-time notice about the tray was shown. */
+        trayNoticeShown: z.boolean().optional()
     })
     .passthrough()
 type Settings = z.infer<typeof settingsSchema>
@@ -82,7 +89,11 @@ export class SettingsStore {
             autoUpdateCheck: this.data.autoUpdateCheck ?? true,
             recentFilesLimit: this.data.recentFilesLimit ?? DEFAULT_RECENT_FILES_LIMIT,
             openLastFileOnStartup: this.data.openLastFileOnStartup ?? true,
-            fileSizeLimitMb: clampLimit(this.data.fileSizeLimitMb)
+            fileSizeLimitMb: clampLimit(this.data.fileSizeLimitMb),
+            notifyNewMessages: this.data.notifyNewMessages ?? true,
+            notifyShowText: this.data.notifyShowText ?? true,
+            startWithWindows: this.data.startWithWindows ?? false,
+            startWithWindowsSettled: this.data.startWithWindowsSettled ?? false
         }
     }
 
@@ -140,6 +151,36 @@ export class SettingsStore {
         this.data = { ...this.data, fileSizeLimitMb: mb }
         await this.persist()
         return this.get()
+    }
+
+    async setFlag(flag: BackgroundFlag, enabled: boolean): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        this.data = {
+            ...this.data,
+            [flag]: enabled,
+            // a choice of the person settles the automatic switch-on (FR-174)
+            ...(flag === 'startWithWindows' ? { startWithWindowsSettled: true } : {})
+        }
+        await this.persist()
+        return this.get()
+    }
+
+    /** FR-174: the first synchronized discussion turns "start with Windows" on, once. True if it did. */
+    async settleStartWithWindows(): Promise<boolean> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        if (this.data.startWithWindowsSettled) return false
+        this.data = { ...this.data, startWithWindows: true, startWithWindowsSettled: true }
+        await this.persist()
+        return true
+    }
+
+    /** FR-173: true the first time only. */
+    async takeTrayNotice(): Promise<boolean> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        if (this.data.trayNoticeShown) return false
+        this.data = { ...this.data, trayNoticeShown: true }
+        await this.persist()
+        return true
     }
 
     private async persist(): Promise<void> {

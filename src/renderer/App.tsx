@@ -63,8 +63,13 @@ export function App(): React.JSX.Element {
         () =>
             api.onMenuCommand((command) => {
                 if (command === 'new') startNew()
-                else if (command === 'settings') setShowSettings(true)
-                else if (command === 'new-shared') setWizard('new')
+                else if (command === 'settings') {
+                    // the settings may have changed in the main process (start with Windows, FR-174)
+                    void api.getSettings().then((r) => {
+                        if (r.ok) setSettings(r.data)
+                        setShowSettings(true)
+                    })
+                } else if (command === 'new-shared') setWizard('new')
                 else if (command === 'join-shared') setWizard('join')
                 else if (command === 'make-shared') {
                     if (viewRef.current && !viewRef.current.synced) setWizard('convert')
@@ -72,6 +77,21 @@ export function App(): React.JSX.Element {
             }),
         [api, startNew, openDialog]
     )
+
+    // A click on a notification (D-33): show that message. The request waits in the main process until this page asks.
+    useEffect(() => {
+        const pull = (): void =>
+            void api.takeFocusRequest().then((r) => {
+                if (r.ok && r.data)
+                    setNav({
+                        documentId: r.data.documentId,
+                        threadId: r.data.threadId,
+                        focus: r.data.messageId
+                    })
+            })
+        pull()
+        return api.onFocusRequest(pull)
+    }, [api])
 
     const activeThreadId = useMemo(() => {
         if (!view) return null

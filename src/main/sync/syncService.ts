@@ -1,13 +1,18 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { eventsFromChange, withLocalDisplayName, type LoadingMessage } from '@shared/sync'
-import type { DocumentContents } from '@shared/validation'
+import type { DocumentContents, Message } from '@shared/validation'
 import type { DocumentSession } from '../application/documentSession'
 import { pathKey } from '../application/paths'
 import type { KeyStore } from '../crypto/keyStore'
 import type { SettingsStore } from '../local-state/settings'
 import { FolderTransport } from '../transport/folderTransport'
-import { ConversationSync, RETRY_INTERVAL_MS, type DocumentPort } from './conversationSync'
+import {
+    ConversationSync,
+    RETRY_INTERVAL_MS,
+    type DocumentPort,
+    type SyncHealth
+} from './conversationSync'
 import type { DocumentView } from '@shared/types/ipc'
 import { FilePort } from './filePort'
 import type { RegistryEntry, SyncRegistry } from './registry'
@@ -29,6 +34,24 @@ export interface SyncServiceDeps {
     stableMs?: number
     watch?: boolean
     log?: (message: string) => void
+    /** Messages of other members that a scan added (notifications, D-33). */
+    onNewMessages?: (arrival: NewMessagesArrival) => void
+    /** A sync status changed (the tray menu, D-35). */
+    onStatusChange?: () => void
+}
+
+export interface NewMessagesArrival {
+    conversationId: string
+    filePath: string
+    messages: Message[]
+    contents: DocumentContents
+}
+
+/** Sync state of one registered discussion for the tray menu (D-35). */
+export interface ConversationStatus {
+    conversationId: string
+    filePath: string
+    health: SyncHealth | null
 }
 
 export type AttachResult =
@@ -156,7 +179,17 @@ export class SyncService {
             maxFileBytes: () => this.deps.settings.get().fileSizeLimitMb * 1024 * 1024,
             appVersion: this.deps.appVersion,
             ...(this.deps.stableMs !== undefined ? { stableMs: this.deps.stableMs } : {}),
-            onChange: () => void this.refreshView(conv),
+            onChange: () => {
+                void this.refreshView(conv)
+                this.statusChanged(conv)
+            },
+            onNewMessages: (messages, contents) =>
+                this.deps.onNewMessages?.({
+                    conversationId: entry.conversationId,
+                    filePath: conv.entry.filePath,
+                    messages,
+                    contents
+                }),
             ...(this.deps.log ? { log: this.deps.log } : {})
         })
         this.conversations.set(entry.conversationId, conv)
@@ -203,6 +236,40 @@ export class SyncService {
 
     async scanAll(): Promise<void> {
         for (const id of this.conversations.keys()) await this.scan(id)
+    }
+
+    /** "Проверить папки" in the tray menu: scan and maintain every discussion. */
+    async checkAll(): Promise<void> {
+        for (const c of this.conversations.values()) {
+            await this.scan(c.entry.conversationId)
+            await c.sync
+                .maintain()
+                .catch((err) => this.deps.log?.(`maintenance failed: ${(err as Error).message}`))
+            await this.refreshView(c)
+        }
+    }
+
+    /** Every registered discussion of this identity, with its sync state (null: the sync did not start). */
+    statusList(): ConversationStatus[] {
+        const ownId = this.deps.settings.get().participantId
+        return this.deps.registry
+            .list()
+            .filter((e) => e.ownId === ownId)
+            .map((e) => ({
+                conversationId: e.conversationId,
+                filePath: e.filePath,
+                health: this.conversations.get(e.conversationId)?.sync.health() ?? null
+            }))
+    }
+
+    private readonly lastStatus = new Map<string, string>()
+
+    private statusChanged(conv: Conversation): void {
+        const h = conv.sync.health()
+        const key = `${h.folder}|${h.quarantined}|${h.needsUpdate}`
+        if (this.lastStatus.get(conv.entry.conversationId) === key) return
+        this.lastStatus.set(conv.entry.conversationId, key)
+        this.deps.onStatusChange?.()
     }
 
     /** Loading messages, own copy states, and the status line of the window (D-37, FR-169, FR-172). */
@@ -363,8 +430,8 @@ export class SyncService {
         return this.conversations.get(conversationId)?.sync.invitationStatus() ?? {}
     }
 
-    /** Is any registered discussion synchronized here (the tray needs this in release 1.4)? */
+    /** The number of registered discussions of this identity: the app stays in the tray if it is not 0 (D-33). */
     get count(): number {
-        return this.conversations.size
+        return this.statusList().length
     }
 }

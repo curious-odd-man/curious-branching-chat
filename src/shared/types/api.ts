@@ -3,6 +3,8 @@ import type { StagedImage } from './assets'
 import type {
     AppInfo,
     AssociationInfo,
+    BackgroundFlag,
+    FocusRequest,
     DocumentStatus,
     CandidateView,
     DocumentView,
@@ -63,6 +65,10 @@ export interface BranchChatApi {
     setOpenLastFileOnStartup(enabled: boolean): Promise<IpcResult<SettingsView>>
     /** Largest file read from a shared folder, 5 to 1 000 MB (FR-166). */
     setFileSizeLimit(mb: number): Promise<IpcResult<SettingsView>>
+    /** Notifications and start with Windows (release 1.4). */
+    setBackgroundFlag(flag: BackgroundFlag, enabled: boolean): Promise<IpcResult<SettingsView>>
+    /** The message this window must show (a click on a notification), once. */
+    takeFocusRequest(): Promise<IpcResult<FocusRequest | null>>
     getRecentFiles(): Promise<IpcResult<RecentFileView[]>>
     removeRecentFile(path: string): Promise<IpcResult<null>>
     clearRecentFiles(): Promise<IpcResult<null>>
@@ -95,6 +101,8 @@ export interface BranchChatApi {
     /** The save status changed (without any change to the discussion itself). */
     onDocumentStatusChanged(callback: (status: DocumentStatus) => void): () => void
     onMenuCommand(callback: (command: MenuCommand) => void): () => void
+    /** A message waits to be shown: call takeFocusRequest(). */
+    onFocusRequest(callback: () => void): () => void
     /** Absolute path of a file dropped onto the window. */
     getPathForFile(file: object): string
 }

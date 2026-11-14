@@ -215,6 +215,11 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
             <div className="dialog settings wizard" data-testid="shared-wizard" data-mode={mode}>
                 <h2 id="wizard-title">{title}</h2>
                 <p className="hint">{ru.shared.intro}</p>
+                {settings && !settings.startWithWindowsSettled && (
+                    <p className="hint" data-testid="wizard-autostart">
+                        {ru.shared.autoStartNote}
+                    </p>
+                )}
 
                 <section>
                     <h3>{ru.shared.keyStep}</h3>

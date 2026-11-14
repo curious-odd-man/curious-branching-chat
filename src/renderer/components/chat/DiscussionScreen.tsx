@@ -242,8 +242,9 @@ export function DiscussionScreen({
                         </div>
                     )}
                     <MessageList
-                        // a new list per thread: it opens at the newest message, or at the focused one
-                        key={threadId}
+                        // a new list per thread and per focused message: it opens at the newest message, or at the
+                        // focused one (also when a notification asks for another message of the same thread)
+                        key={`${threadId}:${focusMessageId ?? ''}`}
                         rows={rows}
                         localParticipantId={view.localParticipantId}
                         participants={view.knownParticipants}

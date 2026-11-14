@@ -356,3 +356,98 @@ test('release 1.3: delivery marks, per-member details, and the status line (FR-1
     await back.win.getByTestId('sync-check').click()
     await expect(back.win.getByTestId('sync-status')).toHaveCount(0, { timeout: 10_000 })
 })
+
+// ---- release 1.4: tray, background sync, notifications (FR-173 to FR-175) ------------------------------------------
+
+type Note = { title: string; body: string }
+const notes = (t: TestApp): Promise<Note[]> =>
+    t.app.evaluate(() =>
+        (globalThis as unknown as { __notifications: Note[] }).__notifications.map((n) => ({
+            title: n.title,
+            body: n.body
+        }))
+    )
+const trayLabels = (t: TestApp): Promise<string[] | null> =>
+    t.app.evaluate(
+        () =>
+            (
+                globalThis as unknown as { __tray: { items: Array<{ label?: string }> | null } }
+            ).__tray.items?.map((i) => i.label ?? '---') ?? null
+    )
+const closeAllWindows = (t: TestApp): Promise<void> =>
+    t.app.evaluate(({ BrowserWindow }) => {
+        for (const w of BrowserWindow.getAllWindows()) w.close()
+    })
+
+test('release 1.4: the app stays in the tray, syncs with no window, and notifies (FR-173 to FR-175)', async () => {
+    const { a, b, fileB } = await createAndJoin()
+
+    // FR-174: the first synchronized discussion turned "start with Windows" on, on both computers
+    for (const t of [a.t, b.t])
+        expect(
+            await t.app.evaluate(
+                () => (globalThis as unknown as { __loginItem: boolean }).__loginItem
+            )
+        ).toBe(true)
+    expect(await trayLabels(b.t)).toEqual(
+        expect.arrayContaining(['Открыть', 'Планы', 'Проверить папки', 'Выход'])
+    )
+
+    // FR-173: Boris closes his window; the app keeps running in the tray, with a one-time notice
+    await closeAllWindows(b.t)
+    await expect.poll(() => b.t.app.windows().length).toBe(0)
+    await expect
+        .poll(async () => (await notes(b.t)).map((n) => n.title))
+        .toEqual(['BranchChat продолжает работать'])
+
+    // FR-175: Anna writes; Boris's app applies it to the file and raises a notification with the text
+    await send(a.win, 'Привет из окна Анны')
+    await expect
+        .poll(async () => (await notes(b.t)).slice(1), { timeout: 15_000 })
+        .toEqual([{ title: 'Анна — Планы', body: 'Привет из окна Анны' }])
+    const onDisk = await fs.readFile(fileB)
+    expect(onDisk.length).toBeGreaterThan(0)
+
+    // a click on the notification opens the discussion with the message
+    await b.t.app.evaluate(() =>
+        (
+            globalThis as unknown as { __notifications: Array<{ click(): void }> }
+        ).__notifications[1]!.click()
+    )
+    const [reopened] = await b.t.windows(1)
+    await expect(message(reopened!, 'Привет из окна Анны')).toBeVisible({ timeout: 10_000 })
+
+    // D-38: with "Показывать текст в уведомлениях" off, the notification has no message text
+    await menu(b.t, reopened!, 'Настройки…', 'settings-background')
+    await reopened!.getByTestId('settings-notifyShowText').uncheck()
+    await expect(reopened!.getByTestId('settings-notifyShowText')).not.toBeChecked()
+    await closeAllWindows(b.t)
+    await expect.poll(() => b.t.app.windows().length).toBe(0)
+    await send(a.win, 'Секретный текст')
+    await expect
+        .poll(async () => (await notes(b.t)).slice(2), { timeout: 15_000 })
+        .toEqual([{ title: 'Анна — Планы', body: 'Новое сообщение' }])
+
+    // "Открыть" in the tray opens the discussion again; it shows both messages
+    await b.t.app.evaluate(() =>
+        (globalThis as unknown as { __tray: { act(l: string): boolean } }).__tray.act('Открыть')
+    )
+    const [again] = await b.t.windows(1)
+    await expect(message(again!, 'Секретный текст')).toBeVisible({ timeout: 10_000 })
+
+    // "Выход" ends the application
+    const exited = new Promise<void>((resolve) => b.t.app.process().once('exit', () => resolve()))
+    await b.t.app.evaluate(() =>
+        (globalThis as unknown as { __tray: { act(l: string): boolean } }).__tray.act('Выход')
+    )
+    await exited
+})
+
+test('release 1.4: a normal discussion does not keep the app in the tray', async () => {
+    const userData = await profile('p-solo', 'Соло')
+    const { t } = await start(userData)
+    expect(await trayLabels(t)).toBeNull()
+    const exited = new Promise<void>((resolve) => t.app.process().once('exit', () => resolve()))
+    await closeAllWindows(t)
+    await exited
+})

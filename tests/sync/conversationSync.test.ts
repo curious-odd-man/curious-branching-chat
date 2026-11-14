@@ -39,6 +39,8 @@ interface Member {
         open: (s: Uint8Array) => Promise<Uint8Array | null>
     }
     writes: number
+    /** IDs reported by onNewMessages, one list per report (notifications, D-33). */
+    arrived: string[][]
 }
 
 let clockMs = Date.parse('2026-11-11T10:00:00Z')
@@ -153,7 +155,8 @@ async function connect(m: Member): Promise<void> {
         newId: randomUUID,
         maxFileBytes: () => 30 * 1024 * 1024,
         appVersion: '1.2.0',
-        stableMs: 0
+        stableMs: 0,
+        onNewMessages: (messages) => (m.arrived ??= []).push(messages.map((x) => x.messageId))
     })
 }
 
@@ -337,6 +340,8 @@ describe('sync service with three members (design 13 to 18)', () => {
             await fs.rename(held, aside)
             await b.sync.scan()
             expect(mainThread(b.contents.discussion).messages).toHaveLength(0)
+            // a loading message raises no notification yet (D-38)
+            expect(b.arrived ?? []).toEqual([])
             const [loading] = await b.sync.loadingMessages()
             expect(loading).toMatchObject({
                 partsTotal: 3,
@@ -349,6 +354,7 @@ describe('sync service with three members (design 13 to 18)', () => {
             await b.sync.scan()
             expect(await b.sync.loadingMessages()).toEqual([])
             expect(mainThread(b.contents.discussion).messages).toHaveLength(1)
+            expect(b.arrived).toEqual([[mainThread(b.contents.discussion).messages[0]!.messageId]])
             expect(sha256Hex(b.images.get(id)!)).toBe(id)
             // after the receipts, the parts are gone from the shared folder and from the local stores
             await scanAll(members)
@@ -801,6 +807,25 @@ describe('delivery marks and sync health (release 1.3: D-09, D-29, D-34, D-35)',
             await c.sync.scan()
             await a.sync.scan()
             expect(a.sync.deliveries()[id]!.state).toBe('delivered')
+        })
+    })
+
+    it('reports new messages of others once per scan, never own messages (D-33)', async () => {
+        await withTempDir(async (dir) => {
+            const { members } = await group(dir)
+            const [a, b] = members as [Member, Member, Member]
+            await say(a, 'первое')
+            await say(a, 'второе')
+            const ids = mainThread(a.contents.discussion).messages.map((m) => m.messageId)
+            await b.sync.scan()
+            expect(b.arrived).toEqual([ids])
+            await b.sync.scan()
+            expect(b.arrived).toEqual([ids]) // nothing new
+            await say(b, 'ответ')
+            await a.sync.scan()
+            const reply = mainThread(b.contents.discussion).messages.at(-1)!.messageId
+            expect(a.arrived).toEqual([[reply]])
+            expect(b.arrived).toEqual([ids])
         })
     })
 

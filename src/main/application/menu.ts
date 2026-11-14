@@ -10,7 +10,9 @@ export function buildMenu(
     controller: AppController,
     updates: UpdateService,
     recent: RecentFilesStore,
-    recentFiles: readonly RecentFileView[]
+    recentFiles: readonly RecentFileView[],
+    /** "Выход": the whole application closes, also from the tray (release 1.4). */
+    exit: () => void = () => app.quit()
 ): Menu {
     const template: MenuItemConstructorOptions[] = [
         {
@@ -57,7 +59,9 @@ export function buildMenu(
                 },
                 { type: 'separator' },
                 { label: ru.menu.closeWindow, role: 'close' },
-                { label: ru.menu.exit, accelerator: 'Alt+F4', click: () => app.quit() }
+                // Alt+F4 closes only the window (Windows default); with a synchronized discussion the app stays in
+                // the tray. "Выход" closes the whole application.
+                { label: ru.menu.exit, click: () => exit() }
             ]
         },
         {

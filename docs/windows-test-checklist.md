@@ -207,3 +207,25 @@ The three Google Drive tests in the design document, Section 23, are done. The r
    Click it on B: C is listed as "ещё не получил", then "получил". C reads it: one green check on A and on B.
 8. Normal (not synchronized) discussion: a message nobody has read has no mark; read by some: one green check; read
    by all: two green checks.
+
+## O. Release 1.4: tray, background sync, notifications
+
+1. Create or join the first synchronized discussion: the wizard says that BranchChat will start with Windows. In
+   Settings > "Работа в фоне", "Запускать вместе с Windows" is ticked. `regedit`: HKCU\...\CurrentVersion\Run has
+   "BranchChat" with `--background`.
+2. Close the last window: the tray icon stays; a notice appears once (not on the next close). Alt+F4 does the same.
+3. Sign out and in again: BranchChat starts with no window, only the tray icon. B writes: a Windows notification
+   appears with "B — <name>" and the start of the text. Click it: the discussion opens at the message.
+4. The window of the discussion is active: no notification. Minimized or behind another program: a notification.
+5. B writes 5 messages while A's computer sleeps. Wake it: one notification "Новых сообщений: 5".
+6. Untick "Показывать текст в уведомлениях": the notification shows no text. Untick "Уведомления о новых сообщениях":
+   no notification.
+7. The tray icon is sharp at 100 %, 150 %, and 200 % display scale. A left click opens a window; the right-click menu
+   lists the discussions, the sync state, "Проверить папки", and "Выход".
+8. Rename the discussion file in Explorer while BranchChat is closed. Start BranchChat: the tray menu shows "Файл не
+   найден" and "Найти файл «…»…". Choose another discussion file: a warning. Choose the renamed file: it opens and
+   syncs.
+9. Double-click a `.branchchat` file while only the tray icon is shown: a window opens (one process in Task Manager).
+10. Download an update, then "Выход" in the tray: the update installs.
+11. Uninstall: the "BranchChat" value under `Run` is gone. Install again, update: the value stays.
+12. A person with only normal discussions: closing the last window ends the program (no tray icon).

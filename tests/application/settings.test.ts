@@ -35,7 +35,11 @@ describe('SettingsStore', () => {
                 autoUpdateCheck: true,
                 recentFilesLimit: 10,
                 openLastFileOnStartup: true,
-                fileSizeLimitMb: 30
+                fileSizeLimitMb: 30,
+                notifyNewMessages: true,
+                notifyShowText: true,
+                startWithWindows: false,
+                startWithWindowsSettled: false
             })
             expect(await a.setDisplayName('  Анна  ')).toEqual({
                 participantId: 'id-1',
@@ -45,7 +49,11 @@ describe('SettingsStore', () => {
                 autoUpdateCheck: true,
                 recentFilesLimit: 10,
                 openLastFileOnStartup: true,
-                fileSizeLimitMb: 30
+                fileSizeLimitMb: 30,
+                notifyNewMessages: true,
+                notifyShowText: true,
+                startWithWindows: false,
+                startWithWindowsSettled: false
             })
 
             const b = new SettingsStore(dir, () => `id-${++n}`) // e.g. next application start
@@ -58,7 +66,11 @@ describe('SettingsStore', () => {
                 autoUpdateCheck: true,
                 recentFilesLimit: 10,
                 openLastFileOnStartup: true,
-                fileSizeLimitMb: 30
+                fileSizeLimitMb: 30,
+                notifyNewMessages: true,
+                notifyShowText: true,
+                startWithWindows: false,
+                startWithWindowsSettled: false
             })
         })
     })
@@ -150,6 +162,54 @@ describe('plainTextToRichDoc', () => {
             const b = new SettingsStore(dir, () => 'id-2')
             await b.load()
             expect(b.get().associationAsked).toBe(true)
+        })
+    })
+})
+
+describe('background settings (release 1.4)', () => {
+    it('defaults: notifications and text on, start with Windows off', async () => {
+        await withTempDir(async (dir) => {
+            const s = new SettingsStore(dir, () => 'p-1')
+            await s.load()
+            expect(s.get()).toMatchObject({
+                notifyNewMessages: true,
+                notifyShowText: true,
+                startWithWindows: false,
+                startWithWindowsSettled: false
+            })
+        })
+    })
+
+    it('the first synchronized discussion turns start with Windows on once; a choice of the person wins (FR-174)', async () => {
+        await withTempDir(async (dir) => {
+            const s = new SettingsStore(dir, () => 'p-1')
+            await s.load()
+            expect(await s.settleStartWithWindows()).toBe(true)
+            expect(s.get().startWithWindows).toBe(true)
+            await s.setFlag('startWithWindows', false)
+            expect(await s.settleStartWithWindows()).toBe(false)
+            const again = new SettingsStore(dir, () => 'p-2')
+            await again.load()
+            expect(again.get().startWithWindows).toBe(false)
+        })
+    })
+
+    it('a person who turned it off before the first discussion keeps it off', async () => {
+        await withTempDir(async (dir) => {
+            const s = new SettingsStore(dir, () => 'p-1')
+            await s.load()
+            await s.setFlag('startWithWindows', false)
+            expect(await s.settleStartWithWindows()).toBe(false)
+            expect(s.get().startWithWindows).toBe(false)
+        })
+    })
+
+    it('the tray notice is given once', async () => {
+        await withTempDir(async (dir) => {
+            const s = new SettingsStore(dir, () => 'p-1')
+            await s.load()
+            expect(await s.takeTrayNotice()).toBe(true)
+            expect(await s.takeTrayNotice()).toBe(false)
         })
     })
 })

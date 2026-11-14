@@ -22,7 +22,7 @@
 | 1.2     | 9 — Wizards and invitations                  | Done in code                                            | Create, convert, join, roster; 5 e2e tests with two app instances                                                                                                                                                                                    |
 | 1.2     | 10 — Hardening of release 1.2                | Done in code; **needs Windows and Google Drive checks** | Security review fixes, performance (5,000 messages: convert and join in 0.4 s), user guide, checklist section M. Google Drive tests (design Section 23) done: results as assumed. **Not done:** the manual matrix and an independent security review |
 | 1.3     | 11 — Delivery marks and sync health          | Done in code                                            | One mark for every message (D-40, D-41), shared delivery state, retry rule, 7-day and 30-day cleanup, status line, "Проверить папки"; unit and e2e tests                                                                                             |
-| 1.4     | 12 — Tray, background sync, notifications    | Not started                                             |                                                                                                                                                                                                                                                      |
+| 1.4     | 12 — Tray, background sync, notifications    | Done in code; **needs a Windows check**                 | Tray, life cycle without windows, notifications (D-42), settings, start with Windows, missing file with "Найти файл…", uninstall entry; unit and e2e tests. Windows: checklist section O                                                             |
 | 1.5     | 13 — Add members after activation            | Not started                                             |                                                                                                                                                                                                                                                      |
 | 1.5     | 14 — Rejoin after key loss                   | Not started                                             |                                                                                                                                                                                                                                                      |
 
@@ -541,7 +541,29 @@ Exit criteria
   with "Показывать текст в уведомлениях" off, the notification has no text; reopen shows the message.
 - Windows check: start with Windows, tray icon at different display scales, notifications, update installs on exit.
 
-Decisions: D-16, D-27 (start-time part), D-33, D-35, D-36, D-38.
+Decisions: D-16, D-27 (start-time part), D-33, D-35, D-36, D-38, D-42.
+
+Implementation decisions
+
+- D-42 (answers during phase 12): no notification when the discussion's window is active; more than 3 new messages
+  of one discussion in one scan give one summary notification; a left click on the tray icon shows a window or opens
+  the most recently used synchronized discussion.
+- The sync engine reports the messages of others that a scan applied (`onNewMessages`), after all parts arrived. The
+  history of an invitation raises no notification.
+- Every request to quit sets a flag on `before-quit` (tray or File "Выход", Windows sign-out, the updater, test
+  tools). A window close that the person cancels (an unsent draft) clears it.
+- File "Выход" lost its Alt+F4 accelerator: Alt+F4 closes only the window, as in other Windows programs.
+- The app stays in the tray if a registered synchronized discussion of this identity exists, also when its file is
+  missing (the tray then shows "Найти файл…"; the chosen file must have the same `documentId`).
+- "Запускать вместе с Windows" uses `app.setLoginItemSettings` with the name "BranchChat" and the argument
+  `--background`. The first synchronized discussion turns it on once (`startWithWindowsSettled`); a choice of the
+  person settles it too. Started with `--background`, the app opens no window and quits if no synchronized discussion
+  exists. The uninstaller removes the `Run` and `StartupApproved\Run` values (not on an update).
+- The tray icon is `build/icon.ico`, shipped as `resources/tray.ico`.
+- A click on a notification opens the discussion; the window takes the message to show from the main process
+  (`takeFocusRequest`), so a new window does not lose it.
+- Test builds replace the tray, notifications, and the login item with recorders (`__tray`, `__notifications`,
+  `__loginItem`); the release check searches for these names.
 
 ---
 

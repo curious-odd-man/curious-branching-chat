@@ -22,6 +22,8 @@ export const IPC = {
     settingsSetRecentLimit: 'settings:set-recent-limit',
     settingsSetOpenLast: 'settings:set-open-last',
     settingsSetFileSizeLimit: 'settings:set-file-size-limit',
+    settingsSetBackgroundFlag: 'settings:set-background-flag',
+    focusTake: 'focus:take',
     recentGet: 'recent:get',
     recentRemove: 'recent:remove',
     recentClear: 'recent:clear',
@@ -57,6 +59,7 @@ export const IPC = {
     identityCopyBundle: 'identity:copy-bundle',
     identitySaveBundle: 'identity:save-bundle',
     menuCommand: 'menu:command',
+    focusRequest: 'focus:request',
     /** main -> renderer: the recent files list changed. */
     recentChanged: 'recent:changed',
     updateChanged: 'update:changed'
@@ -82,7 +85,18 @@ export interface SettingsView {
     openLastFileOnStartup: boolean
     /** Largest file read from a shared folder, in MB (FR-166). */
     fileSizeLimitMb: number
+    /** Windows notifications for new messages of other members (FR-175). On by default. */
+    notifyNewMessages: boolean
+    /** The message text in those notifications (D-38). On by default. */
+    notifyShowText: boolean
+    /** Start with Windows, in the tray (FR-174). Turned on with the first synchronized discussion. */
+    startWithWindows: boolean
+    /** The first synchronized discussion (or the person) has decided it; the wizard then says nothing (FR-174). */
+    startWithWindowsSettled: boolean
 }
+
+/** On/off settings of the background section (release 1.4). */
+export type BackgroundFlag = 'notifyNewMessages' | 'notifyShowText' | 'startWithWindows'
 
 /** A recently opened discussion, as shown on the start screen and in menus. */
 export interface RecentFileView {
@@ -215,6 +229,13 @@ export interface OpenOutcome {
     status: OpenStatus
     /** Set when status is 'failed'. The user has already been told (dialog); this is for the caller. */
     errorCode?: string
+}
+
+/** A message the window must show (a click on a notification, D-33). */
+export interface FocusRequest {
+    documentId: string
+    threadId: string
+    messageId: string
 }
 
 export type MenuCommand = 'new' | 'open' | 'settings' | 'new-shared' | 'join-shared' | 'make-shared'

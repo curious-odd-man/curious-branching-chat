@@ -10,7 +10,18 @@ import { buildMenu } from './application/menu'
 import { describeRecent } from './application/recentView'
 import { electronUi } from './application/ui'
 import { IPC } from '@shared/types/ipc'
-import { e2eKeyProtector, e2eRegistry, e2eUpdaterConfig, installE2eHooks } from './e2e/hooks'
+import {
+    e2eBackgroundPorts,
+    e2eKeyProtector,
+    e2eRegistry,
+    e2eUpdaterConfig,
+    installE2eHooks
+} from './e2e/hooks'
+import { promises as fs } from 'node:fs'
+import { BackgroundService } from './background/backgroundService'
+import { electronLoginItem, electronNotifier, electronTray } from './background/electronPorts'
+import { BACKGROUND_ARG } from './background/ports'
+import { readDocument } from './document'
 import { IdentityService } from './crypto/identityService'
 import { KeyStore } from './crypto/keyStore'
 import { safeStorageProtector } from './crypto/protector'
@@ -50,7 +61,10 @@ if (!gotLock) {
     app.quit()
 } else {
     let controller: AppController | null = null
+    let background: BackgroundService | null = null
     const earlyPaths: string[] = extractDiscussionPaths(process.argv.slice(1))
+    // started by Windows at sign-in (FR-174): no window, only the tray
+    const startedInBackground = process.argv.includes(BACKGROUND_ARG)
 
     app.on('second-instance', (_event, argv) => {
         const paths = extractDiscussionPaths(argv.slice(1))
@@ -86,7 +100,9 @@ if (!gotLock) {
                       stableMs: 300
                   }
                 : {}),
-            log: (message) => console.log(`[sync] ${message}`)
+            log: (message) => console.log(`[sync] ${message}`),
+            onNewMessages: (arrival) => background?.newMessages(arrival),
+            onStatusChange: () => void background?.refresh()
         })
         controller = new AppController({
             settings,
@@ -96,7 +112,8 @@ if (!gotLock) {
             ui: electronUi,
             ctx: systemContext,
             appVersion: app.getVersion(),
-            createWindow: createMainWindow
+            createWindow: createMainWindow,
+            onCloseCancelled: () => background?.closeCancelled()
         })
         installAssetProtocol(controller)
         applyGlobalSecurity()
@@ -151,14 +168,59 @@ if (!gotLock) {
             ctx: systemContext,
             appVersion: app.getVersion()
         })
+        // Release 1.4: tray, notifications, start with Windows (D-16, D-33, D-36, D-38, D-42)
+        const ports = __E2E_HOOKS__
+            ? e2eBackgroundPorts()
+            : { tray: electronTray(), notifier: electronNotifier(), loginItem: electronLoginItem() }
+        background = new BackgroundService({
+            settings,
+            sync,
+            windows: {
+                get windowCount() {
+                    return ctrl.windowCount
+                },
+                isActive: (path) => ctrl.isActive(path),
+                showAny: () => ctrl.showAny(),
+                openPath: async (path) => {
+                    await ctrl.openPath(path, undefined)
+                },
+                showMessage: (path, threadId, messageId) =>
+                    ctrl.showMessage(path, threadId, messageId)
+            },
+            ...ports,
+            fileExists: (path) =>
+                fs
+                    .access(path)
+                    .then(() => true)
+                    .catch(() => false),
+            pickDiscussionFile: async () => {
+                const result = await dialog.showOpenDialog({
+                    title: ru.tray.findTitle,
+                    properties: ['openFile'],
+                    filters: [{ name: ru.fileType.name, extensions: ['branchchat'] }]
+                })
+                return result.canceled ? null : (result.filePaths[0] ?? null)
+            },
+            readDocumentId: (path) =>
+                readDocument(path)
+                    .then((d) => d.contents.manifest.documentId)
+                    .catch(() => null),
+            showError: async (message) => {
+                await dialog.showMessageBox({ type: 'warning', title: ru.app.name, message })
+            },
+            quit: () => app.quit(),
+            log: (message) => console.log(`[background] ${message}`)
+        })
+        const bg = background
         registerIpcHandlers(controller, settings, recent, association, updates, identity, sync, {
             onboarding,
-            ui: electronUi
+            ui: electronUi,
+            background: bg
         })
         // The File > Open recent menu, the taskbar jump list and every window follow the recent files list.
         const refreshRecent = async (): Promise<void> => {
             const files = await describeRecent(recent.list())
-            Menu.setApplicationMenu(buildMenu(ctrl, updates, recent, files))
+            Menu.setApplicationMenu(buildMenu(ctrl, updates, recent, files, () => bg.requestQuit()))
             applyJumpList(files)
             ctrl.broadcast(IPC.recentChanged, files)
         }
@@ -168,11 +230,22 @@ if (!gotLock) {
         // A file given on the command line always wins (the last file is not opened as well).
         let initialPaths = earlyPaths
         const last = recent.list()[0]
-        if (initialPaths.length === 0 && settings.get().openLastFileOnStartup && last) {
+        if (
+            initialPaths.length === 0 &&
+            !startedInBackground &&
+            settings.get().openLastFileOnStartup &&
+            last
+        ) {
             const [view] = await describeRecent([last])
             if (view?.exists) initialPaths = [last.path]
         }
         await sync.start()
+        await bg.start()
+        if (startedInBackground && initialPaths.length === 0) {
+            // no synchronized discussion any more: nothing to do in the background
+            if (!bg.keepsRunning) app.quit()
+            return
+        }
         await controller.openPaths(initialPaths)
         void association.offerAtStartup()
 
@@ -181,5 +254,10 @@ if (!gotLock) {
         })
     })
 
-    app.on('window-all-closed', () => app.quit())
+    app.on('before-quit', () => background?.quitStarted())
+    // D-33: with a synchronized discussion the app stays in the tray; "Выход" closes it
+    app.on('window-all-closed', () => {
+        if (background) void background.windowsGone()
+        else app.quit()
+    })
 }

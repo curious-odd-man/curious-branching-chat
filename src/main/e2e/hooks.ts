@@ -5,6 +5,7 @@ import { ASKED_KEY, ASKED_VALUE } from '../windows/fileAssociation'
 import type { ElectronUpdaterOptions } from '../updates/electronUpdaterPort'
 import { InMemoryRegistry } from '../windows/inMemoryRegistry'
 import type { KeyProtector } from '../crypto/keyStore'
+import type { LoginItemPort, NotifierPort, TrayPort } from '../background/ports'
 
 interface Answers {
     save: string[]
@@ -145,5 +146,61 @@ export function installE2eHooks(): void {
             detail: options.detail
         })
         return { response: g.__answers.box.shift() ?? 0, checkboxChecked: false }
+    }
+}
+
+/**
+ * Tray, notifications, and start with Windows for test builds (release 1.4): nothing is shown; tests read what would
+ * have been shown and act on it through `__tray`, `__notifications`, and `__loginItem`.
+ */
+export function e2eBackgroundPorts(): {
+    tray: TrayPort
+    notifier: NotifierPort
+    loginItem: LoginItemPort
+} {
+    const g = globalThis as unknown as {
+        __tray: {
+            items: Array<{ kind: string; id?: string; label?: string }> | null
+            act: (label: string) => boolean
+            click: () => void
+        }
+        __notifications: Array<{ title: string; body: string; click: () => void }>
+        __loginItem: boolean | null
+    }
+    let onAction: (id: string) => void = () => undefined
+    let onClick: () => void = () => undefined
+    g.__tray = {
+        items: null,
+        act: (label) => {
+            const item = g.__tray.items?.find((i) => i.kind === 'action' && i.label === label)
+            if (!item?.id) return false
+            onAction(item.id)
+            return true
+        },
+        click: () => onClick()
+    }
+    g.__notifications = []
+    g.__loginItem = null
+    return {
+        tray: {
+            show(items, action, click) {
+                g.__tray.items = items.map((i) => ({ ...i }))
+                onAction = action
+                onClick = click
+            },
+            hide() {
+                g.__tray.items = null
+            }
+        },
+        notifier: {
+            show({ title, body, onClick: click }) {
+                g.__notifications.push({ title, body, click })
+            }
+        },
+        loginItem: {
+            set(enabled) {
+                g.__loginItem = enabled
+            }
+        }
     }
 }

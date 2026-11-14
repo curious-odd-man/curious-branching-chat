@@ -5,7 +5,8 @@
 ;  - registers .branchchat for the current user only (HKCU, no administrator rights) if it is ticked and no other
 ;    program holds the type (FR-090),
 ;  - never shows the page and never touches the association on silent installs and updates (FR-135),
-;  - removes the association on uninstall, but not when the uninstaller runs as the first step of an update (FR-135).
+;  - removes the association on uninstall, but not when the uninstaller runs as the first step of an update (FR-135),
+;  - removes the "start with Windows" entry on uninstall (FR-174), but not on an update.
 ;
 ; The same registry keys are written by the application itself (src/main/windows/fileAssociation.ts).
 ; This file is UTF-8 with a BOM so that makensis reads the Russian text correctly.
@@ -122,6 +123,9 @@
     ${EndIf}
     DeleteRegKey HKCU "Software\Classes\${BC_PROGID}"
     DeleteRegKey HKCU "Software\BranchChat"
+    ; "Запускать вместе с Windows" (FR-174): the entry that the application writes (app.setLoginItemSettings)
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "BranchChat"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "BranchChat"
     !insertmacro bcNotifyShell
   ${EndIf}
 !macroend
