@@ -51,6 +51,9 @@ export const IPC = {
     sharedParseKey: 'shared:parse-key',
     sharedPickKeyFile: 'shared:pick-key-file',
     sharedCreate: 'shared:create',
+    sharedInvite: 'shared:invite',
+    sharedReinvite: 'shared:reinvite',
+    syncDecideKeys: 'sync:decide-keys',
     sharedRoster: 'shared:roster',
     joinFind: 'join:find',
     joinImport: 'join:import',
@@ -150,15 +153,21 @@ export type InvitationView =
           title: string
           inviterName: string
           inviterFingerprint: string
+          /** D-15: a re-invitation after key loss. */
+          rejoin: boolean
       }
     | { state: 'already'; conversationId: string }
 
 export interface RosterView {
+    /** The shared folder of this discussion on this computer (the invite wizard reads keys there). */
+    sharedRoot: string
     members: Array<{
         participantId: string
         displayName: string
         fingerprint: string
         state: 'self' | 'invited' | 'joined' | 'member'
+        /** Who added this member (FR-176); null for the person who created the discussion. */
+        addedByName: string | null
     }>
 }
 
@@ -213,6 +222,16 @@ export interface SyncStatusView {
     quarantined: number
     needsUpdate: boolean
     lastScanAt: string | null
+    /** D-32: another member re-invited this person with new keys; this member checks the fingerprint and decides. */
+    keyRequests: Array<{
+        participantId: string
+        displayName: string
+        /** 8 groups of 4 */
+        fingerprint: string
+        state: 'pending' | 'rejected'
+    }>
+    /** D-32: this member was re-invited; these members have not accepted the new keys yet (names). */
+    notAccepted: string[]
 }
 
 /** The part of a DocumentView that changes when a save finishes. */
@@ -238,7 +257,8 @@ export interface FocusRequest {
     messageId: string
 }
 
-export type MenuCommand = 'new' | 'open' | 'settings' | 'new-shared' | 'join-shared' | 'make-shared'
+export type MenuCommand =
+    'new' | 'open' | 'settings' | 'new-shared' | 'join-shared' | 'make-shared' | 'invite-member'
 
 /** What the person is told about an available update (FR-098). Notes are plain text. */
 export interface UpdateInfoView {

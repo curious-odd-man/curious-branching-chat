@@ -18,7 +18,7 @@ import { BranchPanel } from '../branches/BranchPanel'
 import { Composer } from './Composer'
 import { ImageViewer } from './ImageViewer'
 import { MessageList, type ListRow } from './MessageList'
-import { RosterDialog } from '../SharedWizard'
+import { RosterDialog, type ReinviteTarget } from '../SharedWizard'
 import { formatTimestamp } from '../../i18n/format'
 
 interface Props {
@@ -36,6 +36,10 @@ interface Props {
     onSetStatus(threadId: string, status: 'open' | 'closed'): void
     onSetTitle(threadId: string, title: string): void
     onRetrySave(): void
+    /** FR-176: "Пригласить участника…" from the members dialog. */
+    onInvite(): void
+    /** FR-177: "Повторно пригласить…" for a member. */
+    onReinvite(target: ReinviteTarget): void
 }
 
 export function DiscussionScreen({
@@ -50,7 +54,9 @@ export function DiscussionScreen({
     onReply,
     onSetStatus,
     onSetTitle,
-    onRetrySave
+    onRetrySave,
+    onInvite,
+    onReinvite
 }: Props): React.JSX.Element {
     const [dismissed, setDismissed] = useState<string[]>([])
     const [showRoster, setShowRoster] = useState(false)
@@ -171,7 +177,19 @@ export function DiscussionScreen({
                         {checking ? ru.syncStatus.checking : `⟳ ${ru.syncStatus.check}`}
                     </button>
                 )}
-                {showRoster && <RosterDialog onClose={() => setShowRoster(false)} />}
+                {showRoster && (
+                    <RosterDialog
+                        onClose={() => setShowRoster(false)}
+                        onInvite={() => {
+                            setShowRoster(false)
+                            onInvite()
+                        }}
+                        onReinvite={(target) => {
+                            setShowRoster(false)
+                            onReinvite(target)
+                        }}
+                    />
+                )}
                 {status && (
                     <span className="status" data-testid="status">
                         {status}
@@ -300,13 +318,21 @@ function SyncStatusLine({
 }: {
     status: DocumentView['syncStatus']
 }): React.JSX.Element | null {
+    const [busy, setBusy] = useState(false)
     if (!status) return null
     const lines: string[] = []
     if (status.folder === 'missing') lines.push(ru.syncStatus.missing(status.folderPath))
     if (status.folder === 'no-permission') lines.push(ru.syncStatus.noPermission)
     if (status.needsUpdate) lines.push(ru.syncStatus.needsUpdate)
     if (status.quarantined > 0) lines.push(ru.syncStatus.quarantined(status.quarantined))
-    if (lines.length === 0) return null
+    if (status.notAccepted.length > 0)
+        lines.push(ru.syncStatus.notAccepted(status.notAccepted.join(', ')))
+    if (lines.length === 0 && status.keyRequests.length === 0) return null
+    // D-32: the decision about new keys of a member; no Windows notification for it (D-35)
+    const decide = (participantId: string, accept: boolean): void => {
+        setBusy(true)
+        void window.branchchat.decideKeys(participantId, accept).finally(() => setBusy(false))
+    }
     return (
         <div
             className="sync-status"
@@ -316,6 +342,50 @@ function SyncStatusLine({
         >
             {lines.map((l) => (
                 <p key={l}>{l}</p>
+            ))}
+            {status.keyRequests.map((r) => (
+                <div
+                    key={r.participantId}
+                    className="key-request"
+                    data-testid="key-request"
+                    data-state={r.state}
+                    data-name={r.displayName}
+                >
+                    <p>
+                        {r.state === 'pending'
+                            ? ru.syncStatus.keysChanged(r.displayName)
+                            : ru.syncStatus.keysRejected(r.displayName)}
+                    </p>
+                    <p className="fingerprint-row">
+                        <span>{ru.identity.fingerprintLabel}: </span>
+                        <code className="fingerprint" data-testid="key-request-fingerprint">
+                            {r.fingerprint}
+                        </code>
+                    </p>
+                    <div className="buttons">
+                        {r.state === 'pending' && (
+                            <button
+                                type="button"
+                                data-testid="key-reject"
+                                disabled={busy}
+                                onClick={() => decide(r.participantId, false)}
+                            >
+                                {ru.syncStatus.keysReject}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            className="primary"
+                            data-testid="key-accept"
+                            disabled={busy}
+                            onClick={() => decide(r.participantId, true)}
+                        >
+                            {r.state === 'pending'
+                                ? ru.syncStatus.keysAccept
+                                : ru.syncStatus.keysAcceptLater}
+                        </button>
+                    </div>
+                </div>
             ))}
         </div>
     )

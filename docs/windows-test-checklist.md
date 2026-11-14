@@ -229,3 +229,17 @@ The three Google Drive tests in the design document, Section 23, are done. The r
 10. Download an update, then "Выход" in the tray: the update installs.
 11. Uninstall: the "BranchChat" value under `Run` is gone. Install again, update: the value stays.
 12. A person with only normal discussions: closing the last window ends the program (no tray icon).
+
+## P. Release 1.5: new members and rejoin after key loss (three Windows users)
+
+1. B (not the creator) opens 👥 > "Пригласить участника…". C joins the folder; B accepts C's key. A sees C in the
+   members list with "пригласил(а): B" without a question. A message from A written before C imports arrives at C.
+2. C: delete `%APPDATA%\BranchChat\keys` and `settings.json` (or use a new Windows account). Start BranchChat, give the
+   name, "Присоединиться к обсуждению", choose the folder.
+3. A: 👥 > "Повторно пригласить…" at C. Only C's new key is offered. Compare the fingerprint by phone. C sees "Это
+   повторное приглашение…", imports, and has the whole history. `settings.json` of C has the old participant ID.
+4. B: the yellow line "Ключи C изменились" with the new fingerprint. "Отклонить": C's messages do not reach B; C sees
+   "Ещё не приняли ваши новые ключи: B". The tray menu of B shows that keys changed. No Windows notification.
+5. B: "Всё-таки принять": C's waiting message arrives at B; B's next message reaches C; the lines go away.
+6. Old files in C's inbox (written for the old key) do not appear as "Файлов … не удалось использовать".
+

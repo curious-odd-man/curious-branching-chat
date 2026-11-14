@@ -46,6 +46,8 @@ export type InvitationView =
           inviterName: string
           /** 8 groups of 4: the person compares it with what the inviter tells them (FR-162). */
           inviterFingerprint: string
+          /** D-15: a re-invitation after key loss; this person gets the old participant ID back. */
+          rejoin: boolean
       }
     /** This computer already has this discussion. */
     | { state: 'already'; conversationId: string }
@@ -176,6 +178,89 @@ export class Onboarding {
     }
 
     /**
+     * FR-176, D-13: any member invites new people into the open, active discussion. The roster gets them (with
+     * `addedBy` = this member), every earlier member gets `member.added`, and each new member gets an invitation with
+     * the current discussion. Returns the number of new members.
+     */
+    async inviteMembers(input: {
+        session: DocumentSession
+        keys: readonly string[]
+    }): Promise<number> {
+        const me = this.me()
+        await this.identity()
+        const session = input.session
+        const roster = session.current.sync
+        const entry = roster ? this.deps.sync.entryOf(session.documentId) : null
+        if (!roster || !session.synced || !entry)
+            throw new AppError('NOT_SHARED', 'not an active synchronized discussion')
+        const now = this.deps.ctx.now()
+        const known = new Set(roster.members.map((m) => m.participantId))
+        const fresh: RosterMember[] = []
+        for (const text of input.keys) {
+            const bundle = await parseKeyBundle(text).catch(() => {
+                throw new AppError('INVALID_KEY', 'not a valid key')
+            })
+            if (known.has(bundle.participantId))
+                throw new AppError('ALREADY_MEMBER', 'this person is already a member')
+            if (fresh.some((m) => m.participantId === bundle.participantId)) continue
+            fresh.push(await this.member(bundle, me.participantId, now))
+        }
+        if (fresh.length === 0) throw new AppError('NO_MEMBERS', 'no new member')
+        const after = await this.deps.sync.addMembers(entry.conversationId, fresh)
+        if (session.saveError) throw new AppError('WRITE_FAILED', 'cannot write the file')
+        await this.publishOwnKey(entry.sharedRoot)
+        // the snapshot is the file itself, with the new roster and all images (sync-protocol.md 7.10)
+        const snapshot = new Uint8Array(await fs.readFile(entry.filePath))
+        for (const m of fresh)
+            await this.deps.sync.invite(entry.conversationId, m.participantId, snapshot, after)
+        return fresh.length
+    }
+
+    /**
+     * FR-177, D-15: re-invites a member who lost the keys. `key` is the person's new public key (its participant ID
+     * can be new); the member keeps the old ID. The other members must accept the new keys.
+     */
+    async reinviteMember(input: {
+        session: DocumentSession
+        participantId: string
+        key: string
+    }): Promise<void> {
+        const me = this.me()
+        await this.identity()
+        const session = input.session
+        const roster = session.current.sync
+        const entry = roster ? this.deps.sync.entryOf(session.documentId) : null
+        if (!roster || !session.synced || !entry)
+            throw new AppError('NOT_SHARED', 'not an active synchronized discussion')
+        const member = roster.members.find((m) => m.participantId === input.participantId)
+        if (!member || member.participantId === me.participantId)
+            throw new AppError('NOT_MEMBER', 'not another member')
+        const bundle = await parseKeyBundle(input.key).catch(() => {
+            throw new AppError('INVALID_KEY', 'not a valid key')
+        })
+        const verified = await verifyKeyBundle(bundle)
+        // the new key belongs to this person: either the same ID, or an ID that is no member
+        if (
+            verified.participantId !== member.participantId &&
+            roster.members.some((m) => m.participantId === verified.participantId)
+        )
+            throw new AppError('ALREADY_MEMBER', 'this key belongs to another member')
+        if (verified.fingerprint === member.fingerprint)
+            throw new AppError('SAME_KEY', 'the member already has this key')
+        const after = await this.deps.sync.replaceKeys(entry.conversationId, member.participantId, {
+            signingPublicKey: verified.signingPublicKey,
+            encryptionPublicKey: verified.encryptionPublicKey,
+            fingerprint: verified.fingerprint
+        })
+        if (session.saveError) throw new AppError('WRITE_FAILED', 'cannot write the file')
+        await this.publishOwnKey(entry.sharedRoot)
+        const snapshot = new Uint8Array(await fs.readFile(entry.filePath))
+        await this.deps.sync.invite(entry.conversationId, member.participantId, snapshot, after, {
+            inboxId: verified.participantId
+        })
+    }
+
+    /**
      * Makes a synchronized discussion (design 12.3 and 12.4): the roster has this member and the accepted candidates.
      * With `session`, the open discussion is converted (D-02); otherwise a new file is created at `filePath`.
      * Returns the local file path.
@@ -265,8 +350,8 @@ export class Onboarding {
     async findInvitation(root: string): Promise<InvitationView> {
         const found = await this.readInvitation(root)
         if (found.state !== 'ready') return found
-        const { inviter, invitation, contents } = found
-        if (this.deps.registry.get(contents.manifest.documentId))
+        const { inviter, invitation, contents, replacesKeysOf } = found
+        if (!replacesKeysOf && this.deps.registry.get(contents.manifest.documentId))
             return { state: 'already', conversationId: contents.manifest.documentId }
         return {
             state: 'ready',
@@ -274,7 +359,8 @@ export class Onboarding {
             conversationId: contents.manifest.documentId,
             title: contents.discussion.title,
             inviterName: inviter.displayName,
-            inviterFingerprint: groupFingerprint(inviter.fingerprint)
+            inviterFingerprint: groupFingerprint(inviter.fingerprint),
+            rejoin: replacesKeysOf !== null
         }
     }
 
@@ -293,6 +379,8 @@ export class Onboarding {
               contents: DocumentContents
               fileNames: string[]
               ids: string[]
+              /** D-15: the old participant ID of this person, for a re-invitation. */
+              replacesKeysOf: string | null
           }
     > {
         const t = this.transport(root)
@@ -319,6 +407,7 @@ export class Onboarding {
             const payload = frame.envelope.payload as {
                 invitationId: string
                 minProtocolVersion: number
+                replacesKeysOf?: string
                 snapshotSize: number
                 snapshotSha256: string
                 parts: Array<{ partId: string; index: number; size: number; sha256: string }>
@@ -383,7 +472,9 @@ export class Onboarding {
             const inviter = contents.sync.members.find(
                 (m) => m.participantId === frame.envelope.senderId
             )
-            const self = contents.sync.members.find((m) => m.participantId === ownId)
+            // a re-invitation (D-15) names the old ID; the roster has this person there, with the new keys
+            const selfId = payload.replacesKeysOf ?? ownId
+            const self = contents.sync.members.find((m) => m.participantId === selfId)
             const identity = await this.identity()
             const ownFingerprint = fingerprintOf(
                 identity.identity.signingPublicKey,
@@ -400,7 +491,8 @@ export class Onboarding {
                 inviter,
                 contents,
                 fileNames,
-                ids: [payload.invitationId, ...payload.parts.map((p) => p.partId)]
+                ids: [payload.invitationId, ...payload.parts.map((p) => p.partId)],
+                replacesKeysOf: payload.replacesKeysOf ?? null
             }
         }
         return best ?? { state: 'waiting' }
@@ -423,6 +515,16 @@ export class Onboarding {
         const conversationId = found.contents.manifest.documentId
         await fs.copyFile(this.tempSnapshot(invitationId), targetPath)
         await fs.rm(this.tempSnapshot(invitationId), { force: true })
+        // D-32: a re-invitation gives the old participant ID back; the new keys are bound to it
+        const inboxId = this.deps.settings.get().participantId
+        const oldId = found.replacesKeysOf
+        if (oldId && oldId !== inboxId) {
+            await this.deps.keys.rebind(inboxId, oldId)
+            await this.deps.settings.setParticipantId(oldId)
+            await this.transport(root)
+                .delete({ kind: 'keys' }, keyFileName(inboxId))
+                .catch(() => undefined)
+        }
         const entry = {
             conversationId,
             filePath: targetPath,
@@ -430,13 +532,17 @@ export class Onboarding {
             ownId: this.deps.settings.get().participantId
         }
         await this.deps.registry.put(entry)
-        await this.deps.sync.open(entry)
+        if (oldId) await this.deps.sync.restart(entry)
+        else await this.deps.sync.open(entry)
         await this.publishOwnKey(root)
+        // before the first scan: files for the old key are set aside, not quarantined
+        if (oldId) await this.deps.sync.startRejoin(conversationId, found.inviter.participantId)
         await this.deps.sync.confirmInvitation(
             conversationId,
             found.inviter.participantId,
             found.ids,
-            found.fileNames
+            found.fileNames,
+            inboxId
         )
         return targetPath
     }

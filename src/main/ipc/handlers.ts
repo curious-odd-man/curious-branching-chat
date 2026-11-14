@@ -21,6 +21,9 @@ import {
     sharedRootSchema,
     sharedParseKeySchema,
     sharedCreateSchema,
+    sharedInviteSchema,
+    sharedReinviteSchema,
+    decideKeysSchema,
     joinImportSchema,
     setRecentLimitSchema,
     setNameSchema,
@@ -172,18 +175,45 @@ export function registerIpcHandlers(
         await controller.openPath(path, entry)
         return true
     })
+    handle(IPC.sharedInvite, sharedInviteSchema, async (entry, p) => {
+        const count = await onboarding().inviteMembers({
+            session: requireSession(entry),
+            keys: p.keys
+        })
+        entry?.session?.onChange()
+        return count
+    })
+    handle(IPC.sharedReinvite, sharedReinviteSchema, async (entry, p) => {
+        await onboarding().reinviteMember({
+            session: requireSession(entry),
+            participantId: p.participantId,
+            key: p.key
+        })
+        entry?.session?.onChange()
+        return null
+    })
+    handle(IPC.syncDecideKeys, decideKeysSchema, async (entry, p) => {
+        const session = requireSession(entry)
+        await sync?.decideKeys(session.documentId, p.participantId, p.accept)
+        return null
+    })
     handle(IPC.sharedRoster, noPayloadSchema, (entry): RosterView | null => {
         const session = entry?.session
         const roster = session?.current.sync
-        if (!session || !roster || !session.synced) return null
+        const running = session ? sync?.entryOf(session.documentId) : null
+        if (!session || !roster || !session.synced || !running) return null
         const states = sync?.invitationStatus(session.documentId) ?? {}
         const me = settings.get().participantId
+        const names = new Map(roster.members.map((m) => [m.participantId, m.displayName]))
         return {
+            sharedRoot: running.sharedRoot,
             members: roster.members.map((m) => ({
                 participantId: m.participantId,
                 displayName: m.displayName,
                 fingerprint: groupFingerprint(m.fingerprint),
-                state: m.participantId === me ? 'self' : (states[m.participantId] ?? 'member')
+                state: m.participantId === me ? 'self' : (states[m.participantId] ?? 'member'),
+                addedByName:
+                    m.addedBy === m.participantId ? null : (names.get(m.addedBy) ?? m.addedBy)
             }))
         }
     })

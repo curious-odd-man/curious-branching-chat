@@ -383,6 +383,10 @@ Private keys, local paths, and local sync state are never stored in the file.
 
 Each member keeps the key history of each participant. Old signatures stay valid with the old keys.
 
+Details (release 1.5): the re-invitation goes to the inbox of the ID in the person's new key bundle. Files in the old
+inbox that the new key cannot open are set aside. The person sees who has not accepted yet: the members from whom no
+event or receipt opened with the new key. A member who rejected the keys can still accept them later.
+
 ---
 
 ## 9. Events
@@ -806,6 +810,10 @@ The tests are done. All results are **confirmed** as first assumed.
 - Never invent a cryptographic protocol. Use the libsodium constructions as documented.
 
 ## Changes in revision 9
+
+- Section 8.3: implementation details of the rejoin (inbox of the new ID, old files set aside, acceptance seen by the
+  person from events that open with the new key, a rejected key can still be accepted later). Section 8.2: the
+  inviter does not send `member.added` to the new member.
 
 - D-42: tray and notification details (active window, summary above 3, left click, quit rules).
 

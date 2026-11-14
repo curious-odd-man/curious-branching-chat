@@ -8,7 +8,7 @@ import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
 import { ReadNotice } from './components/ReadNotice'
 import { SettingsDialog } from './components/SettingsDialog'
-import { SharedWizard, type WizardMode } from './components/SharedWizard'
+import { SharedWizard, type ReinviteTarget, type WizardMode } from './components/SharedWizard'
 import { UpdateDialog } from './components/UpdateDialog'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
 import { useDocumentView, useRecentFiles, useSettings, useUpdateState } from './hooks'
@@ -32,6 +32,7 @@ export function App(): React.JSX.Element {
     const [bannerHidden, setBannerHidden] = useState<string | null>(null)
     const [showSettings, setShowSettings] = useState(false)
     const [wizard, setWizard] = useState<WizardMode | null>(null)
+    const [reinviteTarget, setReinviteTarget] = useState<ReinviteTarget | null>(null)
     const [readNotice, setReadNotice] = useState<{ retry: () => void } | null>(null)
     const settingsRef = useRef(settings)
     settingsRef.current = settings
@@ -71,7 +72,9 @@ export function App(): React.JSX.Element {
                     })
                 } else if (command === 'new-shared') setWizard('new')
                 else if (command === 'join-shared') setWizard('join')
-                else if (command === 'make-shared') {
+                else if (command === 'invite-member') {
+                    if (viewRef.current?.synced) setWizard('invite')
+                } else if (command === 'make-shared') {
                     if (viewRef.current && !viewRef.current.synced) setWizard('convert')
                 } else openDialog()
             }),
@@ -245,6 +248,11 @@ export function App(): React.JSX.Element {
                         void api.setBranchTitle(threadId, title).then(report)
                     }
                     onRetrySave={() => void api.retrySave().then(report)}
+                    onInvite={() => setWizard('invite')}
+                    onReinvite={(target) => {
+                        setReinviteTarget(target)
+                        setWizard('reinvite')
+                    }}
                 />
             )}
             {update?.dialogOpen && <UpdateDialog view={update} />}
@@ -262,9 +270,18 @@ export function App(): React.JSX.Element {
                     onClose={() => setShowSettings(false)}
                 />
             )}
-            {wizard && (wizard !== 'convert' || view) && (
-                <SharedWizard mode={wizard} settings={settings} onClose={() => setWizard(null)} />
-            )}
+            {wizard &&
+                ((wizard !== 'convert' && wizard !== 'invite' && wizard !== 'reinvite') ||
+                    view) && (
+                    <SharedWizard
+                        mode={wizard}
+                        settings={settings}
+                        onClose={() => setWizard(null)}
+                        {...(wizard === 'reinvite' && reinviteTarget
+                            ? { target: reinviteTarget }
+                            : {})}
+                    />
+                )}
             {pending && <NamePrompt onSubmit={submitName} onCancel={() => setPending(null)} />}
             {readNotice && (
                 <ReadNotice onConfirm={confirmReadNotice} onCancel={() => setReadNotice(null)} />

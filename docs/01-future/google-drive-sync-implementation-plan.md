@@ -23,8 +23,8 @@
 | 1.2     | 10 — Hardening of release 1.2                | Done in code; **needs Windows and Google Drive checks** | Security review fixes, performance (5,000 messages: convert and join in 0.4 s), user guide, checklist section M. Google Drive tests (design Section 23) done: results as assumed. **Not done:** the manual matrix and an independent security review |
 | 1.3     | 11 — Delivery marks and sync health          | Done in code                                            | One mark for every message (D-40, D-41), shared delivery state, retry rule, 7-day and 30-day cleanup, status line, "Проверить папки"; unit and e2e tests                                                                                             |
 | 1.4     | 12 — Tray, background sync, notifications    | Done in code; **needs a Windows check**                 | Tray, life cycle without windows, notifications (D-42), settings, start with Windows, missing file with "Найти файл…", uninstall entry; unit and e2e tests. Windows: checklist section O                                                             |
-| 1.5     | 13 — Add members after activation            | Not started                                             |                                                                                                                                                                                                                                                      |
-| 1.5     | 14 — Rejoin after key loss                   | Not started                                             |                                                                                                                                                                                                                                                      |
+| 1.5     | 13 — Add members after activation            | Done                                                    | "Пригласить участника…" (File menu and the members dialog), `member.added` to earlier members, invitation, roster shows who added; unit and e2e tests                                                                                                |
+| 1.5     | 14 — Rejoin after key loss                   | Done in code; **needs a Windows check**                 | "Повторно пригласить…", `member.keys.replaced`, accept or reject in the status line, waiting events, old ID back on import; unit and e2e tests. Windows: checklist section P                                                                         |
 
 Implementation decisions made in phases 1 to 3:
 
@@ -609,6 +609,30 @@ Exit criteria
   ways. A third member rejects; that member's messages do not reach the person and both sides see the warning.
 
 Decisions: D-15, D-32.
+
+Implementation decisions (phases 13 and 14)
+
+- Inviting: the sync engine adds the members (`addMembers`), writes `member.added` to the earlier members, then the
+  invitation (with the file as the snapshot) goes to each new member. The wizard's "invite" mode reads keys from the
+  shared folder of the open discussion and does not offer members again. The members dialog shows "пригласил(а): …".
+- The e2e test of phase 13 uses three app instances (Boris, who did not create the discussion, invites Clara), not
+  four.
+- Re-inviting (`replaceKeys`): the re-inviter uses the new keys at once (it checked the fingerprint) and writes
+  `member.keys.replaced` to all others. Its own copies for the person without a receipt are written again with the
+  new key.
+- An outbox item has an optional `memberId`: the re-invitation goes to the inbox of the person's new ID, but it is
+  sealed with the member's (new) key, and the receipt comes from the old ID.
+- The person's app on import: `KeyStore.rebind(newId, oldId)` and `settings.participantId = oldId`; the key file of the
+  new ID is removed from `keys/`; the sync of the discussion restarts; files that the new key cannot open are set
+  aside (`keptFiles`); `rejoin.heardFrom` starts with the inviter.
+- Other members: the request is local state (`keyRequests`), shown in the status line with the new fingerprint and in
+  the tray menu; no notification (D-35). Accept writes own unconfirmed copies again with the new key and reads the
+  waiting events. Reject keeps the old keys; "Всё-таки принять" stays available.
+- A bad signature of a known member waits like an incomplete file (10 minutes), and never ends in quarantine while a
+  key request for that member exists.
+- The e2e test of phase 14 uses three instances: Anna re-invites (and so accepts), Clara rejects, then accepts.
+- Fixes found on the way: dialogs inside the page header were drawn under the message list (the overlay now has a
+  stacking order); the members dialog takes the focus when it opens, so Escape works.
 
 ---
 

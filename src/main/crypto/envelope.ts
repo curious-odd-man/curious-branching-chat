@@ -52,7 +52,7 @@ export type OpenedEvent =
     | { status: 'needs-update'; base: EnvelopeBase }
     /** The sender is not in the roster (yet), so the signature cannot be checked. */
     | { status: 'unknown-sender'; base: EnvelopeBase }
-    | { status: 'invalid'; reason: string }
+    | { status: 'invalid'; reason: string; senderId?: string }
 
 export interface OpenContext {
     /** Opens the sealed box with the own private key; null if it does not open. */
@@ -105,7 +105,8 @@ export async function openEvent(sealed: Uint8Array, ctx: OpenContext): Promise<O
         }
     })
     // successful decryption is never proof of the sender
-    if (!valid) return { status: 'invalid', reason: 'signature is not valid' }
+    if (!valid)
+        return { status: 'invalid', reason: 'signature is not valid', senderId: base.senderId }
     if (check.status === 'needs-update') return { status: 'needs-update', base }
 
     const envelope = check.envelope

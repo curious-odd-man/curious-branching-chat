@@ -28,6 +28,11 @@ export interface OutboxItem {
     writtenAt: string | null
     deliveredAt: string | null
     lastWriteAt: string | null
+    /**
+     * The roster member whose key seals this copy and whose receipt confirms it, if not `recipientId`: a re-invitation
+     * goes to the inbox of the person's new ID, but to the member with the old ID (D-15).
+     */
+    memberId?: string
     /** No receipt for 30 days: the own file was deleted and the copy is not written again (D-34). */
     abandonedAt?: string
 }
@@ -72,6 +77,24 @@ export interface StateData {
     /** Receipt files written by this member into other inboxes (cleanup after 7 days, D-34). */
     ownReceipts: Array<{ recipientId: string; fileName: string; writtenAt: string }>
     lastScanAt: string | null
+    /** D-15, D-32: new keys of a member that another member sent; this member accepts or rejects them. */
+    keyRequests: KeyRequest[]
+    /**
+     * D-32: this member was re-invited after key loss. Members from whom an event or receipt opened since then have
+     * accepted the new keys; the others have not (yet).
+     */
+    rejoin: { at: string; heardFrom: string[] } | null
+}
+
+export interface KeyRequest {
+    participantId: string
+    signingPublicKey: string
+    encryptionPublicKey: string
+    fingerprint: string
+    /** The member who re-invited the person. */
+    requestedBy: string
+    createdAt: string
+    state: 'pending' | 'rejected'
 }
 
 const stateSchema = z
@@ -110,7 +133,9 @@ function empty(conversationId: string, ownId: string): StateData {
         failures: {},
         peers: {},
         ownReceipts: [],
-        lastScanAt: null
+        lastScanAt: null,
+        keyRequests: [],
+        rejoin: null
     }
 }
 

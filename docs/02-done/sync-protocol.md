@@ -300,12 +300,25 @@ the history). Added in protocol version 1 before the first release (D-41).
 
 ### 7.6 `member.added`
 
-`{ "member": <roster entry without previousKeys> }`. Applied without confirmation (D-13).
+`{ "member": <roster entry without previousKeys> }`. Applied without confirmation (D-13). `addedBy` must be the
+sender. The inviting member writes it to every earlier member, not to the new member (the invitation has the roster).
+From then on, every event of every member has a copy for the new member (D-23).
 
 ### 7.7 `member.keys.replaced`
 
 `{ "participantId": "…", "signingPublicKey": "…", "encryptionPublicKey": "…", "fingerprint": "…" }`. Each receiving
 member must accept it after a fingerprint check (D-15, D-32). Releases 1.2 to 1.4 keep it pending.
+
+- The re-inviting member uses the new keys at once and writes the event to every other member (not to the person).
+- A receiver stores the request locally (a newer `createdAt` replaces an older request for the same person), sends the
+  receipt, and shows it in the status line. A request about the receiver itself, about the sender, or with the keys
+  that the receiver already has is ignored.
+- Accept: the roster entry gets the new keys; the old keys go to `previousKeys` with `replacedAt` = the event's
+  `createdAt`. Own copies for the person without a receipt are written again with the new key (same file name).
+- Reject: the roster keeps the old keys. The decision can change later (accept). The person's events stay in the
+  inbox; they are not quarantined while the request exists.
+- The person learns who has accepted from the events and receipts that open with the new key after the import; the
+  members from whom nothing opened yet are shown as "not accepted yet".
 
 ### 7.8 `profile.updated`
 
@@ -330,7 +343,12 @@ Invitation header (`.bcinv`):
 
 - The snapshot is a complete `.branchchat` file (schema version 2, with `sync.json` and all images). Its bytes are
   split into `invitation.part` events (payload `{ "invitationId": "…", "partId": "…" }`), each at most 4 MiB.
-- `replacesKeysOf` is present for a re-invitation after key loss (D-15).
+- `replacesKeysOf` is present for a re-invitation after key loss (D-15). The roster in the snapshot has the old ID with
+  the new keys. The header and parts go to the inbox of the ID in the person's new key bundle, with that ID as
+  `recipientId`, sealed with the new key. The person's receipt comes from the old ID.
+- The invitee then checks that the roster has `replacesKeysOf` (or its own ID) with its own fingerprint. On import with
+  `replacesKeysOf`, the person's app sets the old ID as its participant ID and binds the keys to it (D-32). Files in the
+  old ID's inbox that the new key cannot open are set aside (not quarantined).
 - The invitee does not know the inviter's key before it has read the snapshot. It decrypts the header and the parts,
   joins and checks the snapshot (SHA-256, full file validation), takes the inviter's signing key from the snapshot's
   roster, and verifies every frame with it. The snapshot's roster must contain the invitee with the invitee's own
@@ -367,6 +385,9 @@ Invitation header (`.bcinv`):
 - A member's events are verified with the current key. After `member.keys.replaced` is accepted, events with
   `createdAt` before `replacedAt` can also be verified with the previous key.
 - Nobody encrypts to a key that the member has not accepted.
+- A frame of a known member whose signature fails waits like an incomplete file (Section 9.6): it is quarantined only
+  after 10 unchanged minutes, and never while a key request for that member exists (D-32: the request can arrive after
+  the person's first files).
 
 ### 9.3 Dependencies
 

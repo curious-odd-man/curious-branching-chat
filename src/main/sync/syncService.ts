@@ -1,7 +1,12 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { eventsFromChange, withLocalDisplayName, type LoadingMessage } from '@shared/sync'
-import type { DocumentContents, Message } from '@shared/validation'
+import {
+    eventsFromChange,
+    withLocalDisplayName,
+    type LoadingMessage,
+    type NewMemberKeys
+} from '@shared/sync'
+import type { DocumentContents, Message, RosterMember } from '@shared/validation'
 import type { DocumentSession } from '../application/documentSession'
 import { pathKey } from '../application/paths'
 import type { KeyStore } from '../crypto/keyStore'
@@ -13,7 +18,8 @@ import {
     type DocumentPort,
     type SyncHealth
 } from './conversationSync'
-import type { DocumentView } from '@shared/types/ipc'
+import type { DocumentView, SyncStatusView } from '@shared/types/ipc'
+import { groupFingerprint } from '../crypto/identity'
 import { FilePort } from './filePort'
 import type { RegistryEntry, SyncRegistry } from './registry'
 import { SyncState, conversationDir } from './syncState'
@@ -266,7 +272,7 @@ export class SyncService {
 
     private statusChanged(conv: Conversation): void {
         const h = conv.sync.health()
-        const key = `${h.folder}|${h.quarantined}|${h.needsUpdate}`
+        const key = `${h.folder}|${h.quarantined}|${h.needsUpdate}|${h.keyRequests.length}`
         if (this.lastStatus.get(conv.entry.conversationId) === key) return
         this.lastStatus.set(conv.entry.conversationId, key)
         this.deps.onStatusChange?.()
@@ -281,7 +287,29 @@ export class SyncService {
         for (const [messageId, d] of Object.entries(conv.sync.deliveries()))
             copies[messageId] = d.members
         const health = conv.sync.health()
-        const syncStatus = { ...health, folderPath: conv.entry.sharedRoot }
+        const members = session.current.sync?.members ?? []
+        const nameOf = (id: string): string =>
+            members.find((m) => m.participantId === id)?.displayName ?? id
+        const { keyRequests, rejoinHeardFrom, ...rest } = health
+        const syncStatus: SyncStatusView = {
+            ...rest,
+            folderPath: conv.entry.sharedRoot,
+            keyRequests: keyRequests.map((r) => ({
+                participantId: r.participantId,
+                displayName: nameOf(r.participantId),
+                fingerprint: groupFingerprint(r.fingerprint),
+                state: r.state
+            })),
+            notAccepted: rejoinHeardFrom
+                ? members
+                      .filter(
+                          (m) =>
+                              m.participantId !== conv.entry.ownId &&
+                              !rejoinHeardFrom.includes(m.participantId)
+                      )
+                      .map((m) => m.displayName)
+                : []
+        }
         const json = JSON.stringify({
             loading,
             copies,
@@ -336,6 +364,17 @@ export class SyncService {
         }
         const entry = this.deps.registry.get(conversationId)
         if (entry) await this.open(entry)
+    }
+
+    /** Starts the sync of a discussion again (D-32: the own ID and keys changed with a re-invitation). */
+    async restart(entry: RegistryEntry): Promise<void> {
+        const conv = this.conversations.get(entry.conversationId)
+        if (conv) {
+            if (conv.timer) clearTimeout(conv.timer)
+            await conv.stopWatch?.()
+            this.conversations.delete(entry.conversationId)
+        }
+        await this.open(entry)
     }
 
     /** Connects a window's session: the registered copy is synchronized; any other copy is detached. */
@@ -402,26 +441,82 @@ export class SyncService {
         }
     }
 
+    /**
+     * FR-176: adds members to an active discussion and tells the earlier members; returns the discussion as it is now
+     * on disk (the snapshot for the invitations is read from the file after this).
+     */
+    async addMembers(
+        conversationId: string,
+        members: readonly RosterMember[]
+    ): Promise<DocumentContents> {
+        const conv = this.conversations.get(conversationId)
+        if (!conv) throw new Error('conversation is not running')
+        const after = await conv.sync.addMembers(members)
+        if (conv.session) await conv.session.flush()
+        else await conv.file.idle()
+        return after
+    }
+
+    /** FR-177: re-invite a person who lost the keys (see ConversationSync.replaceKeys). */
+    async replaceKeys(
+        conversationId: string,
+        participantId: string,
+        keys: NewMemberKeys
+    ): Promise<DocumentContents> {
+        const conv = this.conversations.get(conversationId)
+        if (!conv) throw new Error('conversation is not running')
+        const after = await conv.sync.replaceKeys(participantId, keys)
+        if (conv.session) await conv.session.flush()
+        else await conv.file.idle()
+        return after
+    }
+
+    /** D-32: the decision of this member about new keys of another member (status line). */
+    async decideKeys(
+        conversationId: string,
+        participantId: string,
+        accept: boolean
+    ): Promise<void> {
+        const conv = this.conversations.get(conversationId)
+        if (!conv) return
+        await conv.sync.decideKeys(participantId, accept)
+        if (accept) await this.scan(conversationId)
+        await this.refreshView(conv)
+    }
+
+    /** D-32: after importing a re-invitation. */
+    async startRejoin(conversationId: string, inviterId: string): Promise<void> {
+        await this.conversations.get(conversationId)?.sync.startRejoin(inviterId)
+    }
+
+    /** The registered file and shared folder of a running discussion. */
+    entryOf(conversationId: string): RegistryEntry | null {
+        return this.conversations.get(conversationId)?.entry ?? null
+    }
+
     async invite(
         conversationId: string,
         recipientId: string,
         snapshot: Uint8Array,
-        contents: DocumentContents
+        contents: DocumentContents,
+        rejoin?: { inboxId: string }
     ): Promise<void> {
         const conv = this.conversations.get(conversationId)
         if (!conv) throw new Error('conversation is not running')
-        await conv.sync.invite(recipientId, snapshot, contents)
+        await conv.sync.invite(recipientId, snapshot, contents, rejoin)
     }
 
     async confirmInvitation(
         conversationId: string,
         inviterId: string,
         ids: readonly string[],
-        fileNames: readonly string[]
+        fileNames: readonly string[],
+        /** The inbox that holds the invitation files (the person's ID before a re-invitation, D-32). */
+        inboxId?: string
     ): Promise<void> {
         const conv = this.conversations.get(conversationId)
         if (!conv) throw new Error('conversation is not running')
-        await conv.sync.confirmInvitation(inviterId, ids, fileNames)
+        await conv.sync.confirmInvitation(inviterId, ids, fileNames, inboxId)
         await this.scan(conversationId)
     }
 

@@ -18,6 +18,10 @@ export type AppErrorCode =
     | 'FOLDER_TEST_FAILED'
     | 'FOLDER_IN_USE'
     | 'INVITATION_GONE'
+    | 'NOT_SHARED'
+    | 'ALREADY_MEMBER'
+    | 'NOT_MEMBER'
+    | 'SAME_KEY'
 
 export class AppError extends Error {
     readonly code: AppErrorCode

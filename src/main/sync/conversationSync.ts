@@ -5,8 +5,11 @@ import {
     SYNC_PROTOCOL_VERSION,
     applyAll,
     documentClock,
+    normalizeSynced,
     addOwnDelivery,
     missingOwnDelivery,
+    withReplacedKeys,
+    type NewMemberKeys,
     isComplete,
     loadingMessage,
     partRanges,
@@ -21,7 +24,8 @@ import {
     compareMessages,
     type DocumentContents,
     type Message,
-    type RichDoc
+    type RichDoc,
+    type RosterMember
 } from '@shared/validation'
 import { openEvent, sealEvent, sha256Hex, type OpenedEvent } from '../crypto/envelope'
 import { fromB64 } from '../crypto/identity'
@@ -83,6 +87,14 @@ export interface SyncHealth {
     quarantined: number
     /** Files that need a newer version of the application (sync-protocol.md section 10). */
     needsUpdate: boolean
+    /** D-32: new keys of other members that wait for this member's decision (or that it rejected). */
+    keyRequests: Array<{
+        participantId: string
+        fingerprint: string
+        state: 'pending' | 'rejected'
+    }>
+    /** D-32: after a re-invitation, the members from whom nothing opened yet (null: not re-invited). */
+    rejoinHeardFrom: string[] | null
     lastScanAt: string | null
 }
 
@@ -323,7 +335,187 @@ export class ConversationSync {
      * Invites one member (sync-protocol.md 7.10): the snapshot is the complete `.branchchat` file, split into parts.
      * Header and parts are encrypted to the invitee and signed by this member. Returns the invitation ID.
      */
-    invite(recipientId: string, snapshot: Uint8Array, contents: DocumentContents): Promise<string> {
+    /**
+     * D-13, FR-176: this member adds new members to the roster and tells every earlier member with `member.added`.
+     * The new members get the discussion through an invitation (the caller sends it after this). Returns the
+     * discussion with the new roster.
+     */
+    addMembers(members: readonly RosterMember[]): Promise<DocumentContents> {
+        return this.serial(async () => {
+            const before = await this.deps.document.read()
+            const sync = before.sync
+            if (!sync) throw new Error('not a synchronized discussion')
+            const known = new Set(sync.members.map((m) => m.participantId))
+            const fresh = members.filter((m) => !known.has(m.participantId))
+            if (fresh.length === 0) return before
+            const earlier = sync.members
+                .map((m) => m.participantId)
+                .filter((id) => id !== this.deps.ownId)
+            const createdAt = this.deps.now()
+            for (const m of fresh)
+                await this.enqueue(
+                    {
+                        type: 'member.added',
+                        payload: { member: { ...m, addedBy: this.deps.ownId } },
+                        clock: documentClock(before),
+                        createdAt
+                    },
+                    earlier
+                )
+            // the event is stored before the document changes (as in deliverUnlocked)
+            await this.state.save()
+            let after = before
+            await this.deps.document.update((c) => {
+                const s = c.sync!
+                const ids = new Set(s.members.map((m) => m.participantId))
+                const add = fresh.filter((m) => !ids.has(m.participantId))
+                if (add.length === 0) return null
+                const next = normalizeSynced({
+                    ...c,
+                    sync: {
+                        ...s,
+                        members: [...s.members, ...add].sort((a, b) =>
+                            a.participantId < b.participantId
+                                ? -1
+                                : a.participantId > b.participantId
+                                  ? 1
+                                  : 0
+                        )
+                    }
+                })
+                after = next
+                return { contents: next, images: [] }
+            })
+            await this.flushUnlocked()
+            await this.state.save()
+            this.deps.onChange?.()
+            return after
+        })
+    }
+
+    /**
+     * D-15, FR-177: this member re-invites a person who lost the keys. The roster gets the new keys (the old ones go to
+     * `previousKeys`), every other member gets `member.keys.replaced` and must accept it, and own copies for the person
+     * that have no receipt are sealed again with the new key. The caller sends the re-invitation after this.
+     */
+    replaceKeys(participantId: string, keys: NewMemberKeys): Promise<DocumentContents> {
+        return this.serial(async () => {
+            const before = await this.deps.document.read()
+            const member = before.sync?.members.find((m) => m.participantId === participantId)
+            if (!member || participantId === this.deps.ownId) throw new Error('not another member')
+            if (member.fingerprint === keys.fingerprint) return before
+            const others = (before.sync?.members ?? [])
+                .map((m) => m.participantId)
+                .filter((id) => id !== this.deps.ownId && id !== participantId)
+            const createdAt = this.deps.now()
+            await this.enqueue(
+                {
+                    type: 'member.keys.replaced',
+                    payload: { participantId, ...keys },
+                    clock: documentClock(before),
+                    createdAt
+                } as unknown as LocalEvent,
+                others
+            )
+            await this.state.save()
+            const after = await this.useKeys(participantId, keys, createdAt)
+            await this.flushUnlocked()
+            await this.state.save()
+            this.deps.onChange?.()
+            return after
+        })
+    }
+
+    /** The roster takes the new keys, and own copies for the member without a receipt are sealed again. */
+    private async useKeys(
+        participantId: string,
+        keys: NewMemberKeys,
+        replacedAt: string
+    ): Promise<DocumentContents> {
+        let after: DocumentContents | null = null
+        await this.deps.document.update((c) => {
+            const next = withReplacedKeys(c, participantId, keys, replacedAt)
+            if (next === c) return null
+            after = next
+            return { contents: next, images: [] }
+        })
+        const key = fromB64(keys.encryptionPublicKey)
+        for (const item of this.state.data.outbox) {
+            if ((item.memberId ?? item.recipientId) !== participantId) continue
+            if (!item.writtenAt || item.deliveredAt || item.abandonedAt) continue
+            // the person cannot open the copy sealed with the old key: write it again with the new one
+            try {
+                await this.writeItem(item, key)
+            } catch (err) {
+                this.noteWriteError(err)
+            }
+        }
+        return after ?? (await this.deps.document.read())
+    }
+
+    /**
+     * D-32: this member accepts or rejects the new keys of another member. A rejection keeps the old keys and can be
+     * changed later by accepting.
+     */
+    decideKeys(participantId: string, accept: boolean): Promise<void> {
+        return this.serial(async () => {
+            const s = this.state.data
+            const request = s.keyRequests.find((r) => r.participantId === participantId)
+            if (!request) return
+            if (!accept) request.state = 'rejected'
+            else {
+                await this.useKeys(
+                    participantId,
+                    {
+                        signingPublicKey: request.signingPublicKey,
+                        encryptionPublicKey: request.encryptionPublicKey,
+                        fingerprint: request.fingerprint
+                    },
+                    request.createdAt
+                )
+                s.keyRequests = s.keyRequests.filter((r) => r !== request)
+                // events of the person that waited for the key can be read now
+                for (const name of Object.keys(s.failures)) delete s.failures[name]
+            }
+            await this.state.save()
+            this.deps.onChange?.()
+        })
+    }
+
+    /**
+     * D-32: after a re-invitation this member uses its old ID with new keys. Files in the own inbox that the new key
+     * cannot open were written for the old key: they are ignored (the invitation has the whole discussion).
+     */
+    startRejoin(inviterId: string): Promise<void> {
+        return this.serial(async () => {
+            const s = this.state.data
+            for (const entry of await this.deps.transport.list(this.inbox(this.deps.ownId))) {
+                if (s.keptFiles.includes(entry.name)) continue
+                const opens = await this.deps.transport
+                    .read(entry.folder, entry.name, this.deps.maxFileBytes())
+                    .then(async (bytes) => (await this.deps.keys.open(bytes)) !== null)
+                    .catch(() => false)
+                if (!opens) s.keptFiles.push(entry.name)
+            }
+            s.rejoin = { at: this.deps.now(), heardFrom: [inviterId] }
+            await this.state.save()
+        })
+    }
+
+    /**
+     * Sends the discussion to a new member (design 12.2). With `rejoin` (D-15), the member keeps the old ID
+     * (`memberId`), but the person still uses the new ID: the files go to the inbox of that ID and name it as the
+     * recipient; the roster key of the member (already the new key) seals them.
+     */
+    invite(
+        recipientId: string,
+        snapshot: Uint8Array,
+        contents: DocumentContents,
+        rejoin?: { inboxId: string }
+    ): Promise<string> {
+        const memberId = recipientId
+        const replacesKeysOf = rejoin ? memberId : undefined
+        recipientId = rejoin?.inboxId ?? recipientId
         return this.serial(async () => {
             const invitationId = this.deps.newId()
             const clock = documentClock(contents)
@@ -354,6 +546,7 @@ export class ConversationSync {
                     {
                         invitationId,
                         minProtocolVersion: SYNC_PROTOCOL_VERSION,
+                        ...(replacesKeysOf ? { replacesKeysOf } : {}),
                         snapshotSize: snapshot.length,
                         snapshotSha256: sha256Hex(snapshot),
                         parts: parts.map(({ partId, index, size, sha256 }) => ({
@@ -366,7 +559,8 @@ export class ConversationSync {
                 ),
                 writtenAt: null,
                 deliveredAt: null,
-                lastWriteAt: null
+                lastWriteAt: null,
+                ...(rejoin ? { memberId } : {})
             })
             for (const p of parts) {
                 const file = await this.state.storeOutPart(p.partId, p.data)
@@ -388,7 +582,8 @@ export class ConversationSync {
                     payloadFile: file,
                     writtenAt: null,
                     deliveredAt: null,
-                    lastWriteAt: null
+                    lastWriteAt: null,
+                    ...(rejoin ? { memberId } : {})
                 })
             }
             await this.state.save()
@@ -403,8 +598,8 @@ export class ConversationSync {
         const out: Record<string, 'invited' | 'joined'> = {}
         for (const item of this.state.data.outbox) {
             if (item.kind !== 'invitation') continue
-            if (item.deliveredAt) out[item.recipientId] = 'joined'
-            else out[item.recipientId] ??= 'invited'
+            // the latest invitation of a member decides (a re-invitation comes after the first one)
+            out[item.memberId ?? item.recipientId] = item.deliveredAt ? 'joined' : 'invited'
         }
         return out
     }
@@ -413,13 +608,19 @@ export class ConversationSync {
     confirmInvitation(
         inviterId: string,
         ids: readonly string[],
-        fileNames: readonly string[]
+        fileNames: readonly string[],
+        inboxId: string = this.deps.ownId
     ): Promise<void> {
         return this.serial(async () => {
             await this.sendReceipts(new Map([[inviterId, new Set(ids)]]))
             for (const name of fileNames) {
-                const r = await this.deps.transport.delete(this.inbox(this.deps.ownId), name)
-                if (r === 'failed' && !this.state.data.keptFiles.includes(name))
+                const r = await this.deps.transport.delete(this.inbox(inboxId), name)
+                // a file left in another inbox (a re-invitation) is not this inbox's business
+                if (
+                    r === 'failed' &&
+                    inboxId === this.deps.ownId &&
+                    !this.state.data.keptFiles.includes(name)
+                )
                     this.state.data.keptFiles.push(name)
             }
             await this.state.save()
@@ -444,7 +645,7 @@ export class ConversationSync {
         )
         for (const item of this.state.data.outbox) {
             if (item.writtenAt) continue
-            const key = keyOf.get(item.recipientId)
+            const key = keyOf.get(item.memberId ?? item.recipientId)
             if (!key) continue
             try {
                 await this.writeItem(item, key)
@@ -501,10 +702,10 @@ export class ConversationSync {
                 report.abandoned++
                 continue
             }
-            const activity = s.peers[item.recipientId]?.lastActivityAt
+            const activity = s.peers[item.memberId ?? item.recipientId]?.lastActivityAt
             const lastWrite = item.lastWriteAt ?? item.writtenAt
             if (!activity || Date.parse(activity) <= Date.parse(lastWrite)) continue
-            const key = keyOf.get(item.recipientId)
+            const key = keyOf.get(item.memberId ?? item.recipientId)
             if (!key) continue
             try {
                 await this.writeItem(item, key)
@@ -660,10 +861,14 @@ export class ConversationSync {
         }
         // section 9.6: only a file that stays the same and still fails for the grace time is quarantined
         if (
-            reason === 'unopened' &&
+            (reason === 'unopened' || reason === 'bad-signature') &&
             nowMs - Date.parse(f.since) >= INCOMPLETE_FILE_GRACE_MINUTES * 60_000
         )
-            this.quarantine(entry, 'does not open', report)
+            this.quarantine(
+                entry,
+                reason === 'bad-signature' ? 'signature is not valid' : 'does not open',
+                report
+            )
     }
 
     private async processFile(
@@ -703,7 +908,17 @@ export class ConversationSync {
         // a member whose `member.added` has not arrived yet: try again later, never quarantine
         if (opened.status === 'unknown-sender')
             return this.notOpened(entry, nowMs, 'unknown-sender', report)
-        if (opened.status === 'invalid') return this.quarantine(entry, opened.reason, report)
+        if (opened.status === 'invalid') {
+            // D-32: a member with new keys that this member has not accepted (yet): the file waits, and while a
+            // request exists it is never quarantined; without one, it waits for the grace time (the request can come
+            // later than the person's first files)
+            if (opened.senderId && opened.reason === 'signature is not valid') {
+                if (this.state.data.keyRequests.some((r) => r.participantId === opened.senderId))
+                    return
+                return this.notOpened(entry, nowMs, 'bad-signature', report)
+            }
+            return this.quarantine(entry, opened.reason, report)
+        }
         delete this.state.data.failures[entry.name]
         if (opened.status === 'needs-update') {
             this.markNeedsUpdate(entry, report)
@@ -712,6 +927,12 @@ export class ConversationSync {
 
         const env = opened.envelope
         this.state.data.peers[env.senderId] = { lastActivityAt: this.deps.now() }
+        // D-32: an event that opened with the new key shows that its sender accepted it
+        const rejoin = this.state.data.rejoin
+        if (rejoin && !rejoin.heardFrom.includes(env.senderId)) {
+            rejoin.heardFrom.push(env.senderId)
+            this.deps.onChange?.()
+        }
 
         if (env.type === 'receipt.delivered') {
             await this.applyReceipt(env as Envelope<'receipt.delivered'>)
@@ -742,8 +963,11 @@ export class ConversationSync {
         }
 
         if (env.type === 'member.keys.replaced') {
-            // release 1.5 accepts key changes; until then the event waits (implementation plan, section 2.2)
-            this.markNeedsUpdate(entry, report)
+            await this.keyRequest(env as Envelope<'member.keys.replaced'>)
+            this.state.markProcessed(key)
+            this.addConfirm(confirm, env.senderId, receiptId)
+            toDelete.push(entry)
+            this.deps.onChange?.()
             return
         }
 
@@ -783,6 +1007,31 @@ export class ConversationSync {
             return // completeLoading applies it when all parts are present
         }
         this.state.data.pending.push(event)
+    }
+
+    /** D-32: another member re-invited a person with new keys; this member decides (status line). */
+    private async keyRequest(env: Envelope<'member.keys.replaced'>): Promise<void> {
+        const p = env.payload
+        const s = this.state.data
+        if (p.participantId === this.deps.ownId || p.participantId === env.senderId) return
+        // the request is only kept while this copy has the person with other keys
+        const contents = await this.deps.document.read()
+        const member = contents.sync?.members.find((m) => m.participantId === p.participantId)
+        if (!member || member.fingerprint === p.fingerprint) return
+        const earlier = s.keyRequests.find((r) => r.participantId === p.participantId)
+        if (earlier && Date.parse(earlier.createdAt) >= Date.parse(env.createdAt)) return
+        s.keyRequests = [
+            ...s.keyRequests.filter((r) => r.participantId !== p.participantId),
+            {
+                participantId: p.participantId,
+                signingPublicKey: p.signingPublicKey,
+                encryptionPublicKey: p.encryptionPublicKey,
+                fingerprint: p.fingerprint,
+                requestedBy: env.senderId,
+                createdAt: env.createdAt,
+                state: 'pending'
+            }
+        ]
     }
 
     private markNeedsUpdate(entry: SharedEntry, report: ScanReport): void {
@@ -984,7 +1233,12 @@ export class ConversationSync {
         const ids = new Set(env.payload.ids)
         const now = this.deps.now()
         for (const item of this.state.data.outbox) {
-            if (item.recipientId !== env.senderId || !ids.has(item.id) || item.deliveredAt) continue
+            if (
+                (item.memberId ?? item.recipientId) !== env.senderId ||
+                !ids.has(item.id) ||
+                item.deliveredAt
+            )
+                continue
             item.deliveredAt = now
             // D-19: the sender deletes its own files after the receipt
             await this.deps.transport.delete(this.inbox(item.recipientId), item.fileName)
@@ -1133,7 +1387,13 @@ export class ConversationSync {
             folder: this.folder,
             quarantined: this.state.data.quarantine.length,
             needsUpdate: this.needsUpdate,
-            lastScanAt: this.state.data.lastScanAt
+            lastScanAt: this.state.data.lastScanAt,
+            keyRequests: this.state.data.keyRequests.map((r) => ({
+                participantId: r.participantId,
+                fingerprint: r.fingerprint,
+                state: r.state
+            })),
+            rejoinHeardFrom: this.state.data.rejoin?.heardFrom ?? null
         }
     }
 

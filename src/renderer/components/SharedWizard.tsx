@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from './Modal'
-import { ru } from '@shared/i18n/ru'
+import { describeError, ru } from '@shared/i18n/ru'
 import type {
     CandidateView,
     IdentityView,
@@ -10,12 +10,21 @@ import type {
     SharedFolderChoice
 } from '@shared/types/ipc'
 
-export type WizardMode = 'new' | 'convert' | 'join'
+export type WizardMode = 'new' | 'convert' | 'join' | 'invite' | 'reinvite'
+
+/** The member to re-invite after key loss (FR-177). */
+export interface ReinviteTarget {
+    participantId: string
+    displayName: string
+    fingerprint: string
+}
 
 interface Props {
     mode: WizardMode
     settings: SettingsView | undefined
     onClose(): void
+    /** For `reinvite`. */
+    target?: ReinviteTarget
 }
 
 const POLL_MS = 2000
@@ -31,7 +40,7 @@ const stepName: Record<string, string> = {
  * Wizards of synchronized discussions (design 12.3 to 12.5, FR-158, FR-162): create, convert the open discussion, or
  * join by invitation. The person checks every fingerprint; private keys never leave this computer.
  */
-export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Element {
+export function SharedWizard({ mode, settings, onClose, target }: Props): React.JSX.Element {
     const api = window.branchchat
     const [identity, setIdentity] = useState<IdentityView | null>(null)
     const [folder, setFolder] = useState<SharedFolderChoice | null>(null)
@@ -45,7 +54,21 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
     const [invitation, setInvitation] = useState<InvitationView | null>(null)
     const hasName = Boolean(settings?.displayName)
     const ready = identity?.state === 'ready' && hasName
-    const root = folder?.test.ok ? folder.path : null
+    // invite (FR-176): the shared folder and the members come from the open discussion
+    const [inviteRoot, setInviteRoot] = useState<string | null>(null)
+    const [memberIds, setMemberIds] = useState<Set<string>>(new Set())
+    const fromDiscussion = mode === 'invite' || mode === 'reinvite'
+    const root = fromDiscussion ? inviteRoot : folder?.test.ok ? folder.path : null
+
+    useEffect(() => {
+        if (!fromDiscussion) return
+        void api.getRoster().then((r) => {
+            if (r.ok && r.data) {
+                setInviteRoot(r.data.sharedRoot)
+                setMemberIds(new Set(r.data.members.map((m) => m.participantId)))
+            } else setError(describeError('NOT_SHARED'))
+        })
+    }, [api, fromDiscussion])
 
     useEffect(() => {
         void api.getIdentity().then((r) => (r.ok ? setIdentity(r.data) : setError(r.error.message)))
@@ -109,6 +132,10 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
     }
 
     const add = (c: CandidateView): void => {
+        if (mode !== 'reinvite' && memberIds.has(c.participantId)) {
+            setError(describeError('ALREADY_MEMBER'))
+            return
+        }
         setCandidates((current) => [
             ...current.filter((x) => x.participantId !== c.participantId),
             c
@@ -170,6 +197,38 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
             .finally(() => setBusy(false))
     }
 
+    const invite = (): void => {
+        const keys = candidates.filter((c) => accepted.has(c.participantId)).map((c) => c.text)
+        setBusy(true)
+        setError(null)
+        void api
+            .inviteMembers(keys)
+            .then(async (r) => {
+                if (!r.ok) return setError(r.error.message)
+                const roster = await api.getRoster()
+                if (roster.ok && roster.data) setRoster(roster.data)
+                else onClose()
+            })
+            .finally(() => setBusy(false))
+    }
+
+    // FR-177: exactly one new key; it replaces the keys of the target member
+    const reinvite = (): void => {
+        const chosen = shown.find((c) => accepted.has(c.participantId))
+        if (!target || !chosen) return
+        setBusy(true)
+        setError(null)
+        void api
+            .reinviteMember(target.participantId, chosen.text)
+            .then(async (r) => {
+                if (!r.ok) return setError(r.error.message)
+                const roster = await api.getRoster()
+                if (roster.ok && roster.data) setRoster(roster.data)
+                else onClose()
+            })
+            .finally(() => setBusy(false))
+    }
+
     const join = (): void => {
         if (!root || invitation?.state !== 'ready') return
         setBusy(true)
@@ -188,7 +247,18 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
             ? ru.shared.newTitle
             : mode === 'convert'
               ? ru.shared.convertTitle
-              : ru.shared.joinTitle
+              : mode === 'invite'
+                ? ru.shared.inviteTitle
+                : mode === 'reinvite'
+                  ? `${ru.shared.reinviteTitle}: ${target?.displayName ?? ''}`
+                  : ru.shared.joinTitle
+    // a re-invitation offers new keys only: not other members, and not the key the member has now
+    const shown = candidates.filter((c) =>
+        mode === 'reinvite'
+            ? c.fingerprint !== target?.fingerprint &&
+              (c.participantId === target?.participantId || !memberIds.has(c.participantId))
+            : !memberIds.has(c.participantId)
+    )
 
     if (roster)
         return (
@@ -214,8 +284,22 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
         <Modal labelledBy="wizard-title" onEscape={onClose}>
             <div className="dialog settings wizard" data-testid="shared-wizard" data-mode={mode}>
                 <h2 id="wizard-title">{title}</h2>
-                <p className="hint">{ru.shared.intro}</p>
-                {settings && !settings.startWithWindowsSettled && (
+                <p className="hint">
+                    {mode === 'invite'
+                        ? ru.shared.inviteIntro
+                        : mode === 'reinvite'
+                          ? ru.shared.reinviteIntro(target?.displayName ?? '')
+                          : ru.shared.intro}
+                </p>
+                {mode === 'reinvite' && target && (
+                    <p className="fingerprint-row">
+                        <span>{ru.shared.reinviteCurrent}: </span>
+                        <code className="fingerprint" data-testid="reinvite-old-fingerprint">
+                            {target.fingerprint}
+                        </code>
+                    </p>
+                )}
+                {!fromDiscussion && settings && !settings.startWithWindowsSettled && (
                     <p className="hint" data-testid="wizard-autostart">
                         {ru.shared.autoStartNote}
                     </p>
@@ -242,7 +326,7 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
                     <p className="hint">{ru.shared.keyHint}</p>
                 </section>
 
-                <section>
+                <section hidden={fromDiscussion}>
                     <h3>{ru.shared.folderStep}</h3>
                     <p className="hint">{ru.shared.folderHint}</p>
                     <div className="buttons">
@@ -279,11 +363,9 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
                     <section data-testid="wizard-members">
                         <h3>{ru.shared.membersStep}</h3>
                         <p className="hint">{ru.shared.membersHint}</p>
-                        {candidates.length === 0 && (
-                            <p className="hint">{ru.shared.noCandidates}</p>
-                        )}
+                        {shown.length === 0 && <p className="hint">{ru.shared.noCandidates}</p>}
                         <ul className="candidates">
-                            {candidates.map((c) => (
+                            {shown.map((c) => (
                                 <li
                                     key={c.participantId}
                                     data-testid="candidate"
@@ -371,6 +453,11 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
                                     </code>
                                 </p>
                                 <p className="hint">{ru.shared.joinCheck}</p>
+                                {invitation.rejoin && (
+                                    <p className="hint" data-testid="invitation-rejoin">
+                                        {ru.shared.rejoinNote}
+                                    </p>
+                                )}
                             </>
                         )}
                     </section>
@@ -385,7 +472,37 @@ export function SharedWizard({ mode, settings, onClose }: Props): React.JSX.Elem
                     <button type="button" data-testid="wizard-cancel" onClick={onClose}>
                         {ru.shared.cancel}
                     </button>
-                    {mode === 'join' ? (
+                    {mode === 'reinvite' ? (
+                        <button
+                            type="button"
+                            className="primary"
+                            data-testid="wizard-reinvite"
+                            disabled={
+                                busy ||
+                                !root ||
+                                !ready ||
+                                shown.filter((c) => accepted.has(c.participantId)).length !== 1
+                            }
+                            onClick={reinvite}
+                        >
+                            {ru.shared.reinviteSend}
+                        </button>
+                    ) : mode === 'invite' ? (
+                        <button
+                            type="button"
+                            className="primary"
+                            data-testid="wizard-invite"
+                            disabled={
+                                busy ||
+                                !root ||
+                                !ready ||
+                                !shown.some((c) => accepted.has(c.participantId))
+                            }
+                            onClick={invite}
+                        >
+                            {ru.shared.inviteSend}
+                        </button>
+                    ) : mode === 'join' ? (
                         <button
                             type="button"
                             className="primary"
@@ -419,7 +536,14 @@ const stateLabel = {
     member: ru.shared.stateMember
 } as const
 
-export function RosterList({ roster }: { roster: RosterView }): React.JSX.Element {
+export function RosterList({
+    roster,
+    onReinvite
+}: {
+    roster: RosterView
+    /** FR-177: re-invite a member who lost the keys. */
+    onReinvite?: (target: ReinviteTarget) => void
+}): React.JSX.Element {
     return (
         <ul className="candidates" data-testid="roster">
             {roster.members.map((m) => (
@@ -432,6 +556,25 @@ export function RosterList({ roster }: { roster: RosterView }): React.JSX.Elemen
                     <span className="candidate-name">{m.displayName}</span>
                     <code className="fingerprint">{m.fingerprint}</code>
                     <span className="roster-state">{stateLabel[m.state]}</span>
+                    <span className="roster-added" data-testid="roster-added-by">
+                        {m.addedByName ? ru.shared.addedBy(m.addedByName) : ru.shared.creator}
+                    </span>
+                    {onReinvite && m.state !== 'self' && (
+                        <button
+                            type="button"
+                            className="link-button"
+                            data-testid="roster-reinvite"
+                            onClick={() =>
+                                onReinvite({
+                                    participantId: m.participantId,
+                                    displayName: m.displayName,
+                                    fingerprint: m.fingerprint
+                                })
+                            }
+                        >
+                            {ru.shared.reinviteTitle}…
+                        </button>
+                    )}
                 </li>
             ))}
         </ul>
@@ -439,7 +582,17 @@ export function RosterList({ roster }: { roster: RosterView }): React.JSX.Elemen
 }
 
 /** The members of the open synchronized discussion (header button "Участники"). */
-export function RosterDialog({ onClose }: { onClose(): void }): React.JSX.Element {
+export function RosterDialog({
+    onClose,
+    onInvite,
+    onReinvite
+}: {
+    onClose(): void
+    /** FR-176: opens the invite wizard. */
+    onInvite(): void
+    /** FR-177: opens the re-invite wizard for a member. */
+    onReinvite(target: ReinviteTarget): void
+}): React.JSX.Element {
     const api = window.branchchat
     const [roster, setRoster] = useState<RosterView | null>(null)
     useEffect(() => {
@@ -452,9 +605,19 @@ export function RosterDialog({ onClose }: { onClose(): void }): React.JSX.Elemen
         <Modal labelledBy="roster-title" onEscape={onClose}>
             <div className="dialog settings wizard" data-testid="roster-dialog">
                 <h2 id="roster-title">{ru.shared.rosterTitle}</h2>
-                {roster && <RosterList roster={roster} />}
+                {roster && <RosterList roster={roster} onReinvite={onReinvite} />}
                 <div className="buttons">
-                    <button type="button" className="primary" onClick={onClose}>
+                    <button type="button" data-testid="roster-invite" onClick={onInvite}>
+                        {ru.shared.inviteTitle}…
+                    </button>
+                    {/* focus inside the dialog, so Escape and Tab work at once */}
+                    <button
+                        type="button"
+                        className="primary"
+                        data-testid="roster-close"
+                        autoFocus
+                        onClick={onClose}
+                    >
                         {ru.shared.close}
                     </button>
                 </div>

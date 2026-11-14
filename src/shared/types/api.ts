@@ -30,6 +30,12 @@ export interface BranchChatApi {
     parseKey(text: string): Promise<IpcResult<CandidateView>>
     pickKeyFile(): Promise<IpcResult<CandidateView | null>>
     createShared(root: string, keys: string[], mode: 'new' | 'convert'): Promise<IpcResult<boolean>>
+    /** FR-176: invite new members into the open synchronized discussion; returns how many were added. */
+    inviteMembers(keys: string[]): Promise<IpcResult<number>>
+    /** FR-177: re-invite a member who lost the keys, with the person's new key. */
+    reinviteMember(participantId: string, key: string): Promise<IpcResult<null>>
+    /** D-32: accept or reject the new keys of a member (status line). */
+    decideKeys(participantId: string, accept: boolean): Promise<IpcResult<null>>
     getRoster(): Promise<IpcResult<RosterView | null>>
     findInvitation(root: string): Promise<IpcResult<InvitationView>>
     importInvitation(root: string, invitationId: string): Promise<IpcResult<boolean>>

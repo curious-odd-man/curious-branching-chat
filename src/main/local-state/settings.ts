@@ -165,6 +165,15 @@ export class SettingsStore {
         return this.get()
     }
 
+    /** D-32: a re-invitation after key loss gives this person the old participant ID back. */
+    async setParticipantId(participantId: string): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        if (participantId.trim().length === 0) throw new Error('participant ID must not be empty')
+        this.data = { ...this.data, participantId }
+        await this.persist()
+        return this.get()
+    }
+
     /** FR-174: the first synchronized discussion turns "start with Windows" on, once. True if it did. */
     async settleStartWithWindows(): Promise<boolean> {
         if (!this.data) throw new Error('SettingsStore.load() has not been called')

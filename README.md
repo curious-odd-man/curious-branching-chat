@@ -40,6 +40,7 @@ src/
     crypto/      encryption identity, key store (safeStorage), signed and encrypted events, parts
     transport/   the shared folder: staging, move, listing, path safety, watching
     sync/        synchronized discussions: registry, local sync state, sync service, wizards (onboarding)
+    background/  tray, notifications, start with Windows (release 1.4)
     e2e/         test hooks, compiled only into `--mode e2e` builds
     ipc/         validated IPC handlers
   preload/     the narrow contextBridge API
@@ -60,6 +61,7 @@ manifest.json     format name, schemaVersion, documentId
 discussion.json   participants, threads (messages inside), asset index
 readstate.json    participantId -> IDs of messages that participant has read
 sync.json         only in a synchronized discussion: the member list with public keys (never private keys)
+delivery.json     only in a synchronized discussion: participantId -> IDs of messages that member has received
 assets/images/<sha256>.<png|jpg|gif|webp>
 ```
 

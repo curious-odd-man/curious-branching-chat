@@ -309,6 +309,8 @@ button:disabled {
 .overlay {
     position: fixed;
     inset: 0;
+    /* above every part of the page, also when the dialog is placed inside the header (the members dialog) */
+    z-index: 100;
     display: grid;
     place-items: center;
     background: rgb(0 0 0 / 0.4);
@@ -948,6 +950,11 @@ mark.quote {
 .candidates .roster-state {
     margin-left: auto;
 }
+.candidates .roster-added {
+    flex-basis: 100%;
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
 .roster-button {
     font-size: 0.85rem;
     padding: 0.15rem 0.5rem;
@@ -998,4 +1005,23 @@ mark.quote {
 }
 .sync-status p {
     margin: 0.1rem 0;
+}
+
+/* release 1.5: re-invite a member, and the decision about new keys (D-32) */
+.link-button {
+    padding: 0;
+    border: none;
+    background: none;
+    color: LinkText;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+.sync-status .key-request {
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid color-mix(in srgb, CanvasText 15%, transparent);
+}
+.sync-status .key-request .buttons {
+    justify-content: flex-start;
 }

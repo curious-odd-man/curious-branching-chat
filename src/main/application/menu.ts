@@ -47,6 +47,10 @@ export function buildMenu(
                     click: () => controller.sendMenuCommand('make-shared')
                 },
                 {
+                    label: ru.menu.inviteMember,
+                    click: () => controller.sendMenuCommand('invite-member')
+                },
+                {
                     label: ru.menu.sendCopy,
                     click: () =>
                         void controller.saveCopy(controller.focusedEntry()).catch(() => undefined)

@@ -198,3 +198,47 @@ export function withLocalDisplayName(
         }
     }
 }
+
+export interface NewMemberKeys {
+    signingPublicKey: string
+    encryptionPublicKey: string
+    fingerprint: string
+}
+
+/**
+ * D-15, D-32: the member gets new keys; the old ones go to `previousKeys` (old signatures stay valid). Returns the
+ * same object if the member is unknown or already has these keys.
+ */
+export function withReplacedKeys(
+    contents: DocumentContents,
+    participantId: string,
+    keys: NewMemberKeys,
+    replacedAt: string
+): DocumentContents {
+    const sync = contents.sync
+    const member = sync?.members.find((m) => m.participantId === participantId)
+    if (!sync || !member || member.fingerprint === keys.fingerprint) return contents
+    const previous = {
+        signingPublicKey: member.signingPublicKey,
+        encryptionPublicKey: member.encryptionPublicKey,
+        fingerprint: member.fingerprint,
+        replacedAt
+    }
+    return {
+        ...contents,
+        sync: {
+            ...sync,
+            members: sync.members.map((m) =>
+                m.participantId === participantId
+                    ? {
+                          ...m,
+                          signingPublicKey: keys.signingPublicKey,
+                          encryptionPublicKey: keys.encryptionPublicKey,
+                          fingerprint: keys.fingerprint,
+                          previousKeys: [...(m.previousKeys ?? []), previous]
+                      }
+                    : m
+            )
+        }
+    }
+}

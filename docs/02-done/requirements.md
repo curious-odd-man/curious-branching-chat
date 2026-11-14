@@ -583,11 +583,14 @@ format is in `sync-protocol.md`. The release column says in which release the re
 
 #### Membership changes (release 1.5)
 
-- **FR-176.** Any member can invite a new person into an active discussion. The other members accept the new member
-  without a confirmation (D-13).
+- **FR-176.** Any member can invite a new person into an active discussion ("Пригласить участника…" in the File menu
+  and in the members dialog). The other members accept the new member without a confirmation (D-13). The members
+  dialog shows who added each member.
 - **FR-177.** A person who lost the keys can be re-invited with the old participant ID. Each other member must accept
   the new keys after a fingerprint check; until then, events with the new keys wait and nobody encrypts to them. A
-  member who rejects keeps the old keys, and both sides see a warning (D-15, D-32).
+  member who rejects keeps the old keys, and both sides see a warning (D-15, D-32). The request is in the status line
+  with the new fingerprint, and a rejection can be changed to an acceptance later. The re-invited person sees which
+  members have not accepted yet.
 
 #### Not supported
 
@@ -844,6 +847,8 @@ The application is distributed as a single installer `.exe` that needs no admini
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
 
 ## Changes in revision 13
+
+- FR-176 and FR-177: details of release 1.5 (where the actions are, the members dialog, a rejection that can change).
 
 - FR-173 and FR-175: tray and notification details (D-42).
 

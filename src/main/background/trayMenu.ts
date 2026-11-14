@@ -51,6 +51,8 @@ export function trayMenuModel(discussions: readonly TrayDiscussion[]): TrayItem[
         if (!h) continue
         if (h.folder === 'missing') problems.push(ru.tray.status.missing(name))
         else if (h.folder === 'no-permission') problems.push(ru.tray.status.denied(name))
+        else if (h.keyRequests.some((r) => r.state === 'pending'))
+            problems.push(ru.tray.status.keys(name))
         else if (h.quarantined > 0 || h.needsUpdate) problems.push(ru.tray.status.problem(name))
     }
     if (problems.length === 0) {

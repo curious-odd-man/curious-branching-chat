@@ -138,6 +138,20 @@ export class KeyStore {
         }
     }
 
+    /**
+     * D-32: a re-invitation gives this person the old participant ID back. The same keys are bound to that ID from now
+     * on (the fingerprint does not depend on the ID).
+     */
+    async rebind(fromId: string, toId: string): Promise<void> {
+        if (fromId === toId) return
+        const { identity } = await this.ensure(fromId)
+        if (identity.state !== 'ready' || !this.cached) throw new Error('keys are not available')
+        const file: IdentityFile = { ...this.cached.file, participantId: toId }
+        const text = JSON.stringify(file, null, 2)
+        await writeFileAtomically(this.path, (tmp) => fs.writeFile(tmp, text, 'utf8'))
+        this.cached = { file, identity: toPublic(file) }
+    }
+
     private readyState(file: IdentityFile, identity: PublicIdentity): IdentityState {
         return {
             state: 'ready',

@@ -52,6 +52,34 @@ export const sharedCreateSchema = z
         mode: z.enum(['new', 'convert'])
     })
     .strict()
+/** FR-177: re-invite a member who lost the keys, with the person's new key. */
+export const sharedReinviteSchema = z
+    .object({
+        participantId: z.string().min(1).max(200),
+        key: z
+            .string()
+            .min(1)
+            .max(64 * 1024)
+    })
+    .strict()
+/** D-32: accept or reject the new keys of a member. */
+export const decideKeysSchema = z
+    .object({ participantId: z.string().min(1).max(200), accept: z.boolean() })
+    .strict()
+/** FR-176: new members for the open, active discussion. */
+export const sharedInviteSchema = z
+    .object({
+        keys: z
+            .array(
+                z
+                    .string()
+                    .min(1)
+                    .max(64 * 1024)
+            )
+            .min(1)
+            .max(100)
+    })
+    .strict()
 export const joinImportSchema = z
     .object({ root: z.string().min(1), invitationId: z.string().min(1) })
     .strict()

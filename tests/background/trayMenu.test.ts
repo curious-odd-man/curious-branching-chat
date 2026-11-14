@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { trayMenuModel, type TrayDiscussion } from '../../src/main/background/trayMenu'
 
-const healthy = { folder: 'ok' as const, quarantined: 0, needsUpdate: false, lastScanAt: null }
+const healthy = {
+    folder: 'ok' as const,
+    quarantined: 0,
+    needsUpdate: false,
+    lastScanAt: null,
+    keyRequests: [],
+    rejoinHeardFrom: null
+}
 const d = (name: string, extra: Partial<TrayDiscussion> = {}): TrayDiscussion => ({
     conversationId: `c-${name}`,
     filePath: `C:\\Users\\x\\${name}.branchchat`,

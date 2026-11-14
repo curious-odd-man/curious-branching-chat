@@ -528,6 +528,11 @@ describe('sync service with three members (design 13 to 18)', () => {
             await post(await fakeSender(mallory.own, 'mallory'), 'подделка')
             await b.sync.scan()
             expect(texts(b.contents)).toEqual([])
+            // D-32: a bad signature of a known member waits for the grace time (new keys can come later)
+            expect(b.state.data.quarantine).toEqual([])
+            clockMs += 11 * 60_000
+            await b.sync.scan()
+            expect(texts(b.contents)).toEqual([])
             expect(b.state.data.quarantine.map((q) => q.reason)).toEqual(['signature is not valid'])
 
             // a real event, then another event that reuses its sequence number with a different event ID
@@ -826,6 +831,155 @@ describe('delivery marks and sync health (release 1.3: D-09, D-29, D-34, D-35)',
             const reply = mainThread(b.contents.discussion).messages.at(-1)!.messageId
             expect(a.arrived).toEqual([[reply]])
             expect(b.arrived).toEqual([ids])
+        })
+    })
+
+    it('a member who did not create the discussion adds a new member; all learn it (D-13, FR-176)', async () => {
+        await withTempDir(async (dir) => {
+            const { members, root } = await group(dir)
+            const [a, b, c] = members as [Member, Member, Member]
+            const dana = await makeKeys()
+            const member = {
+                participantId: 'p-dana',
+                displayName: 'Дана',
+                signingPublicKey: b64(dana.sign.publicKey),
+                encryptionPublicKey: b64(dana.box.publicKey),
+                fingerprint: fingerprintOf(dana.sign.publicKey, dana.box.publicKey),
+                addedBy: 'p-boris',
+                addedAt: '2026-11-11T11:00:00Z'
+            }
+            const after = await b.sync.addMembers([member])
+            expect(after.sync?.members.map((m) => m.participantId)).toContain('p-dana')
+            expect(
+                b.contents.sync?.members.find((m) => m.participantId === 'p-dana')?.addedBy
+            ).toBe('p-boris')
+            // a second call adds nothing and sends nothing
+            const files = (await filesIn(join(root, 'inbox', 'p-anna'))).length
+            await b.sync.addMembers([member])
+            expect((await filesIn(join(root, 'inbox', 'p-anna'))).length).toBe(files)
+            // the new member gets no member.added; the earlier members do
+            expect(await filesIn(join(root, 'inbox', 'p-dana')).catch(() => [])).toEqual([])
+            await a.sync.scan()
+            await c.sync.scan()
+            for (const m of [a, c]) {
+                const added = m.contents.sync?.members.find((x) => x.participantId === 'p-dana')
+                expect(added).toMatchObject({ displayName: 'Дана', addedBy: 'p-boris' })
+            }
+            // from now on every message has a copy for the new member (D-23)
+            await say(c, 'для всех, и для Даны')
+            expect(
+                (await filesIn(join(root, 'inbox', 'p-dana'))).filter((n) => n.endsWith('.bcmsg'))
+            ).toHaveLength(1)
+        })
+    })
+
+    describe('rejoin after key loss (D-15, D-32, FR-177)', () => {
+        /** Anna re-invites Boris, who lost the keys; Boris starts again from Anna's copy with new keys. */
+        async function rejoin(dir: string) {
+            const { members, root } = await group(dir)
+            const [a, b, c] = members as [Member, Member, Member]
+            // a message for the old key, which Boris never reads
+            await say(a, 'для старого ключа')
+            const fresh = await makeKeys()
+            const keys = {
+                signingPublicKey: b64(fresh.sign.publicKey),
+                encryptionPublicKey: b64(fresh.box.publicKey),
+                fingerprint: fingerprintOf(fresh.sign.publicKey, fresh.box.publicKey)
+            }
+            const oldFingerprint = b.contents.sync!.members.find(
+                (m) => m.participantId === 'p-boris'
+            )!.fingerprint
+            await a.sync.replaceKeys('p-boris', keys)
+            // Boris after the import: Anna's copy, new keys, a new local state
+            b.contents = structuredClone(a.contents)
+            b.keys = fresh.own
+            b.stateDir = join(dir, 'local', 'p-boris-rejoined')
+            await connect(b)
+            await b.sync.start()
+            await b.sync.startRejoin('p-anna')
+            return { a, b, c, root, keys, oldFingerprint }
+        }
+
+        it('the re-inviter replaces the keys at once and keeps the old ones as history', async () => {
+            await withTempDir(async (dir) => {
+                const { a, keys, oldFingerprint } = await rejoin(dir)
+                const boris = a.contents.sync!.members.find((m) => m.participantId === 'p-boris')!
+                expect(boris.fingerprint).toBe(keys.fingerprint)
+                expect(boris.previousKeys?.map((k) => k.fingerprint)).toEqual([oldFingerprint])
+            })
+        })
+
+        it("another member gets a request; until it accepts, the person's events wait (not quarantined)", async () => {
+            await withTempDir(async (dir) => {
+                const { a, b, c } = await rejoin(dir)
+                await c.sync.scan()
+                expect(c.sync.health().keyRequests).toEqual([
+                    expect.objectContaining({ participantId: 'p-boris', state: 'pending' })
+                ])
+                await say(b, 'я вернулся')
+                await a.sync.scan()
+                expect(mainThread(a.contents.discussion).messages.at(-1)?.authorId).toBe('p-boris')
+                clockMs += 20 * 60_000 // longer than the grace time
+                await c.sync.scan()
+                await c.sync.scan()
+                expect(
+                    mainThread(c.contents.discussion).messages.some((m) => m.authorId === 'p-boris')
+                ).toBe(false)
+                expect(c.sync.health().quarantined).toBe(0)
+                // Boris knows that Clara has not accepted yet; Anna (the re-inviter) has
+                await b.sync.scan()
+                expect(b.sync.health().rejoinHeardFrom).toEqual(['p-anna'])
+
+                await c.sync.decideKeys('p-boris', true)
+                expect(c.sync.health().keyRequests).toEqual([])
+                await c.sync.scan()
+                expect(
+                    mainThread(c.contents.discussion).messages.some((m) => m.authorId === 'p-boris')
+                ).toBe(true)
+                // Clara's events now reach Boris
+                await say(c, 'привет, Борис')
+                await b.sync.scan()
+                expect(b.sync.health().rejoinHeardFrom?.sort()).toEqual(['p-anna', 'p-clara'])
+                expect(mainThread(b.contents.discussion).messages.at(-1)?.authorId).toBe('p-clara')
+            })
+        })
+
+        it("a member who rejects keeps the old keys; the person's events never reach it", async () => {
+            await withTempDir(async (dir) => {
+                const { b, c, oldFingerprint } = await rejoin(dir)
+                await c.sync.scan()
+                await c.sync.decideKeys('p-boris', false)
+                expect(c.sync.health().keyRequests).toEqual([
+                    expect.objectContaining({ participantId: 'p-boris', state: 'rejected' })
+                ])
+                expect(
+                    c.contents.sync!.members.find((m) => m.participantId === 'p-boris')!.fingerprint
+                ).toBe(oldFingerprint)
+                await say(b, 'не дойдёт')
+                clockMs += 20 * 60_000
+                await c.sync.scan()
+                await c.sync.scan()
+                expect(
+                    mainThread(c.contents.discussion).messages.some((m) => m.authorId === 'p-boris')
+                ).toBe(false)
+                expect(c.sync.health().quarantined).toBe(0)
+                // the decision can still change
+                await c.sync.decideKeys('p-boris', true)
+                await c.sync.scan()
+                expect(
+                    mainThread(c.contents.discussion).messages.some((m) => m.authorId === 'p-boris')
+                ).toBe(true)
+            })
+        })
+
+        it('files for the old key are set aside, not quarantined', async () => {
+            await withTempDir(async (dir) => {
+                const { b } = await rejoin(dir)
+                clockMs += 20 * 60_000
+                await b.sync.scan()
+                await b.sync.scan()
+                expect(b.sync.health().quarantined).toBe(0)
+            })
         })
     })
 

@@ -451,3 +451,171 @@ test('release 1.4: a normal discussion does not keep the app in the tray', async
     await closeAllWindows(t)
     await exited
 })
+
+// ---- release 1.5: add members after activation (FR-176) -------------------------------------------------------------
+
+test('release 1.5: a member who did not create the discussion invites a new person (FR-176)', async () => {
+    const { a, b, shared } = await createAndJoin()
+    await send(a.win, 'Сообщение до приглашения')
+    await expect(message(b.win, 'Сообщение до приглашения')).toBeVisible({ timeout: 15_000 })
+
+    // Clara waits for an invitation in the same folder
+    const work = await dir()
+    const fileC = join(work, 'Клара', 'Планы.branchchat')
+    await fs.mkdir(join(work, 'Клара'))
+    const c = await start(await profile('p-clara', 'Клара'))
+    await menu(c.t, c.win, 'Присоединиться к обсуждению…', 'shared-wizard')
+    await chooseFolder(c.t, c.win, shared)
+    await expect(c.win.getByTestId('wizard-invitation')).toHaveAttribute('data-state', 'waiting')
+
+    // Boris opens the members, then "Пригласить участника…"
+    await b.win.getByTestId('roster-button').click()
+    await b.win.getByTestId('roster-invite').click()
+    await expect(b.win.getByTestId('shared-wizard')).toHaveAttribute('data-mode', 'invite')
+    const borisPrint = await b.win.getByTestId('wizard-own-fingerprint').textContent()
+    const clara = b.win.getByTestId('candidate').filter({ hasText: 'Клара' })
+    await expect(async () => {
+        await b.win.getByTestId('wizard-refresh').click()
+        await expect(clara).toBeVisible({ timeout: 500 })
+    }).toPass({ timeout: 10_000 })
+    // members are not offered again
+    await expect(b.win.getByTestId('candidate').filter({ hasText: 'Анна' })).toHaveCount(0)
+    await clara.getByTestId('candidate-accept').check()
+    await b.win.getByTestId('wizard-invite').click()
+    await expect(b.win.getByTestId('shared-roster')).toBeVisible()
+    await expect(b.win.getByTestId('roster-member').filter({ hasText: 'Клара' })).toHaveAttribute(
+        'data-state',
+        'invited'
+    )
+
+    // Anna learns about the new member without a question, and sees who added her
+    await a.win.getByTestId('roster-button').click()
+    const claraAtAnna = a.win.getByTestId('roster-member').filter({ hasText: 'Клара' })
+    await expect(claraAtAnna).toBeVisible({ timeout: 15_000 })
+    await expect(claraAtAnna.getByTestId('roster-added-by')).toHaveText('пригласил(а): Борис')
+    await a.win.keyboard.press('Escape')
+
+    // a message written after the invitation, before Clara imported it (D-23)
+    await send(a.win, 'Добро пожаловать, Клара')
+
+    // Clara checks Boris's fingerprint and joins
+    await expect(c.win.getByTestId('wizard-invitation')).toHaveAttribute('data-state', 'ready', {
+        timeout: 15_000
+    })
+    await expect(c.win.getByTestId('invitation-from')).toContainText('Борис')
+    await expect(c.win.getByTestId('inviter-fingerprint')).toHaveText(borisPrint!)
+    await c.t.answer({ save: [fileC] })
+    await c.win.getByTestId('wizard-join').click()
+    await expect(c.win.getByTestId('composer')).toBeVisible()
+    await expect(message(c.win, 'Сообщение до приглашения')).toBeVisible()
+    await expect(message(c.win, 'Добро пожаловать, Клара')).toBeVisible({ timeout: 15_000 })
+    await expect(b.win.getByTestId('roster-member').filter({ hasText: 'Клара' })).toHaveAttribute(
+        'data-state',
+        'joined',
+        { timeout: 15_000 }
+    )
+
+    // Clara writes; both earlier members get it
+    await send(c.win, 'Спасибо!')
+    await expect(message(a.win, 'Спасибо!')).toBeVisible({ timeout: 15_000 })
+    await expect(message(b.win, 'Спасибо!')).toBeVisible({ timeout: 15_000 })
+})
+
+// ---- release 1.5: rejoin after key loss (FR-177) -----------------------------------------------------------------------
+
+test('release 1.5: a person who lost the keys is re-invited; another member rejects, then accepts (FR-177)', async () => {
+    const { a, b, shared } = await createAndJoin()
+    const work = await dir()
+
+    // Anna invites Clara (three members)
+    const fileC = join(work, 'Клара.branchchat')
+    const c = await start(await profile('p-clara', 'Клара'))
+    await menu(c.t, c.win, 'Присоединиться к обсуждению…', 'shared-wizard')
+    await chooseFolder(c.t, c.win, shared)
+    await a.win.getByTestId('roster-button').click()
+    await a.win.getByTestId('roster-invite').click()
+    const claraCandidate = a.win.getByTestId('candidate').filter({ hasText: 'Клара' })
+    await expect(async () => {
+        await a.win.getByTestId('wizard-refresh').click()
+        await expect(claraCandidate).toBeVisible({ timeout: 500 })
+    }).toPass({ timeout: 10_000 })
+    await claraCandidate.getByTestId('candidate-accept').check()
+    await a.win.getByTestId('wizard-invite').click()
+    await a.win.getByTestId('wizard-close').click()
+    await expect(c.win.getByTestId('wizard-invitation')).toHaveAttribute('data-state', 'ready', {
+        timeout: 15_000
+    })
+    await c.t.answer({ save: [fileC] })
+    await c.win.getByTestId('wizard-join').click()
+    await expect(c.win.getByTestId('composer')).toBeVisible()
+    await send(b.win, 'Борис до потери ключа')
+    await expect(message(c.win, 'Борис до потери ключа')).toBeVisible({ timeout: 15_000 })
+
+    // Boris loses his keys and his settings: a new profile with a new participant ID
+    await b.t.close()
+    apps.splice(apps.indexOf(b.t), 1)
+    const fileB2 = join(work, 'Борис-снова.branchchat')
+    const b2 = await start(await profile('p-boris-new', 'Борис'))
+    await menu(b2.t, b2.win, 'Присоединиться к обсуждению…', 'shared-wizard')
+    await chooseFolder(b2.t, b2.win, shared)
+    const borisNewPrint = await b2.win.getByTestId('wizard-own-fingerprint').textContent()
+
+    // Anna re-invites him with the new key
+    await a.win.getByTestId('roster-button').click()
+    await a.win
+        .getByTestId('roster-member')
+        .filter({ hasText: 'Борис' })
+        .getByTestId('roster-reinvite')
+        .click()
+    await expect(a.win.getByTestId('shared-wizard')).toHaveAttribute('data-mode', 'reinvite')
+    const newKey = a.win.getByTestId('candidate').filter({ hasText: borisNewPrint! })
+    await expect(async () => {
+        await a.win.getByTestId('wizard-refresh').click()
+        await expect(newKey).toBeVisible({ timeout: 500 })
+    }).toPass({ timeout: 10_000 })
+    // the old key of Boris is not offered
+    await expect(a.win.getByTestId('candidate')).toHaveCount(1)
+    await newKey.getByTestId('candidate-accept').check()
+    await a.win.getByTestId('wizard-reinvite').click()
+    await expect(a.win.getByTestId('shared-roster')).toBeVisible()
+    await a.win.getByTestId('wizard-close').click()
+
+    // Boris imports the re-invitation and has the whole history
+    await expect(b2.win.getByTestId('wizard-invitation')).toHaveAttribute('data-state', 'ready', {
+        timeout: 15_000
+    })
+    await expect(b2.win.getByTestId('invitation-rejoin')).toBeVisible()
+    await b2.t.answer({ save: [fileB2] })
+    await b2.win.getByTestId('wizard-join').click()
+    await expect(b2.win.getByTestId('composer')).toBeVisible()
+    await expect(message(b2.win, 'Борис до потери ключа')).toBeVisible()
+    // he has his old participant ID again
+    const settings = JSON.parse(await fs.readFile(join(b2.t.userData, 'settings.json'), 'utf8'))
+    expect(settings.participantId).toBe('p-boris')
+
+    // Clara: a request with the new fingerprint in the status line; she rejects it
+    const request = c.win.getByTestId('key-request')
+    await expect(request).toHaveAttribute('data-state', 'pending', { timeout: 15_000 })
+    await expect(request.getByTestId('key-request-fingerprint')).toHaveText(borisNewPrint!)
+    await request.getByTestId('key-reject').click()
+    await expect(request).toHaveAttribute('data-state', 'rejected')
+
+    // messages flow between Anna and Boris; Clara does not get Boris's message
+    await send(b2.win, 'Я снова здесь')
+    await expect(message(a.win, 'Я снова здесь')).toBeVisible({ timeout: 15_000 })
+    await send(a.win, 'С возвращением')
+    await expect(message(b2.win, 'С возвращением')).toBeVisible({ timeout: 15_000 })
+    await expect(message(c.win, 'С возвращением')).toBeVisible({ timeout: 15_000 })
+    await c.win.getByTestId('sync-check').click()
+    await expect(message(c.win, 'Я снова здесь')).toHaveCount(0)
+    // Boris sees that Clara has not accepted his new keys
+    await expect(b2.win.getByTestId('sync-status')).toContainText('Клара', { timeout: 15_000 })
+
+    // Clara changes her mind and accepts: the waiting message arrives, and hers reach Boris
+    await request.getByTestId('key-accept').click()
+    await expect(c.win.getByTestId('key-request')).toHaveCount(0)
+    await expect(message(c.win, 'Я снова здесь')).toBeVisible({ timeout: 15_000 })
+    await send(c.win, 'Принято')
+    await expect(message(b2.win, 'Принято')).toBeVisible({ timeout: 15_000 })
+    await expect(b2.win.getByTestId('sync-status')).toHaveCount(0, { timeout: 15_000 })
+})
