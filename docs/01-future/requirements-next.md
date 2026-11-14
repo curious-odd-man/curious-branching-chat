@@ -1,6 +1,6 @@
 # BranchChat: requirements for release 2
 
-**Status:** Draft 3 (answers of draft 2 applied; one question in Section 5)  
+**Status:** Ready for an implementation plan (draft 4; all questions answered)  
 **Date:** 2026-11-14  
 **Base:** `requirements.md` (revision 13) stays valid. This document adds requirements; where it changes an earlier
 requirement, it says so.  
@@ -142,8 +142,12 @@ ADR-003 is accepted: option C, variant C1 (a local SQLite library; `.branchchat`
   `member.limits.set` (`{ "maxFileMb": n }`; the newest event of a member wins). A member sends it when the limit
   changes, after joining, and when a new member is added. The value is kept in the local sync state, not in the file.
   Before sending an attachment, BranchChat compares the size of the message (with all parts) with the limits of the
-  other members. If it is larger for some of them, the action of Q-14 happens; the message names those members. A
-  member with no known limit (an older version) counts with the default of 30 MB.
+  other members. If it is larger for some of them, BranchChat warns and names them ("Анна и Борис не получат этот
+  файл: их предел 30 МБ"); the person can still send (Q-14). A member with no known limit (an older version) counts
+  with the default of 30 MB.
+- **FR-268a.** A member whose limit is smaller than an attachment sees, in place of the attachment, "Файл слишком
+  большой для ваших настроек (N МБ)" with a link to the setting. After the person raises the limit, the file is read
+  at the next scan. This works for 30 days: after that, the sender deletes copies without a receipt (D-34).
 - **FR-269.** An older version that gets `member.limits.set` keeps it waiting and shows "Обновите приложение"
   (`sync-protocol.md`, section 10); no data is lost. The protocol version stays 1.
 - **FR-266.** Attachments are stored by content hash; the same file attached twice is stored once.
@@ -302,5 +306,5 @@ only warn in release 2; encrypted backups together with the key backup (`feature
   setting.
 - Recommendation: (c). The receiving side already knows when a file is over its limit (FR-166), so it can say so.
 
-**Answer:** c
+**Answer:** c (see FR-268 and FR-268a)
 
