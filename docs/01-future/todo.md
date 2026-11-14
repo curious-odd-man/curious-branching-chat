@@ -1,3 +1,2 @@
-- google drive sync
 - multiple files support in same window
 - fix outdated packages
