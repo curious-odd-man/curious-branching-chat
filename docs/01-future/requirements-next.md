@@ -1,6 +1,6 @@
 # BranchChat: requirements for release 2
 
-**Status:** Draft 1 (answer the questions in Section 5)  
+**Status:** Draft 2 (answers of draft 1 applied; three new questions in Section 5)  
 **Date:** 2026-11-14  
 **Base:** `requirements.md` (revision 13) stays valid. This document adds requirements; where it changes an earlier
 requirement, it says so.  
@@ -38,39 +38,52 @@ refuse such a file with the existing "made by a newer version" message (FR-016).
 
 ### 2.1 Local storage, export and import (ADR-003)
 
-The rules below assume ADR-003 option C. They change when Q-01 of the ADR is answered.
+ADR-003 is accepted: option C, variant C1 (a local SQLite library; `.branchchat` only for export and import).
 
-- **FR-201.** BranchChat stores all discussions of a Windows user in a local library in `%APPDATA%\BranchChat`. A
-  change (a message, a read mark, a status) writes only the changed data. The write time does not grow with the
-  number of messages or images.
+- **FR-201.** BranchChat stores all discussions of a Windows user in a local library in `%APPDATA%\BranchChat`: a
+  SQLite database (WAL mode) and a `blobs` folder with images and attachments, one file per content hash. A change (a
+  message, a read mark, a status) writes only the changed data. The write time does not grow with the number of
+  messages or images.
 - **FR-202.** A write is atomic: after a crash or a power cut, the library has the state before or after the change,
   never a mix.
 - **FR-203.** "Экспортировать…" writes a discussion as a `.branchchat` file in the current export format, with all
   images and attachments. The file passes the same validation as an imported file. This replaces "Отправить копию…"
   (FR-170): a synchronized discussion is exported without sync data.
-- **FR-204.** "Импортировать…", drag and drop, and a double-click on a `.branchchat` file import a discussion. Import
-  validates the file as today (FR-125), migrates older schema versions, and does not change the file.
-- **FR-205.** The import of a discussion that is already in the library follows ADR-003 Q-03.
-- **FR-206.** At the first start of the new version, BranchChat offers to import the known files (recent list, sync
-  registry). Synchronized discussions keep their roster, keys, and sync state. The original files are not deleted.
-- **FR-207.** Backups of the library follow ADR-003 Q-02. "Восстановить из резервной копии…" restores a backup after
-  a confirmation.
+- **FR-204.** "Импортировать…", drag and drop, and a double-click on a `.branchchat` file import a discussion, then
+  open it. Import validates the file as today (FR-125), migrates older schema versions, and never changes the file.
+- **FR-205.** The import of a discussion that is already in the library (same document ID) merges: new messages,
+  branches, participants, images, and read marks are added; nothing is removed; for branch titles and states the later
+  change wins (ADR-003, "Merge on import"). The import says how many messages it added. A synchronized discussion
+  follows Q-11.
+- **FR-206.** At the first start of the new version, BranchChat shows one question with the known files (recent list,
+  sync registry), all selected. Each selected file is imported. Synchronized discussions keep their roster, keys, and
+  sync state. The original files are not deleted.
+- **FR-207.** BranchChat makes a backup of the library once a day and before each change of the library schema: in
+  `%APPDATA%\BranchChat\backups` and, if set, in a folder that the person chooses in Settings (for example in
+  Documents or a cloud folder). Each place keeps the last 7 backups. "Резервная копия сейчас" makes one at once.
+  "Восстановить из резервной копии…" restores a backup after a confirmation; the current library is kept as a backup
+  first.
+- **FR-209.** Settings show that backups contain the messages without encryption, and that the private keys are not in
+  a backup.
 - **FR-208.** At start, BranchChat checks the library. If it is damaged, BranchChat says so and offers the last good
   backup. It never deletes a damaged library.
 - Changes to earlier requirements: FR-007 and FR-013 (save to the file on each change) apply to the library; FR-117
   (copy changed elsewhere), FR-154 (detached copy), and FR-168 (moved file) do not apply to library discussions.
 
-### 2.2 Search in a discussion (1)
+### 2.2 Search (1)
 
 - **FR-211.** Ctrl+F (and a search button) opens a search field in the discussion. The search finds messages in all
   branches, open and closed.
+- **FR-215.** Ctrl+Shift+F (and a field above the discussion list) searches in **all** discussions of the library.
+  Results are grouped by discussion; a click opens the discussion, the branch, and the message.
 - **FR-212.** The search ignores case, treats ё and е as the same letter, and finds words that start with the search
   text ("ёжик" finds "ёжика").
 - **FR-213.** Results show the author, the time, the branch, and the text around the match. Enter and Shift+Enter (or
   arrows) go to the next and the previous result; the window opens the branch and highlights the match.
 - **FR-214.** The search reads the text of messages, branch titles, and file names of attachments; not the text inside
   images or attachments.
-- **NFR-201.** A search in a discussion of 20,000 messages shows the first results in less than 0.5 s.
+- **NFR-201.** A search in a discussion of 20,000 messages, or in a library of 100,000 messages, shows the first
+  results in less than 0.5 s.
 
 ### 2.3 Several discussions in one window (3)
 
@@ -79,13 +92,15 @@ The rules below assume ADR-003 option C. They change when Q-01 of the ADR is ans
 - **FR-222.** The list can be sorted by the last message (default) or by name, and filtered by text.
 - **FR-223.** The list can be hidden to give the discussion the whole width. The width and the state are kept.
 - **FR-224.** A discussion keeps its position (branch, scroll) when the person switches to another one and back.
-- **FR-225.** Rules for more than one window follow Q-03.
+- **FR-225.** There is one main window. "Открыть в новом окне" in the list opens a discussion in a separate window
+  (for example to see two side by side). A discussion that is open in a window is not opened a second time; its window
+  comes to the front.
 - Change: the "recent files" list (section 5.11) becomes this list.
 
 ### 2.4 Reactions (8)
 
-- **FR-231.** A person can add a reaction to any message: one of a fixed set of emoji (Q-04). A second click on the
-  same reaction removes it. A person can give several different reactions to one message.
+- **FR-231.** A person can add a reaction to any message: one of 👍 👎 ❤️ 😂 😮 😢 ✅. A second click on the same
+  reaction removes it. A person can give several different reactions to one message.
 - **FR-232.** Under the message, each reaction shows the emoji and the count; a mouse-over shows who reacted.
 - **FR-233.** Reactions are stored in the discussion and exported. In a synchronized discussion, reactions are
   synchronized with a new event; the last change of a person wins for each emoji (as for statuses, D-05).
@@ -111,13 +126,16 @@ The rules below assume ADR-003 option C. They change when Q-01 of the ADR is ans
 - **FR-261.** A person can attach files to a message: with a button, drag and drop, or paste. Images keep their
   current behavior.
 - **FR-262.** A message shows each attachment with the file name, the size, and an icon. "Сохранить как…" saves a
-  copy. "Открыть" saves the file to a temporary folder and opens it with Windows, after a warning for file types that
-  can run code (Q-06).
+  copy. "Открыть" saves the file to a temporary folder and opens it with Windows.
+- **FR-267.** Before "Открыть", BranchChat warns for files that can run code: `.exe`, `.bat`, `.cmd`, `.ps1`, `.js`,
+  `.vbs`, `.msi`, `.lnk`, `.docm`, `.xlsm`. The warning names the type and the author. No type is blocked; the person
+  decides. The list is part of the app (not a setting).
 - **FR-263.** A saved or opened file gets the Windows "downloaded from the internet" mark (Mark of the Web), so Windows
   and Office apply their protections.
 - **FR-264.** BranchChat never opens or runs an attachment by itself.
-- **FR-265.** The largest attachment follows Q-05. In a synchronized discussion, attachments travel in parts, as
-  images do (D-30), and the file size limit of FR-166 applies.
+- **FR-265.** The largest attachment is a setting: "Наибольший размер вложения", default 100 MB. A larger file is
+  refused with a message that names the limit. In a synchronized discussion, attachments travel in parts, as images
+  do (D-30), and the receiver's file size limit of FR-166 also applies (Q-12).
 - **FR-266.** Attachments are stored by content hash; the same file attached twice is stored once.
 
 ### 2.8 Branch map (15)
@@ -127,9 +145,10 @@ The rules below assume ADR-003 option C. They change when Q-01 of the ADR is ans
 - **FR-272.** A click on a branch opens it. The current branch is marked.
 - **FR-273.** The map can show only open branches, or branches with unread messages.
 
-### 2.9 Same person on two computers (21)
+### 2.9 Same person on two computers (21) — later, not in release 2
 
-This item needs its own design document before requirements can be final. The points below are the goals.
+Decision (Q-10): not in release 2. This item needs its own design document before requirements can be final. The
+points below are the goals only.
 
 - **FR-281.** A person can use the same identity on two or more computers. Messages written on one computer appear on
   the others as the same author.
@@ -143,10 +162,10 @@ This item needs its own design document before requirements can be final. The po
 
 - **FR-291.** All texts of the interface exist in Russian and English: menus, dialogs, errors, notifications, the tray
   menu, and the installer.
-- **FR-292.** Settings have "Язык / Language". The default follows the Windows display language: Russian for Russian,
-  English for all others (Q-07).
-- **FR-293.** A change of the language applies without a restart, or with one question to restart (Q-07).
-- **FR-294.** The user guide and the release notes exist in both languages (Q-08).
+- **FR-292.** Settings have "Язык / Language". The default is Russian, whatever the Windows language is.
+- **FR-293.** A change of the language applies after a restart of the app; Settings offer "Перезапустить сейчас".
+- **FR-294.** Documents do not change: the documents in `docs/` stay in English, and the user guide stays in Russian
+  (an English user guide is separate work).
 - **FR-295.** Text in discussions is never translated.
 
 ### 2.11 Text size (24)
@@ -165,9 +184,10 @@ This item needs its own design document before requirements can be final. The po
 - **FR-321.** BranchChat writes a log file in `%APPDATA%\BranchChat\logs`: start, errors, sync, updates. The size is
   limited (for example 5 files of 2 MB).
 - **FR-322.** The log contains no message text, no names of discussions, no keys, and no file contents. File paths and
-  participant IDs are allowed (Q-09).
+  participant IDs are allowed.
 - **FR-323.** "Справка > Сохранить отчёт…" saves a ZIP with the log files, the app version, the Windows version, the
-  settings without the name, and the sync state without keys. The dialog shows what is in the report.
+  settings without the name, and the sync state without keys. The dialog shows what is in the report, and says that
+  file paths can contain the Windows user name.
 - **FR-324.** A log write error never stops the app (see the EPIPE fix of 2026-11-14).
 
 ## 3. Non-functional requirements
@@ -175,8 +195,8 @@ This item needs its own design document before requirements can be final. The po
 - **NFR-202.** Sending a message in a discussion of 20,000 messages and 1 GB of images: saved in less than 0.1 s.
 - **NFR-203.** Opening a discussion of 20,000 messages: the first messages visible in less than 1 s.
 - **NFR-204.** Import and export of a discussion of 20,000 messages without images: less than 5 s each.
-- **NFR-205.** All new texts follow the existing rules: Russian interface texts in `ru.ts` (and `en.ts`), no text in
-  code.
+- **NFR-205.** All new texts follow the existing rules: interface texts in `ru.ts` and `en.ts`, no text in code. A
+  test checks that both files have the same keys.
 - **NFR-206.** All new features work with the keyboard and with Windows high-contrast themes, as today.
 
 ## 4. Proposed order
@@ -189,7 +209,7 @@ This item needs its own design document before requirements can be final. The po
 | 4    | 2.8 branch map, 2.4 reactions                                     | Reactions need a new file schema and sync event                  |
 | 5    | 2.7 file attachments                                              | New file schema; security review of opening files                |
 | 6    | 2.10 English interface                                            | Best after the texts of steps 1–5 are written                    |
-| 7    | 2.9 same person on two computers                                  | Needs its own design and a security review                       |
+| —    | 2.9 same person on two computers                                  | Later, not in release 2 (Q-10)                                   |
 
 ## 5. Questions
 
@@ -224,7 +244,7 @@ synchronized discussions.
 **Q-07.** Language (2.10): the default when Windows has another language than Russian or English (for example
 Latvian): English? And may a language change need a restart of the window?
 
-**Answer:** ok to require restart. use always russian by default. 
+**Answer:** ok to require restart. use always russian by default.
 
 **Q-08.** Language (2.10): must the documents in `docs/` (in English now) and the user guide (Russian now) exist in
 both languages, or only the user guide?
@@ -240,3 +260,22 @@ participant IDs? Recommendation: yes, and the report dialog says so.
 is the largest and the riskiest item.
 
 **Answer:** keep it later.
+
+**Q-11 (new).** Import into a synchronized discussion: see ADR-003 Q-08. Recommendation: refuse the import; the shared
+folder is the only source of a synchronized discussion.
+
+**Answer:** refuse the import
+
+**Q-12 (new).** Attachments in a synchronized discussion: the sender's limit (default 100 MB) can be larger than a
+receiver's file size limit (FR-166, default 30 MB). Then the receiver never gets the file. Should the sender see a
+warning before sending an attachment larger than 30 MB in a synchronized discussion ("некоторые участники могут не
+получить файл")? Recommendation: yes.
+
+**Answer:**  should we add this value in synchronized chat metadata? then sender knows other users size limit upfront.
+
+**Q-13 (new).** Backups: the folder of the person can be a cloud folder. A backup contains all messages without
+encryption. Should the app encrypt the backup in the person's folder (a passphrase), or only warn? Recommendation:
+only warn in release 2; encrypted backups together with the key backup (`feature-ideas.md`, item 2) later.
+
+**Answer:** warn only
+
