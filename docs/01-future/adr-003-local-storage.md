@@ -1,8 +1,8 @@
 # ADR-003: Local storage of discussions
 
-**Status:** Accepted (option C, variant C1; two detail questions open in Section 9)  
+**Status:** Accepted (option C, variant C1; all questions answered)  
 **Date:** 2026-11-14 (accepted 2026-11-14)  
-**Context documents:** `requirements.md` (revision 13), `requirements-next.md` (draft 1), `performance.md`,
+**Context documents:** `requirements.md` (revision 13), `requirements-next.md` (draft 3), `performance.md`,
 `adr-002-sync.md`, `sync-protocol.md`  
 **Relation to ADR-001 and ADR-002:** Changes how a discussion is stored on the computer. The technology (Electron +
 TypeScript) and the sync protocol do not change.
@@ -117,14 +117,16 @@ Notes:
 
 **Option C, variant C1: a local SQLite library with `node:sqlite`; `.branchchat` ZIP only for export and import.**
 
-| Topic                        | Decision                                                                                                                 |
-|------------------------------|--------------------------------------------------------------------------------------------------------------------------|
-| A `.branchchat` file on disk | Opening it imports a copy into the library. The app never changes the file again. Sharing is an explicit export (Q-01)   |
-| Backups                      | Automatic daily backup in `%APPDATA%\BranchChat\backups` (last 7), and also into a folder that the person chooses (Q-02) |
-| Import of a known discussion | Merge by ID: new messages, branches, and read marks from the file are added; nothing is removed (Q-03)                   |
-| Journal mode                 | WAL (Q-04)                                                                                                               |
-| Images and attachments       | Files in `%APPDATA%\BranchChat\blobs\<sha256>`, not BLOBs; the database keeps the hash, type, and size (Q-05)            |
-| Migration                    | At the first start, one question with the list of known files, all selected (Q-06)                                       |
+| Topic                                 | Decision                                                                                                                 |
+|---------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| A `.branchchat` file on disk          | Opening it imports a copy into the library. The app never changes the file again. Sharing is an explicit export (Q-01)   |
+| Backups                               | Automatic daily backup in `%APPDATA%\BranchChat\backups` (last 7), and also into a folder that the person chooses (Q-02) |
+| Import of a known discussion          | Merge by ID: new messages, branches, and read marks from the file are added; nothing is removed (Q-03)                   |
+| Journal mode                          | WAL (Q-04)                                                                                                               |
+| Images and attachments                | Files in `%APPDATA%\BranchChat\blobs\<sha256>`, not BLOBs; the database keeps the hash, type, and size (Q-05)            |
+| Migration                             | At the first start, one question with the list of known files, all selected (Q-06)                                       |
+| Unused blob files                     | Deleted at start when no database row uses them and they are older than 7 days; backups keep their own copies (Q-07)     |
+| Import into a synchronized discussion | Refused: the shared folder is the only source of a synchronized discussion (Q-08)                                        |
 
 Reasons:
 
@@ -185,6 +187,7 @@ copy while it is open. Option A keeps most of today's cost and needs its own cra
 - Branch title and state: the change with the later stamp wins (`titleSet`, `statusSet`, schema version 2), as in the
   sync protocol. A file of schema version 1 has no stamps; then the library keeps its value.
 - Images and attachments: added by hash.
+- A synchronized discussion is never merged from a file (Q-08): the import is refused with a message that says why.
 - The merge is one transaction. The result passes the same integrity check as an imported file.
 
 ### Backups (Q-02)
@@ -290,4 +293,5 @@ messages then sent to the members through the shared folder?
 |------------|------------------------------------------------------------------------------------------------------|
 | 2026-11-14 | Proposed: options A to E compared                                                                    |
 | 2026-11-14 | Accepted: option C, variant C1; backups (b); merge (c); WAL; blob files; migration with one question |
+| 2026-11-14 | Q-07: unused blob files deleted after 7 days; Q-08: no import into a synchronized discussion         |
 

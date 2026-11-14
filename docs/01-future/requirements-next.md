@@ -1,6 +1,6 @@
 # BranchChat: requirements for release 2
 
-**Status:** Draft 2 (answers of draft 1 applied; three new questions in Section 5)  
+**Status:** Draft 3 (answers of draft 2 applied; one question in Section 5)  
 **Date:** 2026-11-14  
 **Base:** `requirements.md` (revision 13) stays valid. This document adds requirements; where it changes an earlier
 requirement, it says so.  
@@ -23,7 +23,7 @@ Size: S 1–2 days, M 3–7 days, L 1–3 weeks, XL more than 3 weeks (one devel
 | 2.4  | Reactions                         | 8    | M    | yes         | yes           |
 | 2.5  | Day separators and "jump to date" | 11   | S    | —           | —             |
 | 2.6  | Drafts kept after a restart       | 12   | S    | —           | —             |
-| 2.7  | File attachments                  | 14   | L    | yes         | —             |
+| 2.7  | File attachments                  | 14   | L    | yes         | yes (FR-268)  |
 | 2.8  | Branch map                        | 15   | M    | —           | —             |
 | 2.9  | Same person on two computers      | 21   | XL   | yes         | yes           |
 | 2.10 | English user interface            | 23   | M    | —           | —             |
@@ -53,8 +53,9 @@ ADR-003 is accepted: option C, variant C1 (a local SQLite library; `.branchchat`
   open it. Import validates the file as today (FR-125), migrates older schema versions, and never changes the file.
 - **FR-205.** The import of a discussion that is already in the library (same document ID) merges: new messages,
   branches, participants, images, and read marks are added; nothing is removed; for branch titles and states the later
-  change wins (ADR-003, "Merge on import"). The import says how many messages it added. A synchronized discussion
-  follows Q-11.
+  change wins (ADR-003, "Merge on import"). The import says how many messages it added.
+- **FR-205a.** The import of a file into a synchronized discussion that is in the library (same document ID) is
+  refused. The message says that a shared discussion gets its messages only through the shared folder.
 - **FR-206.** At the first start of the new version, BranchChat shows one question with the known files (recent list,
   sync registry), all selected. Each selected file is imported. Synchronized discussions keep their roster, keys, and
   sync state. The original files are not deleted.
@@ -64,7 +65,8 @@ ADR-003 is accepted: option C, variant C1 (a local SQLite library; `.branchchat`
   "Восстановить из резервной копии…" restores a backup after a confirmation; the current library is kept as a backup
   first.
 - **FR-209.** Settings show that backups contain the messages without encryption, and that the private keys are not in
-  a backup.
+  a backup. When the person chooses a backup folder, BranchChat warns once that a cloud folder stores the messages
+  readable for the cloud provider. Backups are not encrypted in release 2.
 - **FR-208.** At start, BranchChat checks the library. If it is damaged, BranchChat says so and offers the last good
   backup. It never deletes a damaged library.
 - Changes to earlier requirements: FR-007 and FR-013 (save to the file on each change) apply to the library; FR-117
@@ -135,7 +137,15 @@ ADR-003 is accepted: option C, variant C1 (a local SQLite library; `.branchchat`
 - **FR-264.** BranchChat never opens or runs an attachment by itself.
 - **FR-265.** The largest attachment is a setting: "Наибольший размер вложения", default 100 MB. A larger file is
   refused with a message that names the limit. In a synchronized discussion, attachments travel in parts, as images
-  do (D-30), and the receiver's file size limit of FR-166 also applies (Q-12).
+  do (D-30), and the receiver's file size limit of FR-166 also applies.
+- **FR-268.** In a synchronized discussion, each member tells the others its file size limit (FR-166) with a new event
+  `member.limits.set` (`{ "maxFileMb": n }`; the newest event of a member wins). A member sends it when the limit
+  changes, after joining, and when a new member is added. The value is kept in the local sync state, not in the file.
+  Before sending an attachment, BranchChat compares the size of the message (with all parts) with the limits of the
+  other members. If it is larger for some of them, the action of Q-14 happens; the message names those members. A
+  member with no known limit (an older version) counts with the default of 30 MB.
+- **FR-269.** An older version that gets `member.limits.set` keeps it waiting and shows "Обновите приложение"
+  (`sync-protocol.md`, section 10); no data is lost. The protocol version stays 1.
 - **FR-266.** Attachments are stored by content hash; the same file attached twice is stored once.
 
 ### 2.8 Branch map (15)
@@ -273,9 +283,24 @@ warning before sending an attachment larger than 30 MB in a synchronized discuss
 
 **Answer:**  should we add this value in synchronized chat metadata? then sender knows other users size limit upfront.
 
+**Result:** yes, see FR-268 and FR-269. The limit travels as a new event type, not as a new field in `profile.updated`
+or in `sync.json`: version 1.5 checks known events and the roster strictly and would refuse a file with an unknown
+field, but it keeps an event of an unknown type waiting and shows "Обновите приложение".
+
 **Q-13 (new).** Backups: the folder of the person can be a cloud folder. A backup contains all messages without
 encryption. Should the app encrypt the backup in the person's folder (a passphrase), or only warn? Recommendation:
 only warn in release 2; encrypted backups together with the key backup (`feature-ideas.md`, item 2) later.
 
 **Answer:** warn only
+
+**Q-14 (new).** An attachment is larger than the file size limit of some members (FR-268). What happens?
+
+- (a) a warning that names those members ("Анна и Борис не получат этот файл: их предел 30 МБ"), and the person can
+  still send;
+- (b) the attachment is refused until those members raise their limit;
+- (c) (a), and the members who did not get the file see "Файл слишком большой для ваших настроек" with a link to the
+  setting.
+- Recommendation: (c). The receiving side already knows when a file is over its limit (FR-166), so it can say so.
+
+**Answer:** c
 
