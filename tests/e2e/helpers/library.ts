@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test'
-import { DatabaseSync } from 'node:sqlite'
+import type * as Sqlite from 'node:sqlite'
 import { basename, join } from 'node:path'
 import type { TestApp } from './app'
 import { readEntries, type SavedDiscussion, type SavedThread } from './readFile'
@@ -36,6 +36,13 @@ export async function exportOpen(t: TestApp, win: Page, file: string): Promise<v
     const r = await win.evaluate(() => window.branchchat.exportDiscussion())
     expect(r).toEqual({ ok: true, data: true })
 }
+
+/**
+ * `node:sqlite` exists only with the `node:` prefix. The Playwright loader on Windows does not know such a module and
+ * fails on a static import, so it is taken from Node directly.
+ */
+const { DatabaseSync } = process.getBuiltinModule('node:sqlite') as typeof Sqlite
+type DatabaseSync = Sqlite.DatabaseSync
 
 interface Row {
     [key: string]: string | number | null
