@@ -22,11 +22,17 @@ export class Database {
 
     constructor(readonly path: string) {
         this.db = new DatabaseSync(path)
-        this.exec('PRAGMA journal_mode = WAL')
-        this.exec('PRAGMA synchronous = NORMAL')
-        this.exec('PRAGMA foreign_keys = ON')
-        this.exec('PRAGMA trusted_schema = OFF')
-        this.exec('PRAGMA busy_timeout = 5000')
+        try {
+            this.exec('PRAGMA busy_timeout = 5000')
+            this.exec('PRAGMA journal_mode = WAL')
+            this.exec('PRAGMA synchronous = NORMAL')
+            this.exec('PRAGMA foreign_keys = ON')
+            this.exec('PRAGMA trusted_schema = OFF')
+        } catch (err) {
+            // a damaged file: release it, so it can be renamed (Windows locks an open file)
+            this.db.close()
+            throw err
+        }
     }
 
     exec(sql: string): void {

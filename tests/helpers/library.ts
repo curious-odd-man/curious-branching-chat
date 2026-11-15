@@ -5,10 +5,22 @@ import {
     type SessionDeps,
     type SessionStore
 } from '../../src/main/application/documentSession'
+import { sep } from 'node:path'
 import { DiscussionStore, LibraryService, openLibrary } from '../../src/main/library'
+import { onTempDirRemove } from './fixtures'
 
 const libraries = new Map<string, LibraryService>()
 const byDiscussion = new Map<string, LibraryService>()
+
+// the libraries in a test folder are closed before the folder is removed (Windows cannot remove an open database)
+onTempDirRemove((dir) => {
+    for (const [libDir, lib] of [...libraries]) {
+        if (libDir !== dir && !libDir.startsWith(dir + sep)) continue
+        lib.close()
+        libraries.delete(libDir)
+        for (const [id, l] of [...byDiscussion]) if (l === lib) byDiscussion.delete(id)
+    }
+})
 
 /** The library in a test folder (one per folder, opened on first use). */
 export async function libraryIn(dir: string): Promise<LibraryService> {

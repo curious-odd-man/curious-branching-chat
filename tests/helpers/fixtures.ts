@@ -30,11 +30,19 @@ export const para = (...content: RichNode[]): RichNode => ({ type: 'paragraph', 
 export const richDoc = (...content: RichNode[]): RichDoc => ({ type: 'doc', content })
 export const simple = (t: string): RichDoc => richDoc(para(text(t)))
 
+const beforeRemove: Array<(dir: string) => void> = []
+
+/** Runs before a test folder is removed (for example: close the databases in it; Windows cannot remove an open file). */
+export function onTempDirRemove(hook: (dir: string) => void): void {
+    beforeRemove.push(hook)
+}
+
 export async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
     const dir = await mkdtemp(join(tmpdir(), 'branchchat-test-'))
     try {
         return await fn(dir)
     } finally {
+        for (const hook of beforeRemove) hook(dir)
         // retried: on Windows a file can stay locked for a moment after it was closed; never fail a test over cleanup
         await rm(dir, { recursive: true, force: true, maxRetries: 30, retryDelay: 200 }).catch(
             () => undefined

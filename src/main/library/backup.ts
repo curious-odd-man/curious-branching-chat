@@ -263,7 +263,7 @@ export async function replaceDamagedLibrary(
     const stamp = backupName(now)
     const kept = join(appDir, `library.damaged-${stamp}.sqlite`)
     for (const suffix of ['', '-wal', '-shm'])
-        await fs.rename(join(appDir, LIBRARY_FILE + suffix), kept + suffix).catch(() => undefined)
+        await renameWithRetry(join(appDir, LIBRARY_FILE + suffix), kept + suffix)
     if (backup) await copyBackupInto(appDir, backup)
     return kept
 }
@@ -317,6 +317,22 @@ function viewOf(path: string, info: BackupInfoFile): Omit<BackupView, 'place'> {
 function backupName(d: Date): string {
     const p = (n: number): string => String(n).padStart(2, '0')
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`
+}
+
+/** A missing file is fine (-wal, -shm); Windows can hold a closed file for a moment, so a lock is retried. */
+async function renameWithRetry(from: string, to: string): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            await fs.rename(from, to)
+            return
+        } catch (err) {
+            const code = (err as NodeJS.ErrnoException).code
+            if (code === 'ENOENT') return
+            if ((code !== 'EBUSY' && code !== 'EPERM' && code !== 'EACCES') || attempt >= 10)
+                throw err
+            await new Promise((r) => setTimeout(r, 100 * (attempt + 1)))
+        }
+    }
 }
 
 async function exists(path: string): Promise<boolean> {
