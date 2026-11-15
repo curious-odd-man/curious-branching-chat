@@ -59,14 +59,14 @@ Electron, Node built-ins or `main/`.
 
 `%APPDATA%\BranchChat` (in development and tests: the profile folder):
 
-| Path                                  | Content                                                                    |
-|---------------------------------------|----------------------------------------------------------------------------|
-| `library.sqlite` (+ `-wal`, `-shm`)   | all discussions (SQLite, WAL), the search index                            |
-| `blobs\<2 hex>\<sha256>`              | images, one file per content hash                                          |
-| `backups\<date>\`, `backups\blobs\`    | the last 7 backups and their images (FR-207)                               |
-| `settings.json`, `keys\`, `sync\`      | settings, encryption keys, sync registry and states                        |
-| `logs\`                               | log files (release 2.1)                                                    |
-| `recent.json`                         | the recent files of release 1.x, read once for the migration (FR-206)      |
+| Path                                | Content                                                               |
+|-------------------------------------|-----------------------------------------------------------------------|
+| `library.sqlite` (+ `-wal`, `-shm`) | all discussions (SQLite, WAL), the search index                       |
+| `blobs\<2 hex>\<sha256>`            | images, one file per content hash                                     |
+| `backups\<date>\`, `backups\blobs\` | the last 7 backups and their images (FR-207)                          |
+| `settings.json`, `keys\`, `sync\`   | settings, encryption keys, sync registry and states                   |
+| `logs\`                             | log files (release 2.1)                                               |
+| `recent.json`                       | the recent files of release 1.x, read once for the migration (FR-206) |
 
 `.branchchat` files are only for import and export.
 
