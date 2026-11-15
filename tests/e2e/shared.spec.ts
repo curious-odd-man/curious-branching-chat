@@ -152,7 +152,14 @@ test('create, join, and write in both directions through the shared folder (FR-1
         e.isFile()
     )
     for (const f of files) {
-        const content = await fs.readFile(join(f.parentPath, f.name))
+        // both apps keep running: a receipt can be processed and removed between the listing and the read
+        const content = await fs
+            .readFile(join(f.parentPath, f.name))
+            .catch((err: NodeJS.ErrnoException) => {
+                if (err.code === 'ENOENT') return null
+                throw err
+            })
+        if (content === null) continue
         expect(content.includes(Buffer.from('Привет'))).toBe(false)
         expect(f.name).not.toMatch(/\.(tmp|branchchat|sqlite)$/)
     }
