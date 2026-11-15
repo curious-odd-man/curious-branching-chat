@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { makePng } from './helpers/png'
+import { exportOpen, libraryList, newDiscussion, readLibrary } from './helpers/library'
 
 // Two (or three) application instances, each with its own profile, and one temporary folder as the shared folder.
 // Scans run every 0.5 s in test builds with BRANCHCHAT_E2E_SCAN_MS.
@@ -67,7 +68,10 @@ async function send(win: Page, text: string): Promise<void> {
 
 const message = (win: Page, text: string) => win.getByTestId('message').filter({ hasText: text })
 
-/** Anna creates a shared discussion; Boris joins it. Returns both windows. */
+/**
+ * Anna creates a shared discussion "Планы"; Boris joins it. Returns both windows; `fileA` and `fileB` are the launch
+ * arguments that open the discussion again (`--discussion=<id>`, as the jump list does).
+ */
 async function createAndJoin(): Promise<{
     a: { t: TestApp; win: Page }
     b: { t: TestApp; win: Page }
@@ -78,10 +82,6 @@ async function createAndJoin(): Promise<{
     const work = await dir()
     const shared = join(work, 'Google Диск', 'Общая')
     await fs.mkdir(shared, { recursive: true })
-    const fileA = join(work, 'Анна', 'Планы.branchchat')
-    const fileB = join(work, 'Борис', 'Планы.branchchat')
-    await fs.mkdir(join(work, 'Анна'))
-    await fs.mkdir(join(work, 'Борис'))
     const a = await start(await profile('p-anna', 'Анна'))
     const b = await start(await profile('p-boris', 'Борис'))
 
@@ -100,7 +100,7 @@ async function createAndJoin(): Promise<{
         await expect(boris).toBeVisible({ timeout: 500 })
     }).toPass({ timeout: 10_000 })
     await boris.getByTestId('candidate-accept').check()
-    await a.t.answer({ save: [fileA] })
+    await a.win.getByTestId('wizard-title').fill('Планы')
     await a.win.getByTestId('wizard-create').click()
     await expect(a.win.getByTestId('shared-roster')).toBeVisible()
     await expect(a.win.getByTestId('roster-member').filter({ hasText: 'Борис' })).toHaveAttribute(
@@ -114,7 +114,6 @@ async function createAndJoin(): Promise<{
     })
     await expect(b.win.getByTestId('invitation-from')).toContainText('Анна')
     await expect(b.win.getByTestId('inviter-fingerprint')).toHaveText(annaPrint!)
-    await b.t.answer({ save: [fileB] })
     await b.win.getByTestId('wizard-join').click()
     await expect(b.win.getByTestId('composer')).toBeVisible()
 
@@ -128,7 +127,10 @@ async function createAndJoin(): Promise<{
     )
     await a.win.getByTestId('wizard-close').click()
     await expect(a.win.getByTestId('composer')).toBeVisible()
-    return { a, b, shared, fileA, fileB }
+    const id = readLibrary(a.t.userData, 'Планы').id
+    expect(readLibrary(b.t.userData, 'Планы').id).toBe(id)
+    const open = `--discussion=${id}`
+    return { a, b, shared, fileA: open, fileB: open }
 }
 
 test('create, join, and write in both directions through the shared folder (FR-158 to FR-163)', async () => {
@@ -152,39 +154,35 @@ test('create, join, and write in both directions through the shared folder (FR-1
     for (const f of files) {
         const content = await fs.readFile(join(f.parentPath, f.name))
         expect(content.includes(Buffer.from('Привет'))).toBe(false)
-        expect(f.name).not.toMatch(/\.(tmp|branchchat)$/)
+        expect(f.name).not.toMatch(/\.(tmp|branchchat|sqlite)$/)
     }
     // the roster button shows both members
     await expect(a.win.getByTestId('roster-button')).toContainText('2')
     expect(fileA).toBeTruthy()
 })
 
-test('a copy of the file is detached; "Отправить копию…" saves a copy without the member list (FR-154, FR-167)', async () => {
-    const { a, fileA } = await createAndJoin()
+test('"Экспортировать…" writes a file without the member list; it is never merged into the shared discussion (FR-167, FR-205a)', async () => {
+    const { a } = await createAndJoin()
+    await send(a.win, 'Для копии')
+    await expect(a.win.getByTestId('status')).toHaveText('Сохранено')
     const copy = join(await dir(), 'для WhatsApp.branchchat')
-    await a.t.answer({ save: [copy] })
-    await a.t.app.evaluate(({ Menu }) => {
-        const file = Menu.getApplicationMenu()?.items[0]?.submenu
-        file?.items.find((i) => i.label === 'Отправить копию…')?.click()
-    })
-    await expect
-        .poll(
-            () =>
-                fs.stat(copy).then(
-                    () => true,
-                    () => false
-                ),
-            { timeout: 10_000 }
-        )
-        .toBe(true)
+    await exportOpen(a.t, a.win, copy)
     const { readEntries } = await import('./helpers/readFile')
-    expect([...(await readEntries(copy)).keys()]).not.toContain('sync.json')
+    const names = [...(await readEntries(copy)).keys()]
+    expect(names).not.toContain('sync.json')
+    expect(names).not.toContain('delivery.json')
 
-    // a copy made in Explorer still has the member list, but it is not the registered file
-    const explorerCopy = join(await dir(), 'копия.branchchat')
-    await fs.copyFile(fileA, explorerCopy)
-    const c = await start(await profile('p-anna-2', 'Анна'), [explorerCopy])
-    await expect(c.win.getByTestId('notice')).toContainText('отдельная копия')
+    // the file opens elsewhere as a normal discussion
+    const c = await start(await profile('p-clara', 'Клара'), [copy])
+    await expect(message(c.win, 'Для копии')).toBeVisible()
+    await expect(c.win.getByTestId('roster-button')).toHaveCount(0)
+    expect(libraryList(c.t.userData)).toEqual([expect.objectContaining({ synced: false })])
+
+    // the file is refused in the shared discussion itself (FR-205a)
+    const r = await a.win.evaluate((p) => window.branchchat.openPath(p), copy)
+    expect(r).toEqual({ ok: true, data: { status: 'failed', errorCode: 'SYNCED_IMPORT' } })
+    const box = (await a.t.dialogs()).filter((d) => d.kind === 'box').at(-1)!
+    expect(box.detail).toContain('общее обсуждение')
 })
 
 test('a large picture arrives in parts: the message shows as loading until all parts are there (FR-165, D-37)', async () => {
@@ -233,12 +231,8 @@ test('an existing discussion becomes shared; the key is pasted as text; the hist
     const work = await dir()
     const shared = join(work, 'shared')
     await fs.mkdir(shared)
-    const fileA = join(work, 'Старое.branchchat')
-    const fileB = join(work, 'Старое у Бориса.branchchat')
     const a = await start(await profile('p-anna', 'Анна'))
-    await a.t.answer({ save: [fileA] })
-    await a.win.getByTestId('launcher-new').click()
-    await expect(a.win.getByTestId('composer')).toBeVisible()
+    await newDiscussion(a.win, 'Старое')
     await send(a.win, 'Это было до общей папки')
     await expect(message(a.win, 'Это было до общей папки')).toBeVisible()
 
@@ -267,31 +261,11 @@ test('an existing discussion becomes shared; the key is pasted as text; the hist
     await expect(b.win.getByTestId('wizard-invitation')).toHaveAttribute('data-state', 'ready', {
         timeout: 15_000
     })
-    await b.t.answer({ save: [fileB] })
     await b.win.getByTestId('wizard-join').click()
     await expect(message(b.win, 'Это было до общей папки')).toBeVisible()
+    await expect(b.win.locator('h1')).toHaveText('Старое')
     await send(b.win, 'А это уже после')
     await expect(message(a.win, 'А это уже после')).toBeVisible({ timeout: 15_000 })
-})
-
-test('a moved shared file is recognized after the person confirms it (FR-168)', async () => {
-    const { a, b, fileA } = await createAndJoin()
-    const annaData = a.t.userData
-    await a.t.close()
-    apps.splice(apps.indexOf(a.t), 1)
-    const moved = join(await dir(), 'Переименовано.branchchat')
-    await fs.rename(fileA, moved)
-
-    const again = await start(annaData, [moved])
-    await expect(again.win.getByTestId('composer')).toBeVisible()
-    // the question was asked, and "Да, это он" (the default answer in test builds) was chosen
-    const asked = await again.t.dialogs()
-    expect(asked.some((d) => d.kind === 'box' && String(d['message']).includes('перемещено'))).toBe(
-        true
-    )
-    await expect(again.win.getByTestId('roster-button')).toBeVisible()
-    await send(again.win, 'Из перемещённого файла')
-    await expect(message(b.win, 'Из перемещённого файла')).toBeVisible({ timeout: 15_000 })
 })
 
 test('release 1.3: delivery marks, per-member details, and the status line (FR-169, FR-172)', async () => {
@@ -380,7 +354,7 @@ const closeAllWindows = (t: TestApp): Promise<void> =>
     })
 
 test('release 1.4: the app stays in the tray, syncs with no window, and notifies (FR-173 to FR-175)', async () => {
-    const { a, b, fileB } = await createAndJoin()
+    const { a, b } = await createAndJoin()
 
     // FR-174: the first synchronized discussion turned "start with Windows" on, on both computers
     for (const t of [a.t, b.t])
@@ -405,8 +379,9 @@ test('release 1.4: the app stays in the tray, syncs with no window, and notifies
     await expect
         .poll(async () => (await notes(b.t)).slice(1), { timeout: 15_000 })
         .toEqual([{ title: 'Анна — Планы', body: 'Привет из окна Анны' }])
-    const onDisk = await fs.readFile(fileB)
-    expect(onDisk.length).toBeGreaterThan(0)
+    // the closed discussion was written into Boris's library
+    const saved = readLibrary(b.t.userData, 'Планы')
+    expect(JSON.stringify(saved.discussion.threads)).toContain('Привет из окна Анны')
 
     // a click on the notification opens the discussion with the message
     await b.t.app.evaluate(() =>
@@ -460,9 +435,6 @@ test('release 1.5: a member who did not create the discussion invites a new pers
     await expect(message(b.win, 'Сообщение до приглашения')).toBeVisible({ timeout: 15_000 })
 
     // Clara waits for an invitation in the same folder
-    const work = await dir()
-    const fileC = join(work, 'Клара', 'Планы.branchchat')
-    await fs.mkdir(join(work, 'Клара'))
     const c = await start(await profile('p-clara', 'Клара'))
     await menu(c.t, c.win, 'Присоединиться к обсуждению…', 'shared-wizard')
     await chooseFolder(c.t, c.win, shared)
@@ -504,7 +476,6 @@ test('release 1.5: a member who did not create the discussion invites a new pers
     })
     await expect(c.win.getByTestId('invitation-from')).toContainText('Борис')
     await expect(c.win.getByTestId('inviter-fingerprint')).toHaveText(borisPrint!)
-    await c.t.answer({ save: [fileC] })
     await c.win.getByTestId('wizard-join').click()
     await expect(c.win.getByTestId('composer')).toBeVisible()
     await expect(message(c.win, 'Сообщение до приглашения')).toBeVisible()
@@ -525,10 +496,7 @@ test('release 1.5: a member who did not create the discussion invites a new pers
 
 test('release 1.5: a person who lost the keys is re-invited; another member rejects, then accepts (FR-177)', async () => {
     const { a, b, shared } = await createAndJoin()
-    const work = await dir()
-
     // Anna invites Clara (three members)
-    const fileC = join(work, 'Клара.branchchat')
     const c = await start(await profile('p-clara', 'Клара'))
     await menu(c.t, c.win, 'Присоединиться к обсуждению…', 'shared-wizard')
     await chooseFolder(c.t, c.win, shared)
@@ -545,7 +513,6 @@ test('release 1.5: a person who lost the keys is re-invited; another member reje
     await expect(c.win.getByTestId('wizard-invitation')).toHaveAttribute('data-state', 'ready', {
         timeout: 15_000
     })
-    await c.t.answer({ save: [fileC] })
     await c.win.getByTestId('wizard-join').click()
     await expect(c.win.getByTestId('composer')).toBeVisible()
     await send(b.win, 'Борис до потери ключа')
@@ -554,7 +521,6 @@ test('release 1.5: a person who lost the keys is re-invited; another member reje
     // Boris loses his keys and his settings: a new profile with a new participant ID
     await b.t.close()
     apps.splice(apps.indexOf(b.t), 1)
-    const fileB2 = join(work, 'Борис-снова.branchchat')
     const b2 = await start(await profile('p-boris-new', 'Борис'))
     await menu(b2.t, b2.win, 'Присоединиться к обсуждению…', 'shared-wizard')
     await chooseFolder(b2.t, b2.win, shared)
@@ -585,7 +551,6 @@ test('release 1.5: a person who lost the keys is re-invited; another member reje
         timeout: 15_000
     })
     await expect(b2.win.getByTestId('invitation-rejoin')).toBeVisible()
-    await b2.t.answer({ save: [fileB2] })
     await b2.win.getByTestId('wizard-join').click()
     await expect(b2.win.getByTestId('composer')).toBeVisible()
     await expect(message(b2.win, 'Борис до потери ключа')).toBeVisible()

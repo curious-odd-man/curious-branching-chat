@@ -1,18 +1,14 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { describeRecent } from '../../src/main/application/recentView'
-import { recentSubmenu } from '../../src/main/application/recentMenu'
 import { RecentFilesStore } from '../../src/main/local-state/recentFiles'
-import { jumpListCategories } from '../../src/main/windows/jumpListCategories'
 import { withTempDir } from '../helpers/fixtures'
-
-const view = (name: string, exists = true) => ({
-    path: `C:\\Обсуждения\\${name}.branchchat`,
-    name,
-    directory: 'C:\\Обсуждения',
-    exists
-})
+import { ru } from '@shared/i18n/ru'
+import { describeDiscussions } from '../../src/main/application/recentView'
+import { recentSubmenu } from '../../src/main/application/recentMenu'
+import { jumpListCategories } from '../../src/main/windows/jumpListCategories'
+import { extractDiscussionIds } from '../../src/main/windows/launchArgs'
+import type { DiscussionSummary } from '../../src/main/library'
 
 describe('RecentFilesStore', () => {
     it('quick adds without waiting keep the newest list in the file', async () => {
@@ -97,60 +93,61 @@ describe('RecentFilesStore', () => {
     })
 })
 
-describe('recent files in the windows, the menu and the jump list', () => {
-    it('describes entries and marks the missing ones', async () => {
-        const views = await describeRecent(
-            [
-                { path: '/papka/Ёлка.branchchat', openedAt: '2026-01-01T00:00:00Z' },
-                { path: '/papka/gone.branchchat', openedAt: '2026-01-01T00:00:00Z' }
-            ],
-            (p) => Promise.resolve(!p.includes('gone'))
-        )
-        expect(views).toEqual([
-            { path: '/papka/Ёлка.branchchat', name: 'Ёлка', directory: '/papka', exists: true },
-            { path: '/papka/gone.branchchat', name: 'gone', directory: '/papka', exists: false }
-        ])
+describe('recent discussions in the windows, the menu and the jump list', () => {
+    const summary = (id: string, extra: Partial<DiscussionSummary> = {}): DiscussionSummary => ({
+        id,
+        title: `Обсуждение ${id}`,
+        createdAt: '2026-11-01T10:00:00.000Z',
+        updatedAt: '2026-11-01T10:00:00.000Z',
+        lastMessageAt: null,
+        messageCount: 0,
+        synced: false,
+        conversationId: null,
+        openedAt: null,
+        ...extra
     })
 
-    it('menu: entries, missing ones disabled, then Clear; an empty list shows a disabled note', () => {
+    it('orders by last opened, then last message, then creation', () => {
+        const list = describeDiscussions([
+            summary('a', { createdAt: '2026-11-03T00:00:00.000Z' }),
+            summary('b', { openedAt: '2026-11-02T00:00:00.000Z' }),
+            summary('c', { lastMessageAt: '2026-11-04T00:00:00.000Z', messageCount: 3 }),
+            summary('d', { openedAt: '2026-11-05T00:00:00.000Z', synced: true })
+        ])
+        expect(list.map((d) => d.id)).toEqual(['d', 'c', 'a', 'b'])
+        expect(list[0]).toEqual({
+            id: 'd',
+            title: 'Обсуждение d',
+            lastMessageAt: null,
+            messageCount: 0,
+            synced: true
+        })
+    })
+
+    it('menu: the newest entries up to the limit; an empty list shows a disabled note', () => {
+        const list = describeDiscussions([summary('a'), summary('b'), summary('c')])
         const opened: string[] = []
-        const items = recentSubmenu(
-            [view('один'), view('два', false)],
-            (p) => opened.push(p),
-            () => undefined
-        )
-        expect(items.map((i) => i.label ?? i.type)).toEqual([
-            'один',
-            'два (не найден)',
-            'separator',
-            'Очистить список'
-        ])
-        expect(items[1]!.enabled).toBe(false)
+        const items = recentSubmenu(list, 2, (id) => opened.push(id))
+        expect(items.map((i) => i.label)).toHaveLength(2)
         ;(items[0]!.click as () => void)()
-        expect(opened).toEqual([view('один').path])
-        const empty = recentSubmenu(
-            [],
-            () => undefined,
-            () => undefined
-        )
-        expect(empty).toEqual([{ label: 'Список пуст', enabled: false }])
+        expect(opened).toEqual([list[0]!.id])
+        expect(recentSubmenu([], 10, () => undefined)).toEqual([
+            { label: ru.recent.menuEmpty, enabled: false }
+        ])
     })
 
-    it('jump list: one "Недавние" category that starts BranchChat with the file; missing files are left out', () => {
-        const categories = jumpListCategories(
-            [view('один'), view('два', false)],
-            'C:\\BranchChat.exe'
-        )
-        expect(categories).toHaveLength(1)
-        expect(categories[0]).toMatchObject({ type: 'custom', name: 'Недавние' })
-        expect(categories[0]!.items).toEqual([
-            expect.objectContaining({
-                type: 'task',
-                title: 'один',
-                program: 'C:\\BranchChat.exe',
-                args: '"C:\\Обсуждения\\один.branchchat"'
-            })
-        ])
-        expect(jumpListCategories([], 'x')).toEqual([])
+    it('jump list: one "Недавние" category that starts BranchChat with the discussion ID', () => {
+        const list = describeDiscussions([summary('id-1')])
+        const [category] = jumpListCategories(list, 'C:\\BranchChat.exe', 10)
+        expect(category?.name).toBe(ru.recent.jumpListCategory)
+        expect(category?.items?.[0]).toMatchObject({
+            title: 'Обсуждение id-1',
+            program: 'C:\\BranchChat.exe',
+            args: '--discussion=id-1'
+        })
+        expect(jumpListCategories([], 'x', 10)).toEqual([])
+        expect(
+            extractDiscussionIds(['app.exe', '--discussion=id-1', '--discussion=bad id'])
+        ).toEqual(['id-1'])
     })
 })

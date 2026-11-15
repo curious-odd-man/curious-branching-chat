@@ -3,12 +3,15 @@ import { Modal } from './Modal'
 import { ru } from '@shared/i18n/ru'
 import { TEXT_SIZE_DEFAULT, TEXT_SIZE_MAX, TEXT_SIZE_MIN, TEXT_SIZE_STEP } from '@shared/shortcuts'
 import type { AssociationInfo, BackgroundFlag, IdentityView, SettingsView } from '@shared/types/ipc'
+import { formatTimestamp } from '../i18n/format'
 
 interface Props {
     settings: SettingsView | undefined
     onNameSaved(settings: SettingsView): void
     onSettingsChanged(settings: SettingsView): void
     onClose(): void
+    /** "Восстановить из резервной копии…" (FR-207). */
+    onRestore(): void
 }
 
 const stateText = {
@@ -26,7 +29,8 @@ export function SettingsDialog({
     settings,
     onNameSaved,
     onSettingsChanged,
-    onClose
+    onClose,
+    onRestore
 }: Props): React.JSX.Element {
     const api = window.branchchat
     const [name, setName] = useState(settings?.displayName ?? '')
@@ -41,14 +45,35 @@ export function SettingsDialog({
     const [requested, setRequested] = useState<boolean | null>(null)
     const [identity, setIdentity] = useState<IdentityView | null>(null)
     const [keyMessage, setKeyMessage] = useState<string | null>(null)
+    const [lastBackup, setLastBackup] = useState<string | null>(null)
+    const [backupMessage, setBackupMessage] = useState<string | null>(null)
+    const [backingUp, setBackingUp] = useState(false)
 
     useEffect(() => {
+        void api.getBackups().then((r) => r.ok && setLastBackup(r.data.lastBackupAt))
         void api.getAssociation().then((r) => r.ok && setAssociation(r.data))
         void api.getIdentity().then((r) => {
             if (r.ok) setIdentity(r.data)
             else setError(r.error.message)
         })
     }, [api])
+
+    const backupNow = (): void => {
+        setBackingUp(true)
+        setBackupMessage(null)
+        void api
+            .backupNow()
+            .then((r) => {
+                if (!r.ok) return setError(r.error.message)
+                setLastBackup(r.data.createdAt)
+                setBackupMessage(
+                    r.data.folderError
+                        ? ru.backup.folderFailed(r.data.folderError)
+                        : ru.backup.done(formatTimestamp(r.data.createdAt))
+                )
+            })
+            .finally(() => setBackingUp(false))
+    }
 
     const copyKey = (): void => {
         setKeyMessage(null)
@@ -381,6 +406,69 @@ export function SettingsDialog({
                         />
                     </label>
                     <p className="hint">{ru.settings.recentLimitHint}</p>
+                </section>
+
+                <section data-testid="settings-backup">
+                    <h3>{ru.backup.heading}</h3>
+                    <p className="hint">{ru.backup.explanation}</p>
+                    <p className="hint" data-testid="backup-not-encrypted">
+                        {ru.backup.notEncrypted}
+                    </p>
+                    <p data-testid="backup-last">
+                        {lastBackup ? ru.backup.last(formatTimestamp(lastBackup)) : ru.backup.never}
+                    </p>
+                    <p>
+                        {ru.backup.folder}{' '}
+                        <code className="path" data-testid="backup-folder">
+                            {settings?.backupFolder ?? ru.backup.noFolder}
+                        </code>
+                    </p>
+                    <div className="buttons">
+                        <button
+                            type="button"
+                            data-testid="backup-pick-folder"
+                            onClick={() =>
+                                void api.pickBackupFolder().then((r) => {
+                                    if (!r.ok) setError(r.error.message)
+                                    else if (r.data) onSettingsChanged(r.data)
+                                })
+                            }
+                        >
+                            {ru.backup.pickFolder}
+                        </button>
+                        {settings?.backupFolder && (
+                            <button
+                                type="button"
+                                data-testid="backup-clear-folder"
+                                onClick={() =>
+                                    void api.clearBackupFolder().then((r) => {
+                                        if (r.ok) onSettingsChanged(r.data)
+                                        else setError(r.error.message)
+                                    })
+                                }
+                            >
+                                {ru.backup.clearFolder}
+                            </button>
+                        )}
+                    </div>
+                    <div className="buttons">
+                        <button
+                            type="button"
+                            data-testid="backup-now"
+                            disabled={backingUp}
+                            onClick={backupNow}
+                        >
+                            {backingUp ? ru.backup.running : ru.backup.now}
+                        </button>
+                        <button type="button" data-testid="backup-restore" onClick={onRestore}>
+                            {ru.backup.restore}
+                        </button>
+                    </div>
+                    {backupMessage && (
+                        <p className="ok" data-testid="backup-message">
+                            {backupMessage}
+                        </p>
+                    )}
                 </section>
 
                 <section>

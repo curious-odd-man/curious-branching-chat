@@ -189,7 +189,7 @@ export function DiscussionScreen({
     return (
         <div className="discussion">
             <header className="discussion-header">
-                <h1 title={view.filePath}>{view.fileName}</h1>
+                <h1 data-testid="discussion-title">{view.discussion.title}</h1>
                 <button
                     type="button"
                     className="roster-button"

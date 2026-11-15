@@ -1,8 +1,7 @@
 import { app, dialog, Menu, type MenuItemConstructorOptions } from 'electron'
 import { ru } from '@shared/i18n/ru'
 import { acceleratorOf } from '@shared/shortcuts'
-import type { RecentFileView } from '@shared/types/ipc'
-import type { RecentFilesStore } from '../local-state/recentFiles'
+import type { DiscussionListItem } from '@shared/types/ipc'
 import type { UpdateService } from '../updates/updateService'
 import { recentSubmenu } from './recentMenu'
 import type { AppController } from './appController'
@@ -10,14 +9,16 @@ import type { AppController } from './appController'
 export function buildMenu(
     controller: AppController,
     updates: UpdateService,
-    recent: RecentFilesStore,
-    recentFiles: readonly RecentFileView[],
+    discussions: readonly DiscussionListItem[],
+    recentLimit: number,
     /** "Выход": the whole application closes, also from the tray (release 1.4). */
     exit: () => void = () => app.quit(),
     /** "Справка > Сохранить отчёт…" (FR-323). */
     saveReport: () => void = () => undefined,
     /** "Вид": text size (FR-301). */
-    zoom: (direction: 'in' | 'out' | 'reset') => void = () => undefined
+    zoom: (direction: 'in' | 'out' | 'reset') => void = () => undefined,
+    /** "Резервная копия сейчас" (FR-207). */
+    backupNow: () => void = () => undefined
 ): Menu {
     const template: MenuItemConstructorOptions[] = [
         {
@@ -36,9 +37,9 @@ export function buildMenu(
                 {
                     label: ru.recent.menuTitle,
                     submenu: recentSubmenu(
-                        recentFiles,
-                        (path) => void controller.openFromMenu(path),
-                        () => void recent.clear()
+                        discussions,
+                        recentLimit,
+                        (id) => void controller.openFromMenu(id)
                     )
                 },
                 { type: 'separator' },
@@ -56,10 +57,15 @@ export function buildMenu(
                     click: () => controller.sendMenuCommand('invite-member')
                 },
                 {
-                    label: ru.menu.sendCopy,
+                    label: ru.menu.exportDiscussion,
                     click: () =>
-                        void controller.saveCopy(controller.focusedEntry()).catch(() => undefined)
+                        void controller
+                            .exportDiscussion(controller.focusedEntry())
+                            .catch(() => undefined)
                 },
+                { type: 'separator' },
+                { label: ru.menu.backupNow, click: () => backupNow() },
+                { label: ru.menu.restore, click: () => controller.sendMenuCommand('restore') },
                 { type: 'separator' },
                 {
                     label: ru.menu.settings,

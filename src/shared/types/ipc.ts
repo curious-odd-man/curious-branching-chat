@@ -9,6 +9,8 @@ export const IPC = {
     documentNew: 'document:new',
     documentOpenDialog: 'document:open-dialog',
     documentOpenPath: 'document:open-path',
+    documentOpenId: 'document:open-id',
+    documentExport: 'document:export',
     documentGetState: 'document:get-state',
     documentAppendMessage: 'document:append-message',
     documentRetrySave: 'document:retry-save',
@@ -26,9 +28,15 @@ export const IPC = {
     settingsSetTextSize: 'settings:set-text-size',
     zoomChange: 'zoom:change',
     focusTake: 'focus:take',
-    recentGet: 'recent:get',
-    recentRemove: 'recent:remove',
-    recentClear: 'recent:clear',
+    libraryList: 'library:list',
+    backupGet: 'backup:get',
+    backupNow: 'backup:now',
+    backupPickFolder: 'backup:pick-folder',
+    backupClearFolder: 'backup:clear-folder',
+    backupRestore: 'backup:restore',
+    migrationGet: 'migration:get',
+    migrationRun: 'migration:run',
+    migrationSkip: 'migration:skip',
     updateGetState: 'update:get-state',
     updateCheck: 'update:check',
     updateDownload: 'update:download',
@@ -66,8 +74,8 @@ export const IPC = {
     menuCommand: 'menu:command',
     focusRequest: 'focus:request',
     settingsChanged: 'settings:changed',
-    /** main -> renderer: the recent files list changed. */
-    recentChanged: 'recent:changed',
+    /** main -> renderer: the list of discussions in the library changed. */
+    libraryChanged: 'library:changed',
     updateChanged: 'update:changed'
 } as const
 
@@ -85,7 +93,7 @@ export interface SettingsView {
     associationAsked: boolean
     /** Check for updates in the background (FR-097). On by default. */
     autoUpdateCheck: boolean
-    /** How many recently opened files are remembered. 0 turns the list off. Default 10. */
+    /** How many recently opened discussions the File menu and the jump list show. 0 turns them off. Default 10. */
     recentFilesLimit: number
     /** Open the most recently used discussion when the application starts without a file. On by default. */
     openLastFileOnStartup: boolean
@@ -101,20 +109,69 @@ export interface SettingsView {
     startWithWindowsSettled: boolean
     /** FR-301: text size of all windows, in percent (80–200). */
     textSize: number
+    /** FR-207: the folder for backups that the person chose, or null. */
+    backupFolder: string | null
+}
+
+/** FR-207: the backup section of Settings. */
+export interface BackupState {
+    lastBackupAt: string | null
+    folder: string | null
+    backups: BackupView[]
+}
+
+/** The result of "Резервная копия сейчас". */
+export interface BackupResult {
+    createdAt: string
+    /** The folder of the person could not be written (the app folder was). */
+    folderError: string | null
 }
 
 /** On/off settings of the background section (release 1.4). */
 export type BackgroundFlag = 'notifyNewMessages' | 'notifyShowText' | 'startWithWindows'
 
-/** A recently opened discussion, as shown on the start screen and in menus. */
-export interface RecentFileView {
+/** FR-207: one backup of the library. */
+export interface BackupView {
+    /** The backup folder (passed back to restore it). */
+    path: string
+    /** app: %APPDATA%\BranchChat\backups; folder: the folder chosen in Settings. */
+    place: 'app' | 'folder'
+    createdAt: string
+    reason: 'daily' | 'manual' | 'migration' | 'restore'
+    /** The database and the images, in bytes. */
+    size: number
+    discussions: number
+    messages: number
+}
+
+/** FR-206: a file of release 1.x offered for the library at the first start. */
+export interface MigrationCandidate {
     path: string
     /** File name without the extension. */
     name: string
-    /** Folder that contains the file. */
-    directory: string
-    /** False when the file is no longer where it was (moved, deleted, drive not connected). */
+    /** False: the file is not where the recent list or the registry says (shown, not selectable). */
     exists: boolean
+    /** A synchronized discussion of this computer (registered). */
+    synced: boolean
+}
+
+export interface MigrationResult {
+    path: string
+    name: string
+    status: 'imported' | 'merged' | 'failed'
+    synced: boolean
+    id?: string
+    errorCode?: string
+}
+
+/** A discussion of the library, as shown on the start screen and in menus (most recently used first). */
+export interface DiscussionListItem {
+    id: string
+    title: string
+    /** Time of the newest message, or null for a discussion without messages. */
+    lastMessageAt: string | null
+    messageCount: number
+    synced: boolean
 }
 
 /**
@@ -193,8 +250,6 @@ export interface DocumentView {
     documentId: string
     /** Identifies this open window's discussion in image URLs (see assets.ts). */
     sessionId: string
-    filePath: string
-    fileName: string
     discussion: DiscussionData
     readState: ReadState
     localParticipantId: string
@@ -272,6 +327,7 @@ export type MenuCommand =
     | 'invite-member'
     | 'shortcuts'
     | 'jump-to-date'
+    | 'restore'
 
 /** What the person is told about an available update (FR-098). Notes are plain text. */
 export interface UpdateInfoView {

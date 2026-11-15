@@ -40,7 +40,8 @@ describe('SettingsStore', () => {
                 notifyShowText: true,
                 startWithWindows: false,
                 startWithWindowsSettled: false,
-                textSize: 100
+                textSize: 100,
+                backupFolder: null
             })
             expect(await a.setDisplayName('  Анна  ')).toEqual({
                 participantId: 'id-1',
@@ -55,7 +56,8 @@ describe('SettingsStore', () => {
                 notifyShowText: true,
                 startWithWindows: false,
                 startWithWindowsSettled: false,
-                textSize: 100
+                textSize: 100,
+                backupFolder: null
             })
 
             const b = new SettingsStore(dir, () => `id-${++n}`) // e.g. next application start
@@ -73,7 +75,8 @@ describe('SettingsStore', () => {
                 notifyShowText: true,
                 startWithWindows: false,
                 startWithWindowsSettled: false,
-                textSize: 100
+                textSize: 100,
+                backupFolder: null
             })
         })
     })
@@ -179,7 +182,8 @@ describe('background settings (release 1.4)', () => {
                 notifyShowText: true,
                 startWithWindows: false,
                 startWithWindowsSettled: false,
-                textSize: 100
+                textSize: 100,
+                backupFolder: null
             })
         })
     })

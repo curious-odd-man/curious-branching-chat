@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { readDiscussionFile } from './helpers/readFile'
+import { exportOpen, libraryList, newDiscussion, readLibrary } from './helpers/library'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 
 const apps: TestApp[] = []
@@ -26,15 +27,8 @@ async function workDir(): Promise<string> {
 }
 
 /** Creates a discussion through the UI (name prompt included) and returns once the composer is visible. */
-async function createDiscussion(t: TestApp, win: Page, file: string, name = 'Анна'): Promise<void> {
-    await t.answer({ save: [file] })
-    await win.getByTestId('launcher-new').click()
-    const prompt = win.getByTestId('name-input')
-    if (await prompt.isVisible().catch(() => false)) {
-        await prompt.fill(name)
-        await win.getByTestId('name-confirm').click()
-    }
-    await expect(win.getByTestId('composer')).toBeVisible()
+async function createDiscussion(win: Page, title = 'Обсуждение', name = 'Анна'): Promise<void> {
+    await newDiscussion(win, title, name)
 }
 
 /** A new start would reopen the last discussion (the default); tests that expect the start screen turn that off. */
@@ -50,13 +44,11 @@ async function send(win: Page, text: string): Promise<void> {
 }
 
 test('create, send, close, reopen (requirements 4.1 and 4.2)', async () => {
-    const dir = await workDir()
-    const file = join(dir, 'Идея.branchchat')
     const { t, win } = await start()
 
-    await createDiscussion(t, win, file)
-    await expect(win.locator('h1')).toHaveText('Идея.branchchat')
-    expect((await readDiscussionFile(file)).discussion.title).toBe('Идея') // file exists immediately
+    await createDiscussion(win, 'Идея')
+    await expect(win.locator('h1')).toHaveText('Идея')
+    expect(readLibrary(t.userData).discussion.title).toBe('Идея') // in the library immediately (FR-202)
 
     await send(win, 'Привет!\nВторая строка с ёлкой.')
     const message = win.getByTestId('message')
@@ -65,14 +57,14 @@ test('create, send, close, reopen (requirements 4.1 and 4.2)', async () => {
     await expect(message).toContainText('Вторая строка с ёлкой.')
     await expect(win.getByTestId('status')).toHaveText('Сохранено')
 
-    const saved = (await readDiscussionFile(file)).discussion
+    const saved = readLibrary(t.userData).discussion
     expect(saved.threads[0]!.messages).toHaveLength(1)
     expect(saved.participants.map((p) => p.displayName)).toEqual(['Анна'])
 
-    // close the window (no draft, nothing unsaved: no warning), then reopen from the file
+    // close the window (no draft, nothing unsaved: no warning); the next start opens the last discussion
     const profile = t.userData
     await t.close()
-    const second = await start({ userData: profile, files: [file] })
+    const second = await start({ userData: profile })
     await expect(second.win.getByTestId('message')).toHaveCount(1)
     await expect(second.win.getByTestId('message')).toContainText('Привет!')
 
@@ -83,72 +75,97 @@ test('create, send, close, reopen (requirements 4.1 and 4.2)', async () => {
 })
 
 test('asks for the name once, before the first message or new discussion (FR-019)', async () => {
-    const dir = await workDir()
     const { t, win } = await start()
-    await t.answer({ save: [join(dir, 'a.branchchat')] })
     await win.getByTestId('launcher-new').click()
     await expect(win.getByTestId('name-input')).toBeVisible()
     await expect(win.getByTestId('name-confirm')).toBeDisabled() // empty name is not accepted
     await win.getByTestId('name-input').fill('Борис')
     await win.getByTestId('name-confirm').click()
+    // then the name of the discussion (FR-202)
+    await expect(win.getByTestId('new-title-input')).toHaveValue('Новое обсуждение')
+    await win.getByTestId('new-title-input').fill('  ')
+    await expect(win.getByTestId('new-title-confirm')).toBeDisabled()
+    await win.getByTestId('new-title-input').fill('План')
+    await win.getByTestId('new-title-confirm').click()
     await expect(win.getByTestId('composer')).toBeVisible()
+    await expect(win.locator('h1')).toHaveText('План')
     const settings = JSON.parse(await fs.readFile(join(t.userData, 'settings.json'), 'utf8'))
     expect(settings.displayName).toBe('Борис')
     expect(settings.participantId).toMatch(/[0-9a-f-]{36}/)
 })
 
-test('cancelling the Save dialog creates nothing', async () => {
+test('cancelling the name of a new discussion creates nothing; the start screen lists the discussions', async () => {
     const { t, win } = await start()
-    await createDiscussion(t, win, join(await workDir(), 'x.branchchat')) // sets the name
+    await createDiscussion(win, 'Первое') // sets the name
     await t.close()
     await turnOffReopenLast(t.userData) // otherwise the second start reopens the discussion just created
     const again = await start({ userData: t.userData })
-    await again.win.getByTestId('launcher-new').click() // no answer queued => dialog is cancelled
+    await expect(again.win.getByTestId('discussion-item')).toHaveCount(1)
+    await expect(again.win.getByTestId('discussion-item')).toContainText('Первое')
+    await expect(again.win.getByTestId('discussion-item')).toContainText('нет сообщений')
+    await again.win.getByTestId('launcher-new').click()
+    await expect(again.win.getByTestId('name-input')).toHaveCount(0) // the name is known
+    await again.win.getByTestId('new-title-input').press('Escape')
+    await expect(again.win.getByTestId('new-title-input')).toHaveCount(0)
     await expect(again.win.getByTestId('launcher-new')).toBeVisible()
-    expect((await again.t.dialogs()).filter((d) => d.kind === 'save')).toHaveLength(1)
+    expect(libraryList(t.userData)).toHaveLength(1)
+    expect((await again.t.dialogs()).filter((d) => d.kind === 'save')).toHaveLength(0)
+
+    // a click in the list opens the discussion
+    await again.win.getByTestId('discussion-open').click()
+    await expect(again.win.locator('h1')).toHaveText('Первое')
 })
 
-test('opens two documents in two windows; the same file twice focuses the existing window', async () => {
+test('opens two discussions in two windows; the same discussion twice focuses the existing window', async () => {
     const dir = await workDir()
-    const a = join(dir, 'a.branchchat')
-    const b = join(dir, 'b.branchchat')
     const { t, win } = await start()
-    await createDiscussion(t, win, a)
+    await createDiscussion(win, 'a')
     await send(win, 'в первом')
+    await expect(win.getByTestId('status')).toHaveText('Сохранено')
 
     // a second discussion opens in a new window because the first window already has one
-    await t.answer({ save: [b] })
-    await win.evaluate(() => window.branchchat.newDocument())
+    await win.evaluate(() => window.branchchat.newDocument('b'))
     const [, second] = await t.windows(2)
-    await expect(second!.locator('h1')).toHaveText('b.branchchat')
+    await expect(second!.locator('h1')).toHaveText('b')
 
     // opening a again does not create a third window
-    const result = await win.evaluate((p) => window.branchchat.openPath(p), a)
+    const idA = readLibrary(t.userData, 'a').id
+    const result = await second!.evaluate((id) => window.branchchat.openDiscussion(id), idA)
     expect(result).toEqual({ ok: true, data: { status: 'focused' } })
-    // different spelling of the same path is recognized too
-    const again = await win.evaluate(
-        (p) => window.branchchat.openPath(p),
-        join(dir, '.', 'a.branchchat')
-    )
+    // importing a file of the same discussion: merged into it (nothing new), the window gets the focus (FR-204)
+    const file = join(dir, 'a.branchchat')
+    await exportOpen(t, win, file)
+    const again = await second!.evaluate((p) => window.branchchat.openPath(p), file)
     expect(again).toEqual({ ok: true, data: { status: 'focused' } })
+    await expect(win.getByTestId('notice')).toContainText('нет ничего нового')
     expect(t.app.windows()).toHaveLength(2)
+    expect(libraryList(t.userData)).toHaveLength(2)
 })
 
-test('a second launch with a file forwards it to the running instance (FR-088)', async () => {
+test('a second launch with a file or a discussion forwards it to the running instance (FR-088)', async () => {
     const dir = await workDir()
     const a = join(dir, 'a.branchchat')
     const { t, win } = await start()
-    await createDiscussion(t, win, a)
+    await createDiscussion(win, 'a')
+    await exportOpen(t, win, a)
     await t.close()
 
-    const first = await start({ userData: t.userData }) // launcher window
+    // another profile: the file is imported, then shown in the empty start window
+    const first = await start() // launcher window
     expect(first.t.app.windows()).toHaveLength(1)
     // simulate Windows launching "BranchChat.exe a.branchchat" while the app runs
     await first.t.app.evaluate(({ app }, file) => {
         app.emit('second-instance', {}, ['BranchChat.exe', file], process.cwd())
     }, a)
-    // the empty start window is reused for the file
-    await expect(first.win.locator('h1')).toHaveText('a.branchchat')
+    await expect(first.win.locator('h1')).toHaveText('a')
+    expect(first.t.app.windows()).toHaveLength(1)
+    const id = readLibrary(first.t.userData, 'a').id
+
+    // a jump list entry starts the app with the ID of the discussion
+    await first.t.app.evaluate(({ app }, arg) => {
+        app.emit('second-instance', {}, ['BranchChat.exe', arg], process.cwd())
+    }, `--discussion=${id}`)
+    await expect(first.win.locator('h1')).toHaveText('a')
     expect(first.t.app.windows()).toHaveLength(1)
 })
 
@@ -172,6 +189,7 @@ test('damaged, missing and newer files give a clear message and do not crash (FR
     expect(boxes[0]!.detail).toContain('повреждён')
     expect(boxes[1]!.detail).toContain('не найден')
     await expect(win.getByTestId('launcher-new')).toBeVisible() // still alive, still a start window
+    expect(libraryList(t.userData)).toHaveLength(0)
 })
 
 test('a bad path on the command line shows an error and the app still starts (FR-118)', async () => {
@@ -187,8 +205,9 @@ test('a file from a newer schema version is refused with an update hint (FR-012)
     const dir = await workDir()
     const file = join(dir, 'new.branchchat')
     const { t, win } = await start()
-    await createDiscussion(t, win, join(dir, 'src.branchchat'))
-    // build a newer-version file from the saved one
+    await createDiscussion(win, 'src')
+    await exportOpen(t, win, join(dir, 'src.branchchat'))
+    // build a newer-version file from the exported one
     const { buildNewerCopy } = await import('./helpers/newer')
     await buildNewerCopy(join(dir, 'src.branchchat'), file)
     const result = await win.evaluate((p) => window.branchchat.openPath(p), file)
@@ -200,49 +219,66 @@ test('a file from a newer schema version is refused with an update hint (FR-012)
     expect(box.detail).toContain('более новой версией')
 })
 
-test('two copies of the same discussion: notice names both files, nothing is merged (FR-117)', async () => {
+test('an exported copy that got a message elsewhere is merged on import (FR-204, ADR-003)', async () => {
     const dir = await workDir()
     const a = join(dir, 'a.branchchat')
-    const b = join(dir, 'a (1).branchchat')
-    const { t, win } = await start()
-    await createDiscussion(t, win, a)
-    await send(win, 'общий текст')
-    await fs.copyFile(a, b)
+    const b = join(dir, 'b.branchchat')
+    const one = await start()
+    await createDiscussion(one.win, 'Общее')
+    await send(one.win, 'общий текст')
+    await expect(one.win.getByTestId('status')).toHaveText('Сохранено')
+    await exportOpen(one.t, one.win, a)
 
-    await win.evaluate((p) => window.branchchat.openPath(p), b)
-    const [, copy] = await t.windows(2)
-    const notice = copy!.getByTestId('notice')
-    await expect(notice).toContainText('a.branchchat')
-    await expect(notice).toContainText('a (1).branchchat')
-    await expect(win.getByTestId('notice')).toHaveCount(0) // the first window is unchanged
+    // another person imports the file, answers, and sends the file back
+    const profile = await workDir()
+    await fs.writeFile(
+        join(profile, 'settings.json'),
+        JSON.stringify({
+            participantId: 'p-boris',
+            displayName: 'Борис',
+            readNoticeAcknowledged: true
+        })
+    )
+    const two = await start({ userData: profile, files: [a] })
+    await expect(two.win.getByTestId('message')).toHaveCount(1)
+    await send(two.win, 'ответ из копии')
+    await expect(two.win.getByTestId('message')).toHaveCount(2)
+    await expect(two.win.getByTestId('status')).toHaveText('Сохранено')
+    await exportOpen(two.t, two.win, b)
+
+    // the first person imports it into the open discussion
+    const r = await one.win.evaluate((p) => window.branchchat.openPath(p), b)
+    expect(r).toEqual({ ok: true, data: { status: 'focused' } })
+    await expect(one.win.getByTestId('message')).toHaveCount(2)
+    await expect(one.win.getByTestId('notice')).toContainText('Новых сообщений: 1')
+    expect(libraryList(one.t.userData)).toHaveLength(1)
+    expect((await readDiscussionFile(b)).discussion.threads[0]!.messages).toHaveLength(2)
 })
 
 test('a failed save keeps the message, shows an error, and recovers on retry (FR-008)', async () => {
-    const dir = await workDir()
-    const sub = join(dir, 'sub')
-    await fs.mkdir(sub)
-    const file = join(sub, 'a.branchchat')
     const { t, win } = await start()
-    await createDiscussion(t, win, file)
+    await createDiscussion(win)
 
-    await fs.rm(sub, { recursive: true }) // the folder disappears (e.g. a removed USB stick)
+    await t.app.evaluate(() => {
+        ;(globalThis as unknown as { __saveFault: boolean }).__saveFault = true
+    })
     await send(win, 'не сохранится')
     await expect(win.getByTestId('save-error')).toBeVisible()
     await expect(win.getByTestId('message')).toHaveCount(1) // the message is still shown, not lost
     await expect(win.getByTestId('composer')).toHaveText('') // and it left the composer
 
-    await fs.mkdir(sub)
+    await t.app.evaluate(() => {
+        ;(globalThis as unknown as { __saveFault: boolean }).__saveFault = false
+    })
     await win.getByTestId('retry-save').click()
     await expect(win.getByTestId('save-error')).toHaveCount(0)
     await expect(win.getByTestId('status')).toHaveText('Сохранено')
-    expect((await readDiscussionFile(file)).discussion.threads[0]!.messages).toHaveLength(1)
+    expect(readLibrary(t.userData).discussion.threads[0]!.messages).toHaveLength(1)
 })
 
 test('closing warns only for an unsent draft or a failed save (FR-008)', async () => {
-    const dir = await workDir()
-    const file = join(dir, 'a.branchchat')
     const { t, win } = await start()
-    await createDiscussion(t, win, file)
+    await createDiscussion(win)
 
     // 1. unsent draft: the dialog appears; "cancel" (button 1) keeps the window
     await win.getByTestId('composer').fill('черновик')
@@ -266,14 +302,12 @@ test('closing warns only for an unsent draft or a failed save (FR-008)', async (
         .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
         .catch(() => undefined) // the app quits while this call is answered
     await exited
-    expect((await readDiscussionFile(file)).discussion.threads[0]!.messages).toHaveLength(1)
+    expect(readLibrary(t.userData).discussion.threads[0]!.messages).toHaveLength(1)
 })
 
 test('closing right after sending still saves the message', async () => {
-    const dir = await workDir()
-    const file = join(dir, 'a.branchchat')
     const { t, win } = await start()
-    await createDiscussion(t, win, file)
+    await createDiscussion(win)
     await send(win, 'последнее сообщение')
     const exited = new Promise<void>((resolve) => t.app.process().once('exit', () => resolve()))
     // no waiting for "Сохранено": the app quits while this call is answered
@@ -281,5 +315,5 @@ test('closing right after sending still saves the message', async () => {
         .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
         .catch(() => undefined)
     await exited
-    expect((await readDiscussionFile(file)).discussion.threads[0]!.messages).toHaveLength(1)
+    expect(readLibrary(t.userData).discussion.threads[0]!.messages).toHaveLength(1)
 })

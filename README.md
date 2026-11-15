@@ -33,7 +33,9 @@ src/
     validation/  zod schemas, rich-text subset, editor-to-stored conversion, link input rules, integrity checks
     sync/        sync protocol: event schemas, canonical JSON, frames, apply and merge rules (pure)
   main/        Electron main process
-    document/    .branchchat ZIP reading/writing, atomic save, images, migrations
+    library/     the local library (release 2.2, ADR-003): SQLite adapter, schema, blob files, repository,
+                 import/merge/export, migration of 1.x files, backups
+    document/    .branchchat ZIP reading/writing (import and export), images, file migrations
     windows/     launch arguments, process-wide security
     application/ controller (windows, open/new/close), document session (autosave queue), menu, dialogs
     local-state/ participant settings (name, ID)
@@ -52,6 +54,21 @@ docs/          requirements, ADR, implementation plan
 
 Lint enforces the boundaries: `shared/` may not import Electron, React or Node built-ins; the renderer may not import
 Electron, Node built-ins or `main/`.
+
+## Where the data is (release 2.2)
+
+`%APPDATA%\BranchChat` (in development and tests: the profile folder):
+
+| Path                                  | Content                                                                    |
+|---------------------------------------|----------------------------------------------------------------------------|
+| `library.sqlite` (+ `-wal`, `-shm`)   | all discussions (SQLite, WAL), the search index                            |
+| `blobs\<2 hex>\<sha256>`              | images, one file per content hash                                          |
+| `backups\<date>\`, `backups\blobs\`    | the last 7 backups and their images (FR-207)                               |
+| `settings.json`, `keys\`, `sync\`      | settings, encryption keys, sync registry and states                        |
+| `logs\`                               | log files (release 2.1)                                                    |
+| `recent.json`                         | the recent files of release 1.x, read once for the migration (FR-206)      |
+
+`.branchchat` files are only for import and export.
 
 ## Document format (schema version 2)
 

@@ -1,13 +1,10 @@
-import { win32 } from 'node:path'
 import { ru } from '@shared/i18n/ru'
 import type { SyncHealth } from '../sync/conversationSync'
 
 /** One registered synchronized discussion as the tray menu sees it. */
 export interface TrayDiscussion {
     conversationId: string
-    filePath: string
-    /** False: the registered file is missing (D-27). */
-    exists: boolean
+    title: string
     /** Null: the sync of this discussion did not start. */
     health: SyncHealth | null
 }
@@ -17,36 +14,21 @@ export type TrayItem =
     | { kind: 'info'; label: string }
     | { kind: 'separator' }
 
-/** Name of a discussion in the tray menu: the file name without the extension. */
-export function discussionName(filePath: string): string {
-    // win32 accepts both separators, so the name is right on any platform
-    return win32.basename(filePath).replace(/\.branchchat$/i, '')
-}
-
 /**
- * The tray menu (D-33, D-35, D-27): open, the discussions (a missing file has "Найти файл…"), the sync state,
- * "Проверить папки", "Выход". Action IDs: `open`, `open:<conversationId>`, `find:<conversationId>`, `check`, `exit`.
+ * The tray menu (D-33, D-35): open, the discussions, the sync state, "Проверить папки", "Выход". Action IDs:
+ * `open`, `open:<conversationId>`, `check`, `exit`.
  */
 export function trayMenuModel(discussions: readonly TrayDiscussion[]): TrayItem[] {
     const items: TrayItem[] = [{ kind: 'action', id: 'open', label: ru.tray.open }]
     items.push({ kind: 'separator' }, { kind: 'info', label: ru.tray.discussions })
     if (discussions.length === 0) items.push({ kind: 'info', label: ru.tray.noDiscussions })
-    const sorted = [...discussions].sort((a, b) =>
-        discussionName(a.filePath).localeCompare(discussionName(b.filePath), 'ru')
-    )
-    for (const d of sorted) {
-        const name = discussionName(d.filePath)
-        if (d.exists) items.push({ kind: 'action', id: `open:${d.conversationId}`, label: name })
-        else
-            items.push(
-                { kind: 'info', label: ru.tray.missingFile(name) },
-                { kind: 'action', id: `find:${d.conversationId}`, label: ru.tray.findFile(name) }
-            )
-    }
+    const sorted = [...discussions].sort((a, b) => a.title.localeCompare(b.title, 'ru'))
+    for (const d of sorted)
+        items.push({ kind: 'action', id: `open:${d.conversationId}`, label: d.title })
     items.push({ kind: 'separator' })
     const problems: string[] = []
     for (const d of sorted) {
-        const name = discussionName(d.filePath)
+        const name = d.title
         const h = d.health
         if (!h) continue
         if (h.folder === 'missing') problems.push(ru.tray.status.missing(name))

@@ -4,18 +4,18 @@ import type { BackgroundFlag, SettingsView } from '@shared/types/ipc'
 import type { SettingsStore } from '../local-state/settings'
 import type { NewMessagesArrival, SyncService } from '../sync/syncService'
 import type { LoginItemPort, NotifierPort, TrayPort } from './ports'
-import { discussionName, trayMenuModel, type TrayDiscussion } from './trayMenu'
+import { trayMenuModel, type TrayDiscussion } from './trayMenu'
 
 /** What the background service needs from the window controller. */
 export interface WindowsPort {
     readonly windowCount: number
-    /** True if a window shows this file and that window is active (D-42: then no notification). */
-    isActive(filePath: string): boolean
+    /** True if a window shows this discussion and that window is active (D-42: then no notification). */
+    isActive(documentId: string): boolean
     /** "Открыть": shows a window; with no window, opens the most recently used synchronized discussion. */
     showAny(): Promise<void>
-    openPath(filePath: string): Promise<void>
+    openDiscussion(documentId: string): Promise<void>
     /** Opens the discussion and shows this message (a click on a notification). */
-    showMessage(filePath: string, threadId: string, messageId: string): Promise<void>
+    showMessage(documentId: string, threadId: string, messageId: string): Promise<void>
 }
 
 export interface BackgroundDeps {
@@ -25,19 +25,13 @@ export interface BackgroundDeps {
     tray: TrayPort
     notifier: NotifierPort
     loginItem: LoginItemPort
-    fileExists(path: string): Promise<boolean>
-    /** "Найти файл…" (D-27): the chosen file, or null. */
-    pickDiscussionFile(): Promise<string | null>
-    /** The `documentId` of a discussion file, or null if it cannot be read. */
-    readDocumentId(path: string): Promise<string | null>
-    showError(message: string): Promise<void>
     /** Ends the application (a normal close: a downloaded update installs, FR-141). */
     quit(): void
     log?: (message: string) => void
 }
 
 /**
- * Release 1.4 (D-16, D-27, D-33, D-35, D-36, D-38, D-42): the tray, the life cycle without windows, notifications for
+ * Release 1.4 (D-16, D-33, D-35, D-36, D-38, D-42): the tray, the life cycle without windows, notifications for
  * new messages, and "Запускать вместе с Windows".
  */
 export class BackgroundService {
@@ -56,7 +50,7 @@ export class BackgroundService {
         return this.deps.sync.count > 0
     }
 
-    /** Builds the tray menu again (discussions, missing files, sync state). */
+    /** Builds the tray menu again (discussions, sync state). */
     refresh(): Promise<void> {
         this.refreshing = this.refreshing.then(() => this.doRefresh()).catch(() => undefined)
         return this.refreshing
@@ -68,14 +62,11 @@ export class BackgroundService {
             this.deps.tray.hide()
             return
         }
-        const discussions: TrayDiscussion[] = []
-        for (const s of statuses)
-            discussions.push({
-                conversationId: s.conversationId,
-                filePath: s.filePath,
-                exists: await this.deps.fileExists(s.filePath),
-                health: s.health
-            })
+        const discussions: TrayDiscussion[] = statuses.map((s) => ({
+            conversationId: s.conversationId,
+            title: s.title,
+            health: s.health
+        }))
         this.deps.tray.show(
             trayMenuModel(discussions),
             (id) => void this.onAction(id),
@@ -138,7 +129,7 @@ export class BackgroundService {
     newMessages(arrival: NewMessagesArrival): void {
         const settings = this.deps.settings.get()
         if (!settings.notifyNewMessages) return
-        if (this.deps.windows.isActive(arrival.filePath)) return
+        if (this.deps.windows.isActive(arrival.conversationId)) return
         const names = new Map(
             arrival.contents.discussion.participants.map((p) => [p.participantId, p.displayName])
         )
@@ -148,16 +139,16 @@ export class BackgroundService {
             authorName: names.get(m.authorId) ?? m.authorDisplayName,
             content: m.content
         }))
-        for (const n of planNotifications(
-            discussionName(arrival.filePath),
-            messages,
-            settings.notifyShowText
-        ))
+        for (const n of planNotifications(arrival.title, messages, settings.notifyShowText))
             this.deps.notifier.show({
                 title: n.title,
                 body: n.body,
                 onClick: () =>
-                    void this.deps.windows.showMessage(arrival.filePath, n.threadId, n.messageId)
+                    void this.deps.windows.showMessage(
+                        arrival.conversationId,
+                        n.threadId,
+                        n.messageId
+                    )
             })
     }
 
@@ -168,29 +159,10 @@ export class BackgroundService {
                 await this.deps.sync.checkAll()
                 await this.refresh()
             } else if (id === 'exit') this.requestQuit()
-            else if (id.startsWith('open:')) {
-                const s = this.find(id.slice('open:'.length))
-                if (s) await this.deps.windows.openPath(s.filePath)
-            } else if (id.startsWith('find:')) await this.findFile(id.slice('find:'.length))
+            else if (id.startsWith('open:'))
+                await this.deps.windows.openDiscussion(id.slice('open:'.length))
         } catch (err) {
             this.deps.log?.(`tray action ${id} failed: ${(err as Error).message}`)
         }
-    }
-
-    private find(conversationId: string): { filePath: string } | undefined {
-        return this.deps.sync.statusList().find((s) => s.conversationId === conversationId)
-    }
-
-    /** D-27: the registered file is missing; the person shows where it is now. */
-    private async findFile(conversationId: string): Promise<void> {
-        const chosen = await this.deps.pickDiscussionFile()
-        if (!chosen) return
-        if ((await this.deps.readDocumentId(chosen)) !== conversationId) {
-            await this.deps.showError(ru.tray.wrongFile)
-            return
-        }
-        await this.deps.sync.adoptMovedFile(conversationId, chosen)
-        await this.refresh()
-        await this.deps.windows.openPath(chosen)
     }
 }

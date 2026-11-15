@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { SYNC_PROTOCOL_VERSION, normalizeSynced, type KeyBundle } from '@shared/sync'
 import type { DocumentContents, RosterMember } from '@shared/validation'
 import type { DomainContext } from '@shared/domain'
@@ -19,9 +19,10 @@ import {
     verifyKeyBundle
 } from '../crypto/identity'
 import type { KeyStore } from '../crypto/keyStore'
-import { newDocumentContents, readDocument, writeDocument } from '../document'
+import { newDocumentContents, readDocument } from '../document'
+import type { LibraryService } from '../library'
 import type { SettingsStore } from '../local-state/settings'
-import { FolderTransport, isInside, type FolderTestResult } from '../transport/folderTransport'
+import { FolderTransport, type FolderTestResult } from '../transport/folderTransport'
 import type { SyncRegistry } from './registry'
 import type { SyncService } from './syncService'
 
@@ -54,6 +55,7 @@ export type InvitationView =
 
 export interface OnboardingDeps {
     userData: string
+    library: LibraryService
     keys: KeyStore
     settings: SettingsStore
     registry: SyncRegistry
@@ -207,10 +209,10 @@ export class Onboarding {
         }
         if (fresh.length === 0) throw new AppError('NO_MEMBERS', 'no new member')
         const after = await this.deps.sync.addMembers(entry.conversationId, fresh)
-        if (session.saveError) throw new AppError('WRITE_FAILED', 'cannot write the file')
+        if (session.saveError) throw new AppError('SAVE_FAILED', 'cannot save the discussion')
         await this.publishOwnKey(entry.sharedRoot)
-        // the snapshot is the file itself, with the new roster and all images (sync-protocol.md 7.10)
-        const snapshot = new Uint8Array(await fs.readFile(entry.filePath))
+        // the snapshot is the discussion as a file, with the new roster and all images (sync-protocol.md 7.10)
+        const snapshot = await this.deps.library.snapshot(after)
         for (const m of fresh)
             await this.deps.sync.invite(entry.conversationId, m.participantId, snapshot, after)
         return fresh.length
@@ -252,9 +254,9 @@ export class Onboarding {
             encryptionPublicKey: verified.encryptionPublicKey,
             fingerprint: verified.fingerprint
         })
-        if (session.saveError) throw new AppError('WRITE_FAILED', 'cannot write the file')
+        if (session.saveError) throw new AppError('SAVE_FAILED', 'cannot save the discussion')
         await this.publishOwnKey(entry.sharedRoot)
-        const snapshot = new Uint8Array(await fs.readFile(entry.filePath))
+        const snapshot = await this.deps.library.snapshot(after)
         await this.deps.sync.invite(entry.conversationId, member.participantId, snapshot, after, {
             inboxId: verified.participantId
         })
@@ -262,22 +264,17 @@ export class Onboarding {
 
     /**
      * Makes a synchronized discussion (design 12.3 and 12.4): the roster has this member and the accepted candidates.
-     * With `session`, the open discussion is converted (D-02); otherwise a new file is created at `filePath`.
-     * Returns the local file path.
+     * With `session`, the open discussion is converted (D-02); otherwise a new discussion named `title` is added to
+     * the library. Returns the conversation ID.
      */
     async create(input: {
         root: string
-        filePath: string
+        title?: string
         keys: readonly string[]
         session?: DocumentSession
     }): Promise<string> {
         const me = this.me()
         const identity = await this.identity()
-        if (isInside(input.root, input.filePath))
-            throw new AppError(
-                'FILE_IN_SHARED_FOLDER',
-                'the file must be outside the shared folder'
-            )
         const test = await this.testFolder(input.root)
         if (!test.ok) throw new AppError('FOLDER_TEST_FAILED', `folder test failed at ${test.step}`)
         const marker = await this.transport(input.root).readMarker()
@@ -318,20 +315,22 @@ export class Onboarding {
             await input.session.flush()
             contents = input.session.adoptSync(sync)
             await input.session.flush()
-            if (input.session.saveError) throw new AppError('WRITE_FAILED', 'cannot write the file')
+            if (input.session.saveError)
+                throw new AppError('SAVE_FAILED', 'cannot save the discussion')
         } else {
+            const title = input.title?.trim()
+            if (!title) throw new AppError('TITLE_REQUIRED', 'a title is required')
             const base = newDocumentContents(this.deps.ctx, {
-                title: basename(input.filePath).replace(/\.branchchat$/i, ''),
+                title,
                 author: me,
                 generator: { name: 'BranchChat', version: this.deps.appVersion }
             })
             contents = normalizeSynced({ ...base, sync })
-            await writeDocument(input.filePath, contents, { discardExisting: true })
+            await this.deps.library.create(contents)
         }
 
         const entry = {
             conversationId: contents.manifest.documentId,
-            filePath: input.filePath,
             sharedRoot: input.root,
             ownId: me.participantId
         }
@@ -339,11 +338,11 @@ export class Onboarding {
         await this.deps.sync.open(entry)
         if (input.session) await this.deps.sync.attach(input.session)
         await this.publishOwnKey(input.root)
-        // the snapshot is the file itself, with the roster and all images (sync-protocol.md 7.10)
-        const snapshot = new Uint8Array(await fs.readFile(input.filePath))
+        // the snapshot is the discussion as a file, with the roster and all images (sync-protocol.md 7.10)
+        const snapshot = await this.deps.library.snapshot(contents)
         for (const m of others)
             await this.deps.sync.invite(entry.conversationId, m.participantId, snapshot, contents)
-        return input.filePath
+        return entry.conversationId
     }
 
     /** Looks for an invitation in the own inbox (design 12.5, step 3). */
@@ -498,22 +497,26 @@ export class Onboarding {
         return best ?? { state: 'waiting' }
     }
 
-    /** Saves the invited discussion and starts its sync (design 12.5, steps 4 and 5). */
-    async importInvitation(
-        root: string,
-        invitationId: string,
-        targetPath: string
-    ): Promise<string> {
-        if (isInside(root, targetPath))
-            throw new AppError(
-                'FILE_IN_SHARED_FOLDER',
-                'the file must be outside the shared folder'
-            )
+    /**
+     * Adds the invited discussion to the library and starts its sync (design 12.5, steps 4 and 5). A copy of the same
+     * discussion that is already in the library (an exported copy, or the copy of a lost identity, D-15) is kept under a
+     * new ID. Returns the conversation ID.
+     */
+    async importInvitation(root: string, invitationId: string): Promise<string> {
         const found = await this.readInvitation(root)
         if (found.state !== 'ready' || found.invitation.payload.invitationId !== invitationId)
             throw new AppError('INVITATION_GONE', 'the invitation is not available')
         const conversationId = found.contents.manifest.documentId
-        await fs.copyFile(this.tempSnapshot(invitationId), targetPath)
+        const library = this.deps.library
+        if (library.has(conversationId)) {
+            if (library.store(conversationId).hasOwner)
+                throw new AppError('DISCUSSION_OPEN', 'close the window of this discussion first')
+            await library.moveAside(conversationId)
+        }
+        await library.importFile(this.tempSnapshot(invitationId), {
+            keepSync: true,
+            titleFromFileName: false
+        })
         await fs.rm(this.tempSnapshot(invitationId), { force: true })
         // D-32: a re-invitation gives the old participant ID back; the new keys are bound to it
         const inboxId = this.deps.settings.get().participantId
@@ -527,7 +530,6 @@ export class Onboarding {
         }
         const entry = {
             conversationId,
-            filePath: targetPath,
             sharedRoot: root,
             ownId: this.deps.settings.get().participantId
         }
@@ -544,6 +546,6 @@ export class Onboarding {
             found.fileNames,
             inboxId
         )
-        return targetPath
+        return conversationId
     }
 }

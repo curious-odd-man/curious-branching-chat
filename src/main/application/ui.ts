@@ -9,9 +9,13 @@ export interface CloseProblems {
 
 /** Everything the controller needs to ask the user. Kept behind an interface so tests can replace it. */
 export interface Ui {
-    pickSavePath(parent: BrowserWindow | undefined, defaultName?: string): Promise<string | null>
-    /** The local path of the shared folder (design 12.3, step 5). */
-    pickFolder(parent: BrowserWindow | undefined): Promise<string | null>
+    /** The local path of the shared folder (design 12.3, step 5), or another folder with its own title. */
+    pickFolder(parent: BrowserWindow | undefined, title?: string): Promise<string | null>
+    /** A yes/no question; resolves true for yes (the first button). */
+    confirm(
+        parent: BrowserWindow | undefined,
+        q: { title: string; message: string; detail?: string; yes: string; no: string }
+    ): Promise<boolean>
     /** A `.bckey` file of another person (D-21). */
     pickKeyFile(parent: BrowserWindow | undefined): Promise<string | null>
     pickOpenPath(parent: BrowserWindow | undefined): Promise<string | null>
@@ -27,9 +31,7 @@ export interface Ui {
     confirmAssociation(parent: BrowserWindow | undefined): Promise<boolean>
     /** Resolves true if the user chose to close anyway. */
     confirmClose(parent: BrowserWindow | undefined, problems: CloseProblems): Promise<boolean>
-    /** FR-168: is this file the registered synchronized discussion, moved or renamed? */
-    confirmMovedDiscussion(parent: BrowserWindow | undefined): Promise<boolean>
-    /** "Отправить копию…": where to save the copy (FR-167). */
+    /** "Экспортировать…": where to save the file (FR-204). */
     pickCopyPath(parent: BrowserWindow | undefined, defaultName: string): Promise<string | null>
 }
 
@@ -40,21 +42,6 @@ async function messageBox(parent: BrowserWindow | undefined, options: MessageBox
 }
 
 export const electronUi: Ui = {
-    async pickSavePath(parent, defaultName) {
-        const options = {
-            title: ru.dialogs.saveTitle,
-            defaultPath: join(
-                app.getPath('documents'),
-                `${defaultName ?? ru.dialogs.defaultFileName}.branchchat`
-            ),
-            filters
-        }
-        const result = parent
-            ? await dialog.showSaveDialog(parent, options)
-            : await dialog.showSaveDialog(options)
-        return result.canceled || !result.filePath ? null : result.filePath
-    },
-
     async pickOpenPath(parent) {
         const options = {
             title: ru.dialogs.openTitle,
@@ -70,9 +57,23 @@ export const electronUi: Ui = {
             : (result.filePaths[0] ?? null)
     },
 
-    async pickFolder(parent) {
+    async confirm(parent, q) {
+        const result = await messageBox(parent, {
+            type: 'warning',
+            title: q.title,
+            message: q.message,
+            ...(q.detail ? { detail: q.detail } : {}),
+            buttons: [q.yes, q.no],
+            defaultId: 0,
+            cancelId: 1,
+            noLink: true
+        })
+        return result.response === 0
+    },
+
+    async pickFolder(parent, title) {
         const options = {
-            title: ru.shared.folderTitle,
+            title: title ?? ru.shared.folderTitle,
             properties: ['openDirectory' as const, 'createDirectory' as const]
         }
         const result = parent
@@ -140,24 +141,10 @@ export const electronUi: Ui = {
         return result.response === 0
     },
 
-    async confirmMovedDiscussion(parent) {
-        const result = await messageBox(parent, {
-            type: 'question',
-            title: ru.dialogs.movedTitle,
-            message: ru.dialogs.movedQuestion,
-            detail: ru.dialogs.movedDetail,
-            buttons: [ru.dialogs.movedYes, ru.dialogs.movedNo],
-            defaultId: 0,
-            cancelId: 1,
-            noLink: true
-        })
-        return result.response === 0
-    },
-
     async pickCopyPath(parent, defaultName) {
         const options = {
-            title: ru.dialogs.copyTitle,
-            message: ru.dialogs.copyHint,
+            title: ru.dialogs.exportTitle,
+            message: ru.dialogs.exportHint,
             defaultPath: join(app.getPath('documents'), defaultName),
             filters
         }

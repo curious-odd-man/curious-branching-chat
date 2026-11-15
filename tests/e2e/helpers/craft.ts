@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import yazl from 'yazl'
 
@@ -124,7 +124,8 @@ export async function writeDiscussionFile(
     const manifest = {
         format: 'branchchat',
         schemaVersion: 1,
-        documentId: `doc-${Date.now()}`,
+        // unique: two files with the same ID are the same discussion in the library (merged on import)
+        documentId: `doc-${randomUUID()}`,
         createdAt: created
     }
     const zip = new yazl.ZipFile()

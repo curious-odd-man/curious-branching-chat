@@ -39,10 +39,11 @@ export interface SavedThread {
     status: 'open' | 'closed'
     messages: (SavedMessage & { messageId: string })[]
 }
-interface SavedDiscussion {
+export interface SavedDiscussion {
     title: string
     participants: { participantId: string; displayName: string }[]
     threads: SavedThread[]
+    assets: { assetId: string; sha256: string; mediaType: string; size: number; path: string }[]
 }
 
 export async function readReadState(path: string): Promise<Record<string, string[]>> {

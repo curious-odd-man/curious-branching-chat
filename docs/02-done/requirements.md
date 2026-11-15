@@ -1,10 +1,11 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements plus synchronized discussions and release 2.1 (revision 14)  
+**Status:** MVP requirements plus synchronized discussions, release 2.1, and release 2.2 (revision 15)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
-**Discussion exchange format:** One portable file per discussion  
+**Storage:** A local library in `%APPDATA%\BranchChat` (release 2.2, ADR-003)  
+**Discussion exchange format:** One portable file per discussion (import and export)  
 **Application distribution:** One downloadable Windows `.exe` (per-user installer, no administrator rights)  
 **Windows file association:** `.branchchat` opens in BranchChat  
 **Application update source:** GitHub Releases; stable releases only
@@ -471,6 +472,11 @@ file when it is exchanged.
 
 ### 5.11. Recent discussions and startup
 
+> Release 2.2: FR-143 to FR-147 and FR-150 apply to the discussions of the library (section 5.14): the start screen
+> lists every discussion of the library (most recently used first); the File menu and the jump list show the newest
+> ones (the number is the setting of FR-146, 0 = none); there are no missing files, no "remove from list", and no
+> "Очистить список". FR-148 and FR-149 stay; a jump list entry starts the app with `--discussion=<id>`.
+
 - **FR-143.** The application remembers the discussions the person opened or created, most recent first. The list is
   local to the Windows user (like the settings) and is never stored in a discussion file.
 - **FR-144.** The start screen (a window without a discussion) shows the list: file name, folder, and a button to
@@ -622,6 +628,47 @@ These requirements come from `requirements-next.md` (sections 2.5, 2.11, 2.12, 2
   message text and keys.
 - **FR-324.** A log write error or a console error never stops the app.
 
+### 5.14. Release 2.2: local library, import, export, backups
+
+These requirements come from `requirements-next.md` (section 2.1) and ADR-003 (option C1); the numbers stay the same.
+
+- **FR-201.** BranchChat stores all discussions of a Windows user in a local library in `%APPDATA%\BranchChat`: a
+  SQLite database `library.sqlite` (WAL) and the images as files `blobs\<2 hex>\<sha256>`. The start screen lists the
+  discussions of the library, most recently used first, with the number of messages and the time of the newest one.
+- **FR-202.** A save is one transaction: after a crash or a power cut, the library has the state before or after the
+  change. An image file is written and checked before its row. "Новое обсуждение" asks for the name in the window and
+  makes the discussion in the library (no save dialog).
+- **FR-203.** "Файл > Экспортировать…" writes the discussion as a `.branchchat` file in the current format, with all
+  images. A synchronized discussion is exported without the member list and delivery marks (a copy to send, FR-167).
+- **FR-204.** "Файл > Импортировать…" (Ctrl+O), drag and drop, a double-click on a file, and a file on the command line
+  import the file, then open the discussion. A new discussion takes the file name (without `.branchchat`) as its name.
+  The file is never changed.
+- **FR-205.** The import of a discussion that is already in the library (same document ID) merges: new messages,
+  branches, participants, and images are added by ID; read marks are joined; for a branch title and state the later
+  change stamp wins (a file of schema version 1 has no stamps: the library keeps its value). The window says how many
+  messages were added, or that the file had nothing new.
+- **FR-205a.** A file is never merged into a synchronized discussion: the import is refused with a message. A file with
+  a member list that is not registered on this computer comes in as a normal discussion.
+- **FR-206.** At the first start of release 2.2, one question offers the files of the recent list and the sync registry,
+  all selected (missing files shown, not selectable). Each chosen file is imported; a registered synchronized
+  discussion keeps its conversation ID, member list, keys, sync state, outbox, and shared folder, and its sync goes on.
+  The files are not changed or deleted. "Не переносить" is remembered; files can still be imported one by one.
+- **FR-207.** BranchChat makes a backup of the library once a day (a minute after the first start of the day, or at the
+  next full hour) and before each change of the library schema: in `%APPDATA%\BranchChat\backups` and, if set, in
+  `<folder>\BranchChat backups` of a folder chosen in Settings. A backup is a consistent copy of the database plus the
+  image files, which are copied only once. Each place keeps the last 7 backups. "Резервная копия сейчас" (File menu,
+  Settings) makes one at once. "Восстановить из резервной копии…" (File menu, Settings) lists the backups of both
+  places; after a confirmation the current library becomes a backup and the app restarts with the chosen one.
+- **FR-208.** At start, BranchChat checks the library (`PRAGMA quick_check`; image rows without a file are removed, so
+  the image shows as missing). A damaged library is never deleted: it is renamed to `library.damaged-<time>.sqlite`
+  and the person chooses the newest backup, an empty library, or to quit.
+- **FR-209.** Settings say that backups contain the messages without encryption and that the private keys are not in a
+  backup. When the person chooses a backup folder for the first time, BranchChat warns that a cloud folder stores the
+  messages readable for the cloud provider.
+- Changes to earlier requirements: FR-007 and FR-013 (save on each change) apply to the library. FR-117 (two copies),
+  FR-154 (a detached copy of a file), and FR-168 (a moved file) do not apply: a discussion with a member list that is
+  not registered on this computer is shown as a separate copy. "Отправить копию…" is now "Экспортировать…".
+
 ## 6. Non-functional requirements
 
 - **NFR-001.** The application must work offline for all discussion operations.
@@ -733,7 +780,10 @@ what the window reports.
 ### Local state (not stored in the discussion file)
 
 - Participant name and participant ID.
-- Application settings, including update preferences.
+- Application settings, including update preferences and the backup folder.
+- Release 2.2: the library (`library.sqlite`, `blobs\`) and its backups (`backups\`). The library tables keep the
+  discussion data of the file format (manifest, discussion, read state, member list, delivery) in the same JSON form,
+  plus columns for the list and an FTS5 search index with normalized text (lower case, ё → е).
 
 ## 8. Architecture principles
 
@@ -870,6 +920,11 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 15
+
+- Section 5.14: release 2.2, the local library (FR-201 to FR-209). Notes on sections 5.11 (recent discussions) and on
+  FR-117, FR-154, FR-167, FR-168.
 
 ## Changes in revision 14
 

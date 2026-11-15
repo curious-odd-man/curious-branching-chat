@@ -50,6 +50,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
     const [pasted, setPasted] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [busy, setBusy] = useState(false)
+    const [newTitle, setNewTitle] = useState<string>(ru.shared.defaultFileName)
     const [roster, setRoster] = useState<RosterView | null>(null)
     const [invitation, setInvitation] = useState<InvitationView | null>(null)
     const hasName = Boolean(settings?.displayName)
@@ -186,10 +187,15 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
         setBusy(true)
         setError(null)
         void api
-            .createShared(root, keys, mode === 'convert' ? 'convert' : 'new')
+            .createShared(
+                root,
+                keys,
+                mode === 'convert' ? 'convert' : 'new',
+                mode === 'convert' ? undefined : newTitle.trim()
+            )
             .then(async (r) => {
                 if (!r.ok) return setError(r.error.message)
-                if (!r.data) return // the save dialog was cancelled
+                if (!r.data) return
                 const roster = await api.getRoster()
                 if (roster.ok && roster.data) setRoster(roster.data)
                 else onClose()
@@ -326,6 +332,19 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                     <p className="hint">{ru.shared.keyHint}</p>
                 </section>
 
+                {mode === 'new' && (
+                    <section>
+                        <label>
+                            {ru.shared.titleLabel}
+                            <input
+                                data-testid="wizard-title"
+                                maxLength={500}
+                                value={newTitle}
+                                onChange={(e) => setNewTitle(e.target.value)}
+                            />
+                        </label>
+                    </section>
+                )}
                 <section hidden={fromDiscussion}>
                     <h3>{ru.shared.folderStep}</h3>
                     <p className="hint">{ru.shared.folderHint}</p>
@@ -517,7 +536,13 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                             type="button"
                             className="primary"
                             data-testid="wizard-create"
-                            disabled={busy || !root || !ready || accepted.size === 0}
+                            disabled={
+                                busy ||
+                                !root ||
+                                !ready ||
+                                accepted.size === 0 ||
+                                (mode !== 'convert' && newTitle.trim().length === 0)
+                            }
                             onClick={create}
                         >
                             {mode === 'convert' ? ru.shared.convert : ru.shared.create}

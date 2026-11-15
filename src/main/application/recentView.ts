@@ -1,27 +1,21 @@
-import { promises as fs } from 'node:fs'
-import { basename, dirname, extname } from 'node:path'
-import type { RecentFileView } from '@shared/types/ipc'
-import type { RecentEntry } from '../local-state/recentFiles'
+import type { DiscussionListItem } from '@shared/types/ipc'
+import type { DiscussionSummary } from '../library'
 
-/** Turns stored entries into what the windows show, checking which files still exist. */
-export async function describeRecent(
-    entries: readonly RecentEntry[],
-    exists: (path: string) => Promise<boolean> = defaultExists
-): Promise<RecentFileView[]> {
-    return Promise.all(
-        entries.map(async (e) => ({
-            path: e.path,
-            name: basename(e.path, extname(e.path)),
-            directory: dirname(e.path),
-            exists: await exists(e.path)
-        }))
-    )
+/** The discussions as the start screen and the menus show them: most recently used first. */
+export function describeDiscussions(list: readonly DiscussionSummary[]): DiscussionListItem[] {
+    return recentOrder(list).map((d) => ({
+        id: d.id,
+        title: d.title,
+        lastMessageAt: d.lastMessageAt,
+        messageCount: d.messageCount,
+        synced: d.synced
+    }))
 }
 
-async function defaultExists(path: string): Promise<boolean> {
-    try {
-        return (await fs.stat(path)).isFile()
-    } catch {
-        return false
-    }
+/** Discussions in the order of the start screen and the recent menu: last opened, then last message, then created. */
+export function recentOrder<
+    T extends { openedAt: string | null; lastMessageAt: string | null; createdAt: string }
+>(list: readonly T[]): T[] {
+    const key = (d: T): string => d.openedAt ?? d.lastMessageAt ?? d.createdAt
+    return [...list].sort((a, b) => (key(a) < key(b) ? 1 : key(a) > key(b) ? -1 : 0))
 }

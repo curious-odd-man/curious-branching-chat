@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { mainThread, type Author } from '@shared/domain'
 import type { DocumentContents } from '@shared/types'
 import { DocumentSession } from '../../src/main/application/documentSession'
 import { groupFingerprint } from '../../src/main/crypto/identity'
 import { KeyStore, type KeyProtector } from '../../src/main/crypto/keyStore'
-import { readDocument } from '../../src/main/document'
+import type { LibraryService } from '../../src/main/library'
+import { closeLibraries, createSession, libraryIn } from '../helpers/library'
 import { SettingsStore } from '../../src/main/local-state/settings'
 import { Onboarding } from '../../src/main/sync/onboarding'
 import { SyncRegistry } from '../../src/main/sync/registry'
@@ -20,9 +21,12 @@ const protector: KeyProtector = {
     decrypt: (s) => Buffer.from(s.subarray(2))
 }
 
+afterEach(() => closeLibraries())
+
 interface P {
     author: Author
     dir: string
+    lib: LibraryService
     settings: SettingsStore
     keys: KeyStore
     registry: SyncRegistry
@@ -42,8 +46,10 @@ async function person(dir: string, author: Author): Promise<P> {
     const keys = new KeyStore(join(pdir, 'keys'), protector, () => new Date().toISOString())
     const registry = new SyncRegistry(join(pdir, 'sync'))
     await registry.load()
+    const lib = await libraryIn(pdir)
     const sync = new SyncService({
         userData: pdir,
+        library: lib,
         registry,
         keys,
         settings,
@@ -57,6 +63,7 @@ async function person(dir: string, author: Author): Promise<P> {
     await sync.start()
     const onboarding = new Onboarding({
         userData: pdir,
+        library: lib,
         keys,
         settings,
         registry,
@@ -64,7 +71,15 @@ async function person(dir: string, author: Author): Promise<P> {
         ctx: makeCtx(author.participantId),
         appVersion: '1.2.0'
     })
-    return { author, dir: pdir, settings, keys, registry, sync, onboarding }
+    return { author, dir: pdir, lib, settings, keys, registry, sync, onboarding }
+}
+
+/** What the library of a person holds for a discussion. */
+const saved = (p: P, id: string): DocumentContents => p.lib.repo.load(id).contents
+
+async function openIn(p: P, id: string, ctx: ReturnType<typeof makeCtx>): Promise<DocumentSession> {
+    const store = p.lib.store(id)
+    return DocumentSession.open(store, await store.load(), { ctx })
 }
 
 const texts = (c: DocumentContents): string[] =>
@@ -91,23 +106,16 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
             const bobPrint = (await b.onboarding.ownBundle()).fingerprint
             expect(candidates[0]!.fingerprint).toBe(groupFingerprint(bobPrint))
 
-            // the local file may not be inside the shared folder (FR-160)
+            // a new discussion needs a name
             await expect(
-                a.onboarding.create({
-                    root: shared,
-                    filePath: join(shared, 'x.branchchat'),
-                    keys: [candidates[0]!.text]
-                })
-            ).rejects.toMatchObject({ code: 'FILE_IN_SHARED_FOLDER' })
-            const fileA = join(a.dir, 'Планы.branchchat')
-            await a.onboarding.create({
+                a.onboarding.create({ root: shared, title: ' ', keys: [candidates[0]!.text] })
+            ).rejects.toMatchObject({ code: 'TITLE_REQUIRED' })
+            const fileA = await a.onboarding.create({
                 root: shared,
-                filePath: fileA,
+                title: 'Планы',
                 keys: [candidates[0]!.text]
             })
-            expect(
-                a.sync.invitationStatus((await readDocument(fileA)).contents.manifest.documentId)
-            ).toEqual({ 'p-boris': 'invited' })
+            expect(a.sync.invitationStatus(fileA)).toEqual({ 'p-boris': 'invited' })
 
             // Boris: the invitation names Anna with her fingerprint (he compares it, FR-162)
             const found = await b.onboarding.findInvitation(shared)
@@ -117,19 +125,18 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
                 inviterName: 'Анна',
                 inviterFingerprint: groupFingerprint((await a.onboarding.ownBundle()).fingerprint)
             })
-            const fileB = join(b.dir, 'Планы.branchchat')
-            await b.onboarding.importInvitation(shared, found.invitationId, fileB)
+            const fileB = await b.onboarding.importInvitation(shared, found.invitationId)
             expect(await b.onboarding.findInvitation(shared)).toEqual({ state: 'waiting' })
 
             await settle(a, b)
             expect(a.sync.invitationStatus(found.conversationId)).toEqual({ 'p-boris': 'joined' })
 
-            const sb = await DocumentSession.open(fileB, { ctx: makeCtx('b') })
+            const sb = await openIn(b, fileB, makeCtx('b'))
             expect(await b.sync.attach(sb)).toBe('synced')
             sb.appendMessage(boris, mainThread(sb.current.discussion).threadId, simple('Я с вами'))
             await sb.flush()
             await settle(b, a)
-            expect(texts((await readDocument(fileA)).contents)).toEqual(['Я с вами'])
+            expect(texts(saved(a, fileA))).toEqual(['Я с вами'])
             // nothing is left in the shared folder except the marker and the two key files
             const left = (await fs.readdir(shared, { recursive: true, withFileTypes: true }))
                 .filter((e) => e.isFile())
@@ -148,8 +155,11 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
             await fs.mkdir(shared)
             const a = await person(dir, anna)
             const c = await person(dir, clara)
-            const fileA = join(a.dir, 'Старое.branchchat')
-            const sa = await DocumentSession.create(fileA, { ctx: makeCtx('a') }, { author: anna })
+            const sa = await createSession(
+                a.dir,
+                { ctx: makeCtx('a') },
+                { author: anna, title: 'Старое' }
+            )
             const img = sa.stageImage(pngBytes(7))
             const main = mainThread(sa.current.discussion).threadId
             sa.appendMessage(anna, main, simple('до синхронизации'))
@@ -176,14 +186,13 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
                     )
                 )
             ).text
-            await a.onboarding.create({ root: shared, filePath: fileA, keys: [key], session: sa })
+            await a.onboarding.create({ root: shared, keys: [key], session: sa })
             expect(sa.synced).toBe(true)
 
             const found = await c.onboarding.findInvitation(shared)
             if (found.state !== 'ready') throw new Error(found.state)
-            const fileC = join(c.dir, 'Старое.branchchat')
-            await c.onboarding.importInvitation(shared, found.invitationId, fileC)
-            const got = await readDocument(fileC)
+            const fileC = await c.onboarding.importInvitation(shared, found.invitationId)
+            const got = c.lib.repo.load(fileC)
             expect(texts(got.contents)).toEqual(['до синхронизации', 'с картинкой'])
             expect(got.missingAssetIds).toEqual([])
             expect(got.contents.discussion.threads).toHaveLength(2)
@@ -202,8 +211,11 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
             await fs.mkdir(shared)
             const a = await person(dir, anna)
             const b = await person(dir, boris)
-            const fileA = join(a.dir, 'Большое.branchchat')
-            const sa = await DocumentSession.create(fileA, { ctx: makeCtx('a') }, { author: anna })
+            const sa = await createSession(
+                a.dir,
+                { ctx: makeCtx('a') },
+                { author: anna, title: 'Большое' }
+            )
             const main = mainThread(sa.current.discussion).threadId
             for (let i = 0; i < 5000; i++)
                 sa.appendMessage(
@@ -216,15 +228,12 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
             const key = (await import('../../src/main/crypto/identity')).keyBundleToText(
                 await b.onboarding.ownBundle()
             )
-            await a.onboarding.create({ root: shared, filePath: fileA, keys: [key], session: sa })
+            await a.onboarding.create({ root: shared, keys: [key], session: sa })
             const found = await b.onboarding.findInvitation(shared)
             if (found.state !== 'ready') throw new Error(found.state)
-            const fileB = join(b.dir, 'Большое.branchchat')
-            await b.onboarding.importInvitation(shared, found.invitationId, fileB)
+            const fileB = await b.onboarding.importInvitation(shared, found.invitationId)
             const elapsed = Date.now() - started
-            expect(
-                mainThread((await readDocument(fileB)).contents.discussion).messages
-            ).toHaveLength(5000)
+            expect(mainThread(saved(b, fileB).discussion).messages).toHaveLength(5000)
             expect(elapsed).toBeLessThan(30_000)
             console.log(`convert and join of 5,000 messages: ${elapsed} ms`)
             await a.sync.stop()
@@ -244,7 +253,7 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
             )
             await a.onboarding.create({
                 root: shared,
-                filePath: join(a.dir, 'x.branchchat'),
+                title: 'x',
                 keys: [bobKey]
             })
             // Clara copies Boris's invitation into her own inbox: she cannot open it
@@ -261,7 +270,7 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
             await expect(
                 a.onboarding.create({
                     root: shared,
-                    filePath: join(a.dir, 'y.branchchat'),
+                    title: 'y',
                     keys: [bobKey]
                 })
             ).rejects.toMatchObject({ code: 'FOLDER_IN_USE' })

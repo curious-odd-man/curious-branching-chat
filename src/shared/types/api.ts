@@ -15,7 +15,11 @@ import type {
     IpcResult,
     MenuCommand,
     OpenOutcome,
-    RecentFileView,
+    DiscussionListItem,
+    MigrationCandidate,
+    BackupResult,
+    BackupState,
+    MigrationResult,
     SettingsView,
     UpdateView
 } from './ipc'
@@ -29,7 +33,12 @@ export interface BranchChatApi {
     listCandidates(root: string): Promise<IpcResult<CandidateView[]>>
     parseKey(text: string): Promise<IpcResult<CandidateView>>
     pickKeyFile(): Promise<IpcResult<CandidateView | null>>
-    createShared(root: string, keys: string[], mode: 'new' | 'convert'): Promise<IpcResult<boolean>>
+    createShared(
+        root: string,
+        keys: string[],
+        mode: 'new' | 'convert',
+        title?: string
+    ): Promise<IpcResult<boolean>>
     /** FR-176: invite new members into the open synchronized discussion; returns how many were added. */
     inviteMembers(keys: string[]): Promise<IpcResult<number>>
     /** FR-177: re-invite a member who lost the keys, with the person's new key. */
@@ -49,9 +58,16 @@ export interface BranchChatApi {
     saveKeyBundle(): Promise<IpcResult<boolean>>
     getSettings(): Promise<IpcResult<SettingsView>>
     setDisplayName(displayName: string): Promise<IpcResult<SettingsView>>
-    newDocument(): Promise<IpcResult<OpenOutcome>>
+    /** "Новое обсуждение" with the name the person gave (FR-202). */
+    newDocument(title: string): Promise<IpcResult<OpenOutcome>>
+    /** "Импортировать…": a file dialog, then import and open (FR-203). */
     openDocumentDialog(): Promise<IpcResult<OpenOutcome>>
+    /** A dropped `.branchchat` file: import and open (FR-203). */
     openPath(path: string): Promise<IpcResult<OpenOutcome>>
+    /** Opens a discussion of the library. */
+    openDiscussion(id: string): Promise<IpcResult<OpenOutcome>>
+    /** "Экспортировать…" (FR-204); false if the person cancelled. */
+    exportDiscussion(): Promise<IpcResult<boolean>>
     getDocumentState(): Promise<IpcResult<DocumentView | null>>
     appendMessage(threadId: string, content: RichDoc): Promise<IpcResult<null>>
     retrySave(): Promise<IpcResult<null>>
@@ -66,7 +82,7 @@ export interface BranchChatApi {
     /** The person has seen the notice that read status is visible to other participants (FR-125). */
     acknowledgeReadNotice(): Promise<IpcResult<SettingsView>>
     setAutoUpdateCheck(enabled: boolean): Promise<IpcResult<SettingsView>>
-    /** How many recent files are remembered (0 = none). Lowering it forgets the oldest entries. */
+    /** How many recent discussions the File menu and the jump list show (0 = none). */
     setRecentFilesLimit(limit: number): Promise<IpcResult<SettingsView>>
     setOpenLastFileOnStartup(enabled: boolean): Promise<IpcResult<SettingsView>>
     /** Largest file read from a shared folder, 5 to 1 000 MB (FR-166). */
@@ -79,10 +95,24 @@ export interface BranchChatApi {
     zoom(direction: 'in' | 'out' | 'reset'): Promise<IpcResult<null>>
     /** The message this window must show (a click on a notification), once. */
     takeFocusRequest(): Promise<IpcResult<FocusRequest | null>>
-    getRecentFiles(): Promise<IpcResult<RecentFileView[]>>
-    removeRecentFile(path: string): Promise<IpcResult<null>>
-    clearRecentFiles(): Promise<IpcResult<null>>
-    onRecentFilesChanged(callback: (files: RecentFileView[]) => void): () => void
+    /** The discussions of the library, most recently used first. */
+    getDiscussions(): Promise<IpcResult<DiscussionListItem[]>>
+    onDiscussionsChanged(callback: (list: DiscussionListItem[]) => void): () => void
+    /** FR-207: the backups, the last backup, and the folder of the person. */
+    getBackups(): Promise<IpcResult<BackupState>>
+    /** FR-207: "Резервная копия сейчас". */
+    backupNow(): Promise<IpcResult<BackupResult>>
+    /** FR-207, FR-209: chooses the folder for backups (warns once about cloud folders); null if cancelled. */
+    pickBackupFolder(): Promise<IpcResult<SettingsView | null>>
+    clearBackupFolder(): Promise<IpcResult<SettingsView>>
+    /** FR-207: restores a backup after a confirmation; false if the person cancelled. The app restarts. */
+    restoreBackup(path: string): Promise<IpcResult<boolean>>
+    /** FR-206: the files of release 1.x to offer (empty: nothing to ask). */
+    getMigration(): Promise<IpcResult<MigrationCandidate[]>>
+    /** FR-206: imports the chosen files. */
+    runMigration(paths: string[]): Promise<IpcResult<MigrationResult[]>>
+    /** FR-206: "Не переносить". */
+    skipMigration(): Promise<IpcResult<null>>
     getUpdateState(): Promise<IpcResult<UpdateView>>
     /** Manual check (Help > Check for updates); opens the update dialog. */
     checkForUpdates(): Promise<IpcResult<null>>

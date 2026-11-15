@@ -203,22 +203,29 @@ describe('local sync state and registry (design 18)', () => {
         })
     })
 
-    it('remembers which file and folder belong to a conversation (FR-168)', async () => {
+    it('remembers which folder belongs to a conversation; the old file path is kept for the migration', async () => {
         await withTempDir(async (dir) => {
             const r = new SyncRegistry(dir)
             await r.load()
             let changes = 0
             r.onChange(() => changes++)
+            await r.put({ conversationId: 'doc-1', sharedRoot: '/s', ownId: 'p-anna' })
             await r.put({
-                conversationId: 'doc-1',
+                conversationId: 'doc-2',
                 filePath: '/a.branchchat',
+                sharedRoot: '/t',
+                ownId: 'p-anna'
+            })
+            const again = new SyncRegistry(dir)
+            await again.load()
+            expect(again.get('doc-1')).toEqual({
+                conversationId: 'doc-1',
                 sharedRoot: '/s',
                 ownId: 'p-anna'
             })
-            await r.updatePath('doc-1', '/b.branchchat')
-            const again = new SyncRegistry(dir)
-            await again.load()
-            expect(again.get('doc-1')?.filePath).toBe('/b.branchchat')
+            expect(again.get('doc-2')?.filePath).toBe('/a.branchchat')
+            await again.remove('doc-2')
+            expect(again.list().map((e) => e.conversationId)).toEqual(['doc-1'])
             expect(changes).toBe(2)
         })
     })

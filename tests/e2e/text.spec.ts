@@ -2,7 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
-import { readDiscussionFile, plainTextOf } from './helpers/readFile'
+import { plainTextOf } from './helpers/readFile'
+import { savedFile } from './helpers/library'
 import { selectText } from './helpers/select'
 import { doc, p, simple, t, writeDiscussionFile } from './helpers/craft'
 
@@ -29,8 +30,11 @@ async function profile(): Promise<string> {
     )
     return dir
 }
-async function open(file: string): Promise<Page> {
-    const app = await launchApp({ files: [file], userData: await profile() })
+let lastProfile = ''
+/** Starts the app with a new profile and the file; without a file, the last profile again (it opens the last discussion). */
+async function open(file?: string): Promise<Page> {
+    if (file) lastProfile = await profile()
+    const app = await launchApp({ files: file ? [file] : [], userData: lastProfile })
     apps.push(app)
     const win = await app.app.firstWindow()
     await expect(win.getByTestId('composer')).toBeVisible()
@@ -39,7 +43,7 @@ async function open(file: string): Promise<Page> {
 
 const SAMPLE = 'Ёлка, ёжик, Ёлочка: съешь ещё этих мягких французских булок 😀 и выпей чаю 👍🏽!'
 
-test('Cyrillic, ё/Ё and emoji are saved in the file and read back after reopening', async () => {
+test('Cyrillic, ё/Ё and emoji are saved in the library and read back after reopening', async () => {
     const dir = await tempDir('bc-text-')
     dirs.push(dir)
     const file = join(dir, 'Ёлка — обсуждение 😀.branchchat')
@@ -53,14 +57,14 @@ test('Cyrillic, ё/Ё and emoji are saved in the file and read back after reopen
     await win.keyboard.press('Control+Enter')
     await expect(win.getByTestId('message').filter({ hasText: 'французских' })).toHaveCount(1)
     await expect
-        .poll(async () => (await readDiscussionFile(file)).discussion.threads[0]!.messages.length)
+        .poll(async () => (await savedFile(file)).discussion.threads[0]!.messages.length)
         .toBe(2)
 
-    const saved = (await readDiscussionFile(file)).discussion.threads[0]!.messages[1]!
+    const saved = (await savedFile(file)).discussion.threads[0]!.messages[1]!
     expect(plainTextOf(saved.content)).toBe(SAMPLE)
 
     await apps.pop()!.close()
-    win = await open(file)
+    win = await open()
     await expect(win.getByTestId('message').filter({ hasText: SAMPLE })).toHaveCount(1)
 })
 
@@ -78,17 +82,15 @@ test('a branch quoted after an emoji keeps correct offsets (surrogate pairs)', a
     await win.getByTestId('reply-to-this').click()
     await expect(win.getByTestId('branch-header')).toBeVisible()
 
-    await expect
-        .poll(async () => (await readDiscussionFile(file)).discussion.threads.length)
-        .toBe(2)
-    const branch = (await readDiscussionFile(file)).discussion.threads[1]!
+    await expect.poll(async () => (await savedFile(file)).discussion.threads.length).toBe(2)
+    const branch = (await savedFile(file)).discussion.threads[1]!
     expect(branch.quoteText).toBe('ёжик')
     // the stored offsets point at the same characters of the original message (UTF-16 code units)
     expect(text.slice(branch.selectionStart!, branch.selectionEnd!)).toBe('ёжик')
 
     // reopen: the quote is still shown in the branch header
     await apps.pop()!.close()
-    const again = await open(file)
+    const again = await open()
     await again.getByTestId('panel-branch').first().click()
     await expect(again.getByTestId('branch-header')).toContainText('ёжик')
 })

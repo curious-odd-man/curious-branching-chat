@@ -172,8 +172,10 @@ export interface WriteOptions {
     newAssets?: PreparedImage[]
     /** Ignore whatever is currently at the target path (used when creating a new file). */
     discardExisting?: boolean
-    /** Copy images and unknown entries from this file instead of the target (used for "Отправить копию…"). */
+    /** Copy images and unknown entries from this file instead of the target. */
     copyFrom?: string
+    /** Images read from files on disk (the library's blob files, for an export); streamed, not held in memory. */
+    assetFiles?: Array<{ path: string; file: string }>
 }
 
 function validateBeforeWrite(contents: DocumentContents): void {
@@ -253,9 +255,15 @@ export async function writeDocument(
             zip.addBuffer(json(contents.delivery), DELIVERY_ENTRY, { mtime, compress: true })
         for (const asset of newAssets)
             zip.addBuffer(asset.data, asset.path, { mtime, compress: false })
+        const fromFiles = new Set(newAssets.map((a) => a.path))
+        for (const asset of options.assetFiles ?? []) {
+            if (fromFiles.has(asset.path)) continue
+            fromFiles.add(asset.path)
+            zip.addFile(asset.file, asset.path, { mtime, compress: false })
+        }
 
         if (copyExisting) {
-            const skip = new Set<string>([...MANAGED_ENTRIES, ...newAssets.map((a) => a.path)])
+            const skip = new Set<string>([...MANAGED_ENTRIES, ...fromFiles])
             await scanZip(source, async (entry, zf) => {
                 const name = entry.fileName
                 if (name.endsWith('/') || skip.has(name)) return

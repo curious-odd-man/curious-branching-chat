@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { simple, writeDiscussionFile, type CraftOptions, type CraftThread } from './helpers/craft'
-import { readDiscussionFile, readReadState } from './helpers/readFile'
+import { exportOpen, newDiscussion, savedFile, savedReadState } from './helpers/library'
 import { selectText } from './helpers/select'
 
 const apps: TestApp[] = []
@@ -96,15 +96,15 @@ const panel = (win: Page, id: string): Locator =>
     win.locator(`[data-testid=panel-branch][data-thread-id=${id}]`)
 const windowTitle = (t: TestApp): Promise<string> =>
     t.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getTitle())
-const savedReadState = async (file: string, participant = 'p-local') =>
-    (await readReadState(file))[participant]
+const savedReadOf = async (file: string, participant = 'p-local') =>
+    (await savedReadState(file))[participant]
 
 test('on first open every message by others is unread, with counts in the panel, header and window title (FR-109, FR-110, FR-113)', async () => {
     const file = await craft()
     const { t, win } = await open(file, await profile())
 
     await expect(total(win)).toHaveText('Непрочитано: 6')
-    await expect.poll(() => windowTitle(t)).toBe('(6) непрочитанное.branchchat — BranchChat')
+    await expect.poll(() => windowTitle(t)).toBe('(6) непрочитанное — BranchChat')
     await expect(unreadMessages(win)).toHaveCount(3) // the main thread shows its three
     await expect(win.getByTestId('unread-label')).toHaveCount(3)
 
@@ -124,7 +124,7 @@ test('on first open every message by others is unread, with counts in the panel,
     }
     await win.getByTestId('panel-main').click()
     await expect(total(win)).toHaveText('Непрочитано: 6')
-    expect(await savedReadState(file)).toBeUndefined() // nothing was written
+    expect(await savedReadOf(file)).toBeUndefined() // nothing was written
 })
 
 test('"Mark as read" works per message; the notice is shown once and can be declined (FR-111, FR-125)', async () => {
@@ -137,7 +137,7 @@ test('"Mark as read" works per message; the notice is shown once and can be decl
     await expect(win.getByTestId('read-notice')).toBeVisible()
     await win.getByTestId('read-notice-cancel').click()
     await expect(m1).toHaveAttribute('data-unread', 'true')
-    expect(await savedReadState(file)).toBeUndefined()
+    expect(await savedReadOf(file)).toBeUndefined()
 
     // accepting it marks the message, and the file records it, with this person added as a participant (FR-022)
     await m1.getByTestId('mark-read').click()
@@ -146,18 +146,16 @@ test('"Mark as read" works per message; the notice is shown once and can be decl
     await expect(m1.getByTestId('mark-read')).toHaveCount(0)
     await expect(total(win)).toHaveText('Непрочитано: 5')
     await expect.poll(() => windowTitle(t)).toContain('(5)')
-    await expect.poll(() => savedReadState(file)).toEqual(['m1'])
+    await expect.poll(() => savedReadOf(file)).toEqual(['m1'])
     await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
-    const participants = (await readDiscussionFile(file)).discussion.participants.map(
-        (p) => p.displayName
-    )
+    const participants = (await savedFile(file)).discussion.participants.map((p) => p.displayName)
     expect(participants).toContain('Вера')
 
     // the notice is not shown again
     await win.locator('[data-message-id=m3]').getByTestId('mark-read').click()
     await expect(win.locator('[data-message-id=m3]')).toHaveAttribute('data-unread', 'false')
     await expect(win.getByTestId('read-notice')).toHaveCount(0)
-    await expect.poll(() => savedReadState(file)).toEqual(['m1', 'm3'])
+    await expect.poll(() => savedReadOf(file)).toEqual(['m1', 'm3'])
     const settings = JSON.parse(await fs.readFile(join(t.userData, 'settings.json'), 'utf8')) as {
         readNoticeAcknowledged: boolean
     }
@@ -190,10 +188,10 @@ test('"Mark thread as read" and "Mark all as read" (FR-111)', async () => {
     await expect(win.getByTestId('unread-total')).toHaveCount(0)
     await expect(win.getByTestId('panel-unread')).toHaveCount(0)
     await expect(win.getByTestId('panel-dot')).toHaveCount(0)
-    await expect.poll(() => windowTitle(t)).toBe('непрочитанное.branchchat — BranchChat')
+    await expect.poll(() => windowTitle(t)).toBe('непрочитанное — BranchChat')
     // only messages by others are listed; all of them are
     await expect
-        .poll(async () => [...((await savedReadState(file)) ?? [])].sort())
+        .poll(async () => [...((await savedReadOf(file)) ?? [])].sort())
         .toEqual(['a1', 'a2', 'b1', 'm1', 'm2', 'm3'])
 })
 
@@ -301,26 +299,24 @@ test('every message shows who has read it: all, some or none of the other known 
     await expect(win.getByTestId('not-read-by')).toHaveText('Вера')
 })
 
-test('exchange: A writes, B reads and replies, A opens the returned file and sees it all (acceptance criterion 22)', async () => {
+test('exchange: A writes and exports, B reads and replies, A imports the returned file and sees it all (acceptance criterion 22)', async () => {
     const dir = await workDir()
     const file = join(dir, 'обмен.branchchat')
     const profileA = await profile({ id: 'p-a', name: 'Анна', ack: true })
     const profileB = await profile({ id: 'p-b', name: 'Борис', ack: false })
 
-    // A creates the discussion and writes
+    // A creates the discussion, writes, and exports it
     const first = await launchApp({ userData: profileA })
     apps.push(first)
     const a1 = await first.app.firstWindow()
-    await first.answer({ save: [file] })
-    await a1.getByTestId('launcher-new').click()
-    await expect(a1.getByTestId('composer')).toBeVisible()
+    await newDiscussion(a1, 'обмен')
     await a1.getByTestId('composer').click()
     await a1.keyboard.type('Вопрос про ёлку')
     await a1.keyboard.press('Control+Enter')
     await expect(a1.getByTestId('status')).toHaveText('Сохранено')
+    await exportOpen(first, a1, file)
     await first.close()
-    const questionId = (await readDiscussionFile(file)).discussion.threads[0]!.messages[0]!
-        .messageId
+    const questionId = (await savedFile(file)).discussion.threads[0]!.messages[0]!.messageId
 
     // B opens the file: the question is unread; replying in a branch reads it (after the one-time notice)
     const second = await open(file, profileB)
@@ -340,12 +336,14 @@ test('exchange: A writes, B reads and replies, A opens the returned file and see
         second.win.getByTestId('message').filter({ hasText: 'Ответ про ёлку' })
     ).toHaveCount(1)
     await expect(second.win.getByTestId('status')).toHaveText('Сохранено')
+    const returned = join(dir, 'обмен-ответ.branchchat')
+    await exportOpen(second.t, second.win, returned)
     await second.t.close()
-    const afterB = await readReadState(file)
+    const afterB = await savedReadState(file)
     expect(afterB['p-b']).toEqual([questionId])
 
-    // A opens the returned file
-    const third = await open(file, profileA)
+    // A opens the returned file: it is merged into A's discussion (FR-204)
+    const third = await open(returned, profileA)
     const question = third.win.locator(`[data-message-id="${questionId}"]`)
     await expect(question).toHaveAttribute('data-unread', 'false') // A wrote it
     await expect(question.getByTestId('message-mark')).toHaveAttribute('data-state', 'read-all') // B read it
@@ -366,9 +364,9 @@ test('exchange: A writes, B reads and replies, A opens the returned file and see
     await expect(reply).toHaveAttribute('data-unread', 'false')
     await expect(reply.getByTestId('message-mark')).toHaveAttribute('data-state', 'read-all')
     await expect
-        .poll(async () => Object.keys(await readReadState(file)).sort())
+        .poll(async () => Object.keys(await savedReadState(file)).sort())
         .toEqual(['p-a', 'p-b'])
-    const final = await readReadState(file)
+    const final = await savedReadState(file)
     expect(final['p-b']).toEqual(afterB['p-b'])
     const replyId = (await reply.getAttribute('data-message-id'))!
     expect(final['p-a']).toEqual([replyId])

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { DocumentView, RecentFileView, SettingsView, UpdateView } from '@shared/types/ipc'
+import type { DocumentView, DiscussionListItem, SettingsView, UpdateView } from '@shared/types/ipc'
 
 /** The discussion shown in this window: undefined while loading, null when the window has none. */
 export function useDocumentView(): DocumentView | null | undefined {
@@ -45,15 +45,15 @@ export function useUpdateState(): UpdateView | undefined {
     return view
 }
 
-/** The recently opened discussions (shared by all windows); empty until the first answer arrives. */
-export function useRecentFiles(): RecentFileView[] {
-    const [files, setFiles] = useState<RecentFileView[]>([])
+/** The discussions of the library, most recently used first (shared by all windows); null until the first answer. */
+export function useDiscussions(): DiscussionListItem[] | null {
+    const [list, setList] = useState<DiscussionListItem[] | null>(null)
     useEffect(() => {
-        const unsubscribe = window.branchchat.onRecentFilesChanged(setFiles)
-        void window.branchchat.getRecentFiles().then((r) => {
-            if (r.ok) setFiles((current) => (current.length > 0 ? current : r.data))
+        const unsubscribe = window.branchchat.onDiscussionsChanged(setList)
+        void window.branchchat.getDiscussions().then((r) => {
+            if (r.ok) setList((current) => current ?? r.data)
         })
         return unsubscribe
     }, [])
-    return files
+    return list
 }

@@ -1,7 +1,8 @@
 # BranchChat: implementation plan for release 2
 
-**Status:** Release 2.1 done in code (phases 1–3); two questions open for release 2.4 (Section 9)  
-**Date:** 2026-11-14  
+**Status:** Releases 2.1 (phases 1–3) and 2.2 (phases 4–7) done in code; two questions open for release 2.4
+(Section 9)  
+**Date:** 2026-11-15  
 **Input:** `requirements-next.md` (ready, draft 4), `adr-003-local-storage.md` (accepted), `requirements.md`
 (revision 13), `sync-protocol.md`  
 **Base code:** release 1.5 (tag `release-1.5-done`)
@@ -33,12 +34,16 @@ Changes to the order in `requirements-next.md`, section 4:
 
 ## 1a. Progress
 
-| Release | Phase                                 | State                                   | Notes                                              |
-|---------|---------------------------------------|-----------------------------------------|----------------------------------------------------|
-| 2.1     | 1 — Log file and diagnostics report   | Done                                    | Tag `phase-2.1-done`                               |
-| 2.1     | 2 — Text size and keyboard shortcuts  | Done                                    | Tag `phase-2.2-done`                               |
-| 2.1     | 3 — Day separators and "jump to date" | Done in code; **needs a Windows check** | Tag `phase-2.3-done`; Windows: checklist section Q |
-| 2.2–2.5 | 4–16                                  | Not started                             |                                                    |
+| Release | Phase                                 | State                                   | Notes                                                         |
+|---------|---------------------------------------|-----------------------------------------|---------------------------------------------------------------|
+| 2.1     | 1 — Log file and diagnostics report   | Done                                    | Tag `phase-2.1-done`                                          |
+| 2.1     | 2 — Text size and keyboard shortcuts  | Done                                    | Tag `phase-2.2-done`                                          |
+| 2.1     | 3 — Day separators and "jump to date" | Done in code; **needs a Windows check** | Tag `phase-2.3-done`; Windows: checklist section Q            |
+| 2.2     | 4 — Library core                      | Done                                    | Tag `phase-2.4-done`; one save at 20,000 messages: about 7 ms |
+| 2.2     | 5 — Sessions, import, export          | Done                                    | Tag `phase-2.5-done`                                          |
+| 2.2     | 6 — Migration of existing files       | Done                                    | Tag `phase-2.6-done`                                          |
+| 2.2     | 7 — Backups and checks                | Done in code; **needs a Windows check** | Tag `phase-2.7-done`; Windows: checklist section R            |
+| 2.3–2.5 | 8–16                                  | Not started                             |                                                               |
 
 ### Implementation decisions of release 2.1
 
@@ -59,6 +64,35 @@ Changes to the order in `requirements-next.md`, section 4:
   about 1 s per 20,000 messages and made sending at 20,000 messages slower (found by the performance test).
 - Fixes on the way: dialogs opened with a button take the focus, so Escape works (the calendar).
 - The user guide is not changed (Q-08 of `requirements-next.md`).
+
+### Implementation decisions of release 2.2
+
+- Tables (`src/main/library/schema.ts`): `discussion` (list columns, revision, manifest, other discussion fields, member
+  list, mark keys as JSON), `participant`, `thread`, `message`, `asset`, `blob`, `mark` (read and delivery marks, one
+  row per message), `search_index` (FTS5, `unicode61`, rowid = message rowid), `meta`. Data with unknown extra fields
+  stays JSON, so a discussion comes back exactly as it went in (tested with random change sequences).
+- A save is a difference between two versions: object identity first (the domain functions return new objects only
+  for what they change), then IDs. A `revision` column refuses a save that is based on an older version.
+- One `DiscussionStore` per discussion is shared by its window and the sync engine; while a window is open, the
+  store hands remote changes to the window's session. So an open and a closed synchronized discussion are written the
+  same way, and `FilePort` is gone.
+- Read marks of a synchronized discussion are sorted lists (`normalizeSynced`); they are written as a set difference.
+- A file with a member list that is not registered here is imported as a normal discussion (sync data left out). A
+  synchronized discussion is refused as an import target (FR-205a).
+- Joining an invitation when the library already has the same discussion (an exported copy, or the copy of a lost
+  identity): the old copy is kept under a new ID (`moveAside`); nothing is lost.
+- A new discussion from an import takes the file name as its name (release 1.x showed the file name). The snapshot
+  of an invitation keeps its title.
+- "Новое обсуждение" and "Новое общее обсуждение…" ask for the name in the window (no save dialog).
+- The registry keeps `filePath` of release 1.5 only for the migration; the sync starts only for registered
+  discussions that are in the library.
+- The start screen lists every discussion; the recent-files setting now sets the length of the File menu and the jump
+  list. The old `recent.json` is read only, for the migration.
+- Backups: a folder per backup (`library.sqlite` in rollback-journal mode and `info.json`) and an image pool next to
+  them; a restore is done at the next start (the database is open while the app runs); test builds end instead of
+  restarting. The daily backup runs a minute after start and then at every full hour if none was made that day.
+- Test builds have one new hook, `__saveFault` (a failing save, FR-008); it is in the release leak check.
+- Phase 4 task 5 (images from the blob store) was done in phase 5, with the session change.
 
 ## 2. Rules for all phases
 

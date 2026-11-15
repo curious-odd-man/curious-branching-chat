@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { basename } from 'node:path'
 import {
     appendMessage,
     addAsset,
@@ -31,21 +30,18 @@ import type { StagedImage } from '@shared/types/assets'
 import type { DocumentContents } from '@shared/validation'
 import type { DocumentView } from '@shared/types/ipc'
 import { describeError } from '@shared/i18n/ru'
-import {
-    DocumentError,
-    newDocumentContents,
-    prepareImage,
-    readDocument,
-    readImageAsset,
-    writeDocument as defaultWriter,
-    type PreparedImage
-} from '../document'
+import type { AssetInfo } from '@shared/validation'
+import { DocumentError, newDocumentContents, prepareImage, type PreparedImage } from '../document'
+import type { BlobRef, DiscussionChange, DiscussionOwner } from '../library'
+import { LibraryError } from '../library/schema'
 
-export type DocumentWriter = (
-    path: string,
-    contents: DocumentContents,
-    options?: { discardExisting?: boolean; newAssets?: PreparedImage[]; copyFrom?: string }
-) => Promise<void>
+/** Where a session keeps its discussion: a `DiscussionStore` of the library (tests can wrap one). */
+export interface SessionStore {
+    readonly id: string
+    save(after: DocumentContents, newAssets: BlobRef[]): Promise<void>
+    readAsset(info: AssetInfo): Promise<Buffer | null>
+    setOwner(owner: DiscussionOwner | null): void
+}
 
 /** What a caller is about to do, to find out beforehand whether it will change the person's read state. */
 export type ReadAction =
@@ -57,18 +53,16 @@ export type ReadAction =
 
 export interface SessionDeps {
     ctx: DomainContext
-    /** Injectable so tests can observe, delay or fail writes. */
-    writer?: DocumentWriter
 }
 
 /**
- * One open discussion: the in-memory state plus a serialized, coalescing write queue (FR-007).
+ * One open discussion: the in-memory state plus a serialized, coalescing save queue (FR-007).
  *
- * Changes appear immediately; every change is then saved to the file. Several quick changes are saved with a single
- * write of the latest state. If a write fails, the changes stay in memory, `saveError` is set, and the next change or
+ * Changes appear immediately; every change is then saved to the library (a small transaction, ADR-003). Several quick
+ * changes are saved together. If a save fails, the changes stay in memory, `saveError` is set, and the next change or
  * `retrySave()` tries again (FR-008).
  */
-export class DocumentSession {
+export class DocumentSession implements DiscussionOwner {
     /** Called whenever the discussion or the save state changes because of a change made by the person. */
     onChange: () => void = () => undefined
     /** Called when only the save status changed (a write finished); the discussion itself is unchanged. */
@@ -83,8 +77,8 @@ export class DocumentSession {
     readonly sessionId = randomUUID()
     /** Images added to a draft. They are kept in memory only; nothing is written until a message uses them. */
     private readonly staged = new Map<string, PreparedImage>()
-    /** Images used by sent messages but not yet written to the file. */
-    private pendingAssets: PreparedImage[] = []
+    /** Images used by sent messages but not yet saved in the library. */
+    private pendingAssets: Array<BlobRef & { data: Buffer }> = []
     /**
      * Set by the sync service when this window shows the registered copy of a synchronized discussion: called after
      * every local change with the discussion before and after it (design section 10). Null for every other file.
@@ -97,38 +91,39 @@ export class DocumentSession {
     syncStatus: DocumentView['syncStatus'] = null
 
     private constructor(
-        readonly path: string,
+        readonly store: SessionStore,
         private contents: DocumentContents,
         private readonly missingAssetIds: string[],
-        private readonly deps: Required<SessionDeps>
-    ) {}
-
-    static async open(path: string, deps: SessionDeps): Promise<DocumentSession> {
-        const loaded = await readDocument(path)
-        return new DocumentSession(
-            path,
-            loaded.contents,
-            loaded.missingAssetIds,
-            withDefaults(deps)
-        )
+        private readonly deps: SessionDeps
+    ) {
+        store.setOwner(this)
     }
 
-    /** Creates the file immediately (requirements 4.1). Fails if it cannot be written. */
-    static async create(
-        path: string,
+    /** Opens a discussion of the library. */
+    static open(
+        store: SessionStore,
+        loaded: { contents: DocumentContents; missingAssetIds: string[] },
+        deps: SessionDeps
+    ): DocumentSession {
+        return new DocumentSession(store, loaded.contents, loaded.missingAssetIds, deps)
+    }
+
+    /** The contents of a brand-new discussion (requirements 4.1); the caller adds it to the library. */
+    static newContents(
         deps: SessionDeps,
-        input: { author: Author; title?: string; generator?: { name: string; version: string } }
-    ): Promise<DocumentSession> {
-        const full = withDefaults(deps)
-        const title = input.title ?? basename(path).replace(/\.branchchat$/i, '')
-        const contents = newDocumentContents(full.ctx, {
-            title,
+        input: { author: Author; title: string; generator?: { name: string; version: string } }
+    ): DocumentContents {
+        return newDocumentContents(deps.ctx, {
+            title: input.title,
             author: input.author,
             ...(input.generator ? { generator: input.generator } : {})
         })
-        // A new file replaces whatever is at the path (the Save dialog already asked about overwriting).
-        await full.writer(path, contents, { discardExisting: true })
-        return new DocumentSession(path, contents, [], full)
+    }
+
+    /** The window closed: changes from now on go to the library directly (the sync engine). */
+    async close(): Promise<void> {
+        await this.flush()
+        this.store.setOwner(null)
     }
 
     get documentId(): string {
@@ -146,24 +141,17 @@ export class DocumentSession {
      * Applies remote events (design section 10): in the same write queue as local changes, so a local save never
      * overwrites a remote change. `images` are bytes of images that the change registers. No events are sent.
      */
-    applyRemote(
-        change: (contents: DocumentContents) => {
-            contents: DocumentContents
-            images: Array<{ assetId: string; data: Uint8Array }>
-        } | null
-    ): void {
+    applyRemote(change: DiscussionChange): void {
         const r = change(this.contents)
         if (!r) return
         for (const image of r.images) {
             const info = r.contents.discussion.assets.find((a) => a.assetId === image.assetId)
             if (!info || this.pendingAssets.some((a) => a.sha256 === image.assetId)) continue
-            const data = Buffer.from(image.data)
             this.pendingAssets.push({
-                data,
+                data: Buffer.from(image.data),
                 sha256: info.sha256,
                 size: info.size,
-                mediaType: info.mediaType,
-                path: info.path
+                mediaType: info.mediaType
             })
         }
         this.contents = r.contents
@@ -187,26 +175,21 @@ export class DocumentSession {
         if (next !== this.contents) this.commit(next)
     }
 
-    /** "Отправить копию…": the same discussion without the roster, for manual sharing (D-26, FR-167). */
-    async saveCopyWithoutSync(target: string): Promise<void> {
-        await this.flush()
-        const { sync: _roster, delivery: _delivery, ...plain } = this.contents
-        await this.deps.writer(target, plain, { discardExisting: false, copyFrom: this.path })
-    }
     get saveError(): string | null {
         return this._saveError
     }
     get saving(): boolean {
         return this.scheduled || this.running
     }
-    get fileName(): string {
-        return basename(this.path)
+    /** The name of the discussion (window title, lists). */
+    get title(): string {
+        return this.contents.discussion.title
     }
 
     /**
      * Adds image bytes to the draft (FR-065 to FR-067). Only PNG, JPEG, GIF and WebP are accepted (FR-116); there is no
-     * size limit (NFR-015). The image is stored in the file only when a message containing it is sent; one that is
-     * never sent leaves no trace in the file. Identical images are the same asset (deduplicated by checksum).
+     * size limit (NFR-015). The image is stored in the library only when a message containing it is sent; one that is
+     * never sent leaves no trace. Identical images are the same asset (deduplicated by checksum).
      */
     stageImage(data: Buffer): StagedImage {
         const image = prepareImage(data)
@@ -216,7 +199,7 @@ export class DocumentSession {
 
     /**
      * Bytes of an embedded image, for display (FR-068). Images that are not saved yet come from memory; the others are
-     * read from the file and checked against their recorded type and checksum. Null means "show a placeholder"
+     * read from the library and checked against their recorded type and checksum. Null means "show a placeholder"
      * (FR-075): the data is missing, damaged, or does not match.
      */
     async readAssetBytes(assetId: string): Promise<{ data: Buffer; mediaType: string } | null> {
@@ -225,12 +208,8 @@ export class DocumentSession {
         if (memory) return { data: memory.data, mediaType: memory.mediaType }
         const info = this.contents.discussion.assets.find((a) => a.assetId === assetId)
         if (!info) return null
-        try {
-            const data = await readImageAsset(this.path, info)
-            return data ? { data, mediaType: info.mediaType } : null
-        } catch {
-            return null
-        }
+        const data = await this.store.readAsset(info).catch(() => null)
+        return data ? { data, mediaType: info.mediaType } : null
     }
 
     /** FR-112 (1): writing in a thread also marks that thread's earlier messages as read. */
@@ -242,7 +221,7 @@ export class DocumentSession {
             author.participantId,
             threadId
         )
-        // Images used for the first time are registered in the file now, and their bytes queued for the next write.
+        // Images used for the first time are registered now, and their bytes queued for the next save.
         let withAssets = before
         const added: PreparedImage[] = []
         for (const assetId of collectImageAssetIds(content)) {
@@ -266,7 +245,14 @@ export class DocumentSession {
             author,
             content
         })
-        this.pendingAssets.push(...added)
+        this.pendingAssets.push(
+            ...added.map((a) => ({
+                data: a.data,
+                sha256: a.sha256,
+                size: a.size,
+                mediaType: a.mediaType
+            }))
+        )
         this.commit({ ...this.contents, discussion, readState })
     }
 
@@ -400,8 +386,6 @@ export class DocumentSession {
         return {
             documentId: this.documentId,
             sessionId: this.sessionId,
-            filePath: this.path,
-            fileName: this.fileName,
             discussion: this.contents.discussion,
             readState: this.contents.readState,
             synced: this.synced,
@@ -420,7 +404,7 @@ export class DocumentSession {
         }
     }
 
-    /** Saves a read-state change (FR-121); the participant is added to the file on this first write (FR-022). */
+    /** Saves a read-state change (FR-121); the participant is added to the discussion on this first save (FR-022). */
     private commitReadState(author: Author, readState: ReadState): boolean {
         if (readState === this.contents.readState) return false
         this.commit({
@@ -450,12 +434,8 @@ export class DocumentSession {
             const snapshot = this.contents
             const assets = [...this.pendingAssets]
             try {
-                await this.deps.writer(
-                    this.path,
-                    snapshot,
-                    assets.length > 0 ? { newAssets: assets } : undefined
-                )
-                // saved: these images now come from the file, so their memory can be released
+                await this.store.save(snapshot, assets)
+                // saved: these images now come from the library, so their memory can be released
                 this.pendingAssets = this.pendingAssets.filter((a) => !assets.includes(a))
                 for (const a of assets) this.staged.delete(a.sha256)
                 this._saveError = null
@@ -469,12 +449,9 @@ export class DocumentSession {
     }
 }
 
-function withDefaults(deps: SessionDeps): Required<SessionDeps> {
-    return { ctx: deps.ctx, writer: deps.writer ?? ((p, c, o) => defaultWriter(p, c, o)) }
-}
-
 export function describeSaveError(err: unknown): string {
     if (err instanceof DocumentError) return describeError(err.code)
     if (err instanceof DomainError) return describeError(err.code)
-    return describeError('WRITE_FAILED')
+    if (err instanceof LibraryError && err.code === 'CONFLICT') return describeError('CONFLICT')
+    return describeError('SAVE_FAILED')
 }

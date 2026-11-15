@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { doc, img, p, sha256, simple, t, writeDiscussionFile } from './helpers/craft'
 import { makePng } from './helpers/png'
-import { plainTextOf, readDiscussionFile, readEntries } from './helpers/readFile'
+import { plainTextOf } from './helpers/readFile'
+import { createAt, exportOpen, savedAssets, savedFile } from './helpers/library'
 import { selectText } from './helpers/select'
 
 const apps: TestApp[] = []
@@ -42,18 +43,23 @@ async function newDiscussion(file: string): Promise<{ t: TestApp; win: Page }> {
     const t = await launchApp({ userData: await profile() })
     apps.push(t)
     const win = await t.app.firstWindow()
-    await t.answer({ save: [file] })
-    await win.getByTestId('launcher-new').click()
-    await expect(win.getByTestId('composer')).toBeVisible()
+    await createAt(t, win, file)
     return { t, win }
+}
+/** The application started again with the same profile: it opens the last discussion. */
+async function reopen(userData: string): Promise<{ t: TestApp; win: Page }> {
+    const t = await launchApp({ userData })
+    apps.push(t)
+    return { t, win: await t.app.firstWindow() }
 }
 
 const composer = (win: Page): Locator => win.getByTestId('composer')
 const draftImages = (win: Page): Locator => composer(win).locator('img.editor-image')
 const messageImages = (win: Page): Locator => win.getByTestId('message-image')
+/** Images of the discussion in the library, named as in a file. */
 const assetEntries = async (file: string): Promise<string[]> =>
-    [...(await readEntries(file)).keys()].filter((n) => n.startsWith('assets/')).sort()
-const savedThread = async (file: string) => (await readDiscussionFile(file)).discussion.threads[0]!
+    [...(await savedAssets(file)).keys()].sort()
+const savedThread = async (file: string) => (await savedFile(file)).discussion.threads[0]!
 const naturalWidth = (image: Locator): Promise<number> =>
     image.evaluate((el) => (el as HTMLImageElement).naturalWidth)
 
@@ -161,22 +167,23 @@ test('a pasted picture is shown in the draft, sent, saved in the file, and shown
     // in the file: one asset, content-addressed, with the exact bytes, referenced by the message
     const sha = sha256(pic.data)
     expect(await assetEntries(file)).toEqual([`assets/images/${sha}.png`])
-    expect((await readEntries(file)).get(`assets/images/${sha}.png`)!.equals(pic.data)).toBe(true)
+    expect((await savedAssets(file)).get(`assets/images/${sha}.png`)!.equals(pic.data)).toBe(true)
     await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
-    const saved = (await readDiscussionFile(file)).discussion as unknown as {
+    const saved = (await savedFile(file)).discussion as unknown as {
         assets: { assetId: string; mediaType: string }[]
     }
     expect(saved.assets).toMatchObject([{ assetId: sha, mediaType: 'image/png' }])
 
+    // an exported file on another computer shows the same picture: the data travels inside the file
+    const elsewhere = join(await workDir(), 'копия.branchchat')
+    await exportOpen(t, win, elsewhere)
+
     // reopen the application
     await t.close()
-    const again = await open(file, t.userData)
+    const again = await reopen(t.userData)
     await expect(messageImages(again.win)).toHaveCount(1)
     await expect.poll(() => naturalWidth(messageImages(again.win))).toBe(40)
 
-    // a copy of the file on another computer shows the same picture: the data travels inside the file
-    const elsewhere = join(await workDir(), 'копия.branchchat')
-    await fs.copyFile(file, elsewhere)
     const other = await open(elsewhere)
     await expect.poll(() => naturalWidth(messageImages(other.win))).toBe(40)
 })
@@ -464,9 +471,7 @@ test('pictures do not disturb text selection or branches: the quote around a pic
     await expect(win.getByTestId('inherited-message').getByTestId('message-image')).toHaveCount(1) // still shown
 
     await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
-    const thread = (await readDiscussionFile(file)).discussion.threads.find(
-        (th) => th.parentThreadId
-    )!
+    const thread = (await savedFile(file)).discussion.threads.find((th) => th.parentThreadId)!
     const plain = plainTextOf((await savedThread(file)).messages[0]!.content)
     expect(plain.slice(thread.selectionStart, thread.selectionEnd)).toBe('до  после')
 })
@@ -545,11 +550,11 @@ test('a very large picture is handled without freezing the window, and survives 
 
     const names = await assetEntries(file)
     expect(names).toHaveLength(1)
-    const size = (await readEntries(file)).get(names[0]!)!.length
+    const size = (await savedAssets(file)).get(names[0]!)!.length
     expect(size).toBeGreaterThan(5 * 1024 * 1024) // really large
 
     await t.close()
-    const again = await open(file, t.userData)
+    const again = await reopen(t.userData)
     await expect.poll(() => naturalWidth(messageImages(again.win)), { timeout: 60_000 }).toBe(3000)
 
     const metrics = {

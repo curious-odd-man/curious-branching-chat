@@ -1,29 +1,25 @@
 import type { JumpListCategory } from 'electron'
-import type { RecentFileView } from '@shared/types/ipc'
+import type { DiscussionListItem } from '@shared/types/ipc'
 import { ru } from '@shared/i18n/ru'
+import { DISCUSSION_ARG } from './launchArgs'
 
 /** The taskbar jump list and the File menu show at most this many entries (Windows limits the jump list anyway). */
 export const MENU_RECENT_LIMIT = 20
 
-/**
- * The "Недавние" category of the taskbar jump list. Each entry starts BranchChat with the file as an argument, so it
- * works whether or not the .branchchat association is registered. Missing files are left out.
- */
+/** The "Недавние" category of the taskbar jump list. Each entry starts BranchChat with the discussion's ID. */
 export function jumpListCategories(
-    files: readonly RecentFileView[],
-    execPath: string
+    list: readonly DiscussionListItem[],
+    execPath: string,
+    limit = MENU_RECENT_LIMIT
 ): JumpListCategory[] {
-    const items = files
-        .filter((f) => f.exists)
-        .slice(0, MENU_RECENT_LIMIT)
-        .map((f) => ({
-            type: 'task' as const,
-            title: f.name,
-            description: f.path,
-            program: execPath,
-            args: `"${f.path}"`,
-            iconPath: execPath,
-            iconIndex: 0
-        }))
+    const items = list.slice(0, Math.min(limit, MENU_RECENT_LIMIT)).map((d) => ({
+        type: 'task' as const,
+        title: d.title,
+        description: d.title,
+        program: execPath,
+        args: `${DISCUSSION_ARG}${d.id}`,
+        iconPath: execPath,
+        iconIndex: 0
+    }))
     return items.length === 0 ? [] : [{ type: 'custom', name: ru.recent.jumpListCategory, items }]
 }

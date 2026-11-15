@@ -1107,3 +1107,41 @@ mark.quote {
 .jump-to-date .day.today {
     text-decoration: underline;
 }
+
+/* Release 2.2: the list of discussions and the migration of release 1.x files (FR-206). */
+.dialog.wide {
+    width: min(38rem, 92vw);
+}
+.recent-shared {
+    color: GrayText;
+    font-weight: normal;
+}
+.migration-list {
+    list-style: none;
+    margin: 0.6rem 0;
+    padding: 0;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+.migration-list li {
+    padding: 0.3rem 0;
+    border-bottom: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+}
+.dialog .migration-list label {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 0.5rem;
+    margin: 0;
+}
+.dialog .migration-list input {
+    display: inline;
+    width: auto;
+    grid-row: span 2;
+}
+.migration-list .recent-dir {
+    grid-column: 2;
+    word-break: break-all;
+}
+.migration-list li[data-exists='false'] {
+    color: GrayText;
+}

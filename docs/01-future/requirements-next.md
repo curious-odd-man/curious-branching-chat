@@ -1,8 +1,8 @@
 # BranchChat: requirements for release 2
 
 **Status:** Ready (draft 4). Release 2.1 done: sections 2.5, 2.11, 2.12, 2.13 are now in `requirements.md`
-(revision 14, section 5.13).  
-**Date:** 2026-11-14  
+(revision 14, section 5.13). Release 2.2 done: section 2.1 is now in `requirements.md` (revision 15, section 5.14).  
+**Date:** 2026-11-15  
 **Base:** `requirements.md` (revision 13) stays valid. This document adds requirements; where it changes an earlier
 requirement, it says so.  
 **Source:** the filtered list of `feature-ideas.md`; the storage decision is in `adr-003-local-storage.md`.

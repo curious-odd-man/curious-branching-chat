@@ -121,6 +121,8 @@ Releases of a **public** repository.
 
 ## J. Recent discussions and startup
 
+> Release 2.2: steps 2, 6 (list shrinking), and 7 changed; see section R, steps 4 and 5.
+
 1. Open three discussions in turn, close BranchChat, start it from the Start menu: the most recent discussion opens by
    itself (one window). Settings > turn "Открывать последнее обсуждение при запуске" off, restart: the start screen
    shows
@@ -258,3 +260,35 @@ The three Google Drive tests in the design document, Section 23, are done. The r
 8. Ctrl+G: the calendar opens at the newest month; days without messages cannot be chosen; a chosen day shows its
    first message.
 
+## R. Release 2.2: local library, import, export, migration, backups
+
+Use a test machine with a real release 1.5 profile (normal and synchronized discussions, with images), and Google
+Drive for Desktop for the backup folder. Keep a copy of `%APPDATA%\BranchChat` before the update.
+
+1. Update from 1.5. At the first start one dialog lists the files of the recent list and of the synchronized
+   discussions, all selected; a deleted file is shown, not selectable. "Перенести": each file shows "перенесено". The
+   original files are unchanged (date and size in Explorer). Start again: no second question.
+2. A migrated synchronized discussion: write from this computer and from a 1.5 member and from a 2.2 member; messages
+   arrive in both directions, also with the window closed (tray notification). Images of a migrated discussion show.
+3. "Новое обсуждение": the name is asked in the window; no save dialog; no file appears in Documents.
+4. The start screen lists every discussion, the last used first, with the number of messages; a click opens it.
+   File > Открыть недавние and the taskbar jump list show the newest ones; a jump list entry opens the discussion (also
+   with BranchChat closed).
+5. Settings > number of recent discussions: 2 shortens the File menu and the jump list; the start screen still shows
+   all.
+6. "Экспортировать…": the file opens on another computer with the same messages and images; a synchronized discussion
+   is exported without the member list. Double-click on that file on this computer: "В файле … нет ничего нового" (a
+   normal discussion) or the refusal message (a synchronized one).
+7. A changed copy: another person adds a message to an exported file and sends it back; double-click: the discussion
+   shows "Новых сообщений: 1".
+8. Settings > Резервные копии: "Резервная копия сейчас" writes a folder into `%APPDATA%\BranchChat\backups`. Choose a
+   Google Drive folder: the warning about cloud folders appears once; the next backup is also in
+   `<folder>\BranchChat backups`. Make 8 backups (change the clock or wait): 7 are kept in each place.
+9. "Восстановить из резервной копии…": choose an older backup, confirm: BranchChat restarts with that state; the list
+   now has a backup "перед восстановлением".
+10. Power cut: send messages in a loop and pull the plug (or end the process in Task Manager). After the start, the
+    library opens; the last message is there or not, never half.
+11. Damaged library: close BranchChat, overwrite `library.sqlite` with any text file, start: the question offers the
+    last backup; "Восстановить копию" opens the discussions of the backup; `library.damaged-<time>.sqlite` is kept.
+12. Antivirus on (Windows Defender real-time protection): steps 1, 3, 8 work; no error in `logs\main.log`.
+13. A discussion of 20,000 messages: sending stays immediate; the log shows no slow saves.

@@ -1,4 +1,3 @@
-import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import {
     eventsFromChange,
@@ -8,24 +7,20 @@ import {
 } from '@shared/sync'
 import type { DocumentContents, Message, RosterMember } from '@shared/validation'
 import type { DocumentSession } from '../application/documentSession'
-import { pathKey } from '../application/paths'
 import type { KeyStore } from '../crypto/keyStore'
 import type { SettingsStore } from '../local-state/settings'
 import { FolderTransport } from '../transport/folderTransport'
-import {
-    ConversationSync,
-    RETRY_INTERVAL_MS,
-    type DocumentPort,
-    type SyncHealth
-} from './conversationSync'
+import { ConversationSync, RETRY_INTERVAL_MS, type SyncHealth } from './conversationSync'
 import type { DocumentView, SyncStatusView } from '@shared/types/ipc'
 import { groupFingerprint } from '../crypto/identity'
-import { FilePort } from './filePort'
+import type { DiscussionStore, LibraryService } from '../library'
 import type { RegistryEntry, SyncRegistry } from './registry'
 import { SyncState, conversationDir } from './syncState'
 
 export interface SyncServiceDeps {
     userData: string
+    /** Where the discussions are (ADR-003): open and closed ones are written the same way. */
+    library: LibraryService
     registry: SyncRegistry
     keys: KeyStore
     settings: SettingsStore
@@ -48,7 +43,7 @@ export interface SyncServiceDeps {
 
 export interface NewMessagesArrival {
     conversationId: string
-    filePath: string
+    title: string
     messages: Message[]
     contents: DocumentContents
 }
@@ -56,14 +51,14 @@ export interface NewMessagesArrival {
 /** Sync state of one registered discussion for the tray menu (D-35). */
 export interface ConversationStatus {
     conversationId: string
-    filePath: string
+    title: string
     health: SyncHealth | null
 }
 
 export type AttachResult =
-    /** The registered copy: synchronized. */
+    /** A registered discussion: synchronized. */
     | 'synced'
-    /** A file with a roster that is not the registered copy (FR-154). */
+    /** A discussion with a member list that is not registered on this computer (another identity, FR-154). */
     | 'detached'
     /** A normal discussion. */
     | 'plain'
@@ -71,7 +66,7 @@ export type AttachResult =
 interface Conversation {
     entry: RegistryEntry
     sync: ConversationSync
-    file: FilePort
+    store: DiscussionStore
     session: DocumentSession | null
     stopWatch: (() => Promise<void>) | null
     viewJson: string
@@ -79,8 +74,8 @@ interface Conversation {
 }
 
 /**
- * Runs every synchronized discussion of this computer (design sections 10, 13 to 17): while a window shows it,
- * through the window's document session; otherwise through the file.
+ * Runs every synchronized discussion of this computer (design sections 10, 13 to 17): through the discussion's store
+ * in the library, which hands the change to the window's session while a window shows it.
  */
 export class SyncService {
     private readonly conversations = new Map<string, Conversation>()
@@ -140,35 +135,23 @@ export class SyncService {
 
     private async doOpen(entry: RegistryEntry): Promise<void> {
         if (entry.ownId !== this.deps.settings.get().participantId) return // another identity on this computer
+        if (!this.deps.library.has(entry.conversationId))
+            throw new Error('the discussion is not in the library')
         const state = await SyncState.open(
             conversationDir(this.syncRoot, entry.conversationId),
             entry.conversationId,
             entry.ownId
         )
         const transport = new FolderTransport(entry.sharedRoot, state.stagingDir)
-        const file = new FilePort(entry.filePath)
+        const store = this.deps.library.store(entry.conversationId)
         const conv: Conversation = {
             entry,
             sync: null as unknown as ConversationSync,
-            file,
+            store,
             session: null,
             stopWatch: null,
             viewJson: '',
             timer: null
-        }
-        const port: DocumentPort = {
-            read: async () => (conv.session ? conv.session.current : file.read()),
-            update: async (change) => {
-                if (conv.session) conv.session.applyRemote(change)
-                else await file.update(change)
-            },
-            imageBytes: async (assetId) => {
-                if (conv.session) {
-                    const r = await conv.session.readAssetBytes(assetId)
-                    return r ? new Uint8Array(r.data) : null
-                }
-                return file.imageBytes(assetId)
-            }
         }
         conv.sync = new ConversationSync({
             conversationId: entry.conversationId,
@@ -179,7 +162,7 @@ export class SyncService {
                 sign: (d) => this.deps.keys.sign(entry.ownId, d),
                 open: (s) => this.deps.keys.openSealed(entry.ownId, s)
             },
-            document: port,
+            document: store,
             now: this.deps.now,
             newId: this.deps.newId,
             maxFileBytes: () => this.deps.settings.get().fileSizeLimitMb * 1024 * 1024,
@@ -192,7 +175,7 @@ export class SyncService {
             onNewMessages: (messages, contents) =>
                 this.deps.onNewMessages?.({
                     conversationId: entry.conversationId,
-                    filePath: conv.entry.filePath,
+                    title: contents.discussion.title,
                     messages,
                     contents
                 }),
@@ -260,10 +243,10 @@ export class SyncService {
         const ownId = this.deps.settings.get().participantId
         return this.deps.registry
             .list()
-            .filter((e) => e.ownId === ownId)
+            .filter((e) => e.ownId === ownId && this.deps.library.has(e.conversationId))
             .map((e) => ({
                 conversationId: e.conversationId,
-                filePath: e.filePath,
+                title: this.deps.library.summary(e.conversationId)?.title ?? e.conversationId,
                 health: this.conversations.get(e.conversationId)?.sync.health() ?? null
             }))
     }
@@ -333,37 +316,10 @@ export class SyncService {
             }
     }
 
-    /** A window that opens a registered file waits until no write to that file is running. */
-    async beforeOpen(path: string): Promise<void> {
-        for (const c of this.conversations.values())
-            if (pathKey(c.entry.filePath) === pathKey(path)) {
-                await c.file.idle()
-                c.file.invalidate()
-            }
-    }
-
-    /** True if the registered file of this conversation is missing (it was moved or renamed, FR-168). */
-    async registeredFileMissing(conversationId: string): Promise<boolean> {
+    /** Starts the sync of a registered discussion that came into the library later (the migration, FR-206). */
+    async startRegistered(conversationId: string): Promise<void> {
         const entry = this.deps.registry.get(conversationId)
-        if (!entry) return false
-        try {
-            await fs.access(entry.filePath)
-            return false
-        } catch {
-            return true
-        }
-    }
-
-    /** The person confirmed that this file is the moved discussion (FR-168). */
-    async adoptMovedFile(conversationId: string, path: string): Promise<void> {
-        await this.deps.registry.updatePath(conversationId, path)
-        const conv = this.conversations.get(conversationId)
-        if (conv) {
-            await conv.stopWatch?.()
-            this.conversations.delete(conversationId)
-        }
-        const entry = this.deps.registry.get(conversationId)
-        if (entry) await this.open(entry)
+        if (entry) await this.open(entry).catch((err) => this.fail(entry, err))
     }
 
     /** Starts the sync of a discussion again (D-32: the own ID and keys changed with a re-invitation). */
@@ -377,17 +333,16 @@ export class SyncService {
         await this.open(entry)
     }
 
-    /** Connects a window's session: the registered copy is synchronized; any other copy is detached. */
+    /** Connects a window's session: a registered discussion is synchronized. */
     async attach(session: DocumentSession): Promise<AttachResult> {
         if (!session.current.sync) return 'plain'
         const entry = this.deps.registry.get(session.documentId)
-        if (!entry || pathKey(entry.filePath) !== pathKey(session.path)) return 'detached'
+        if (!entry) return 'detached'
         if (!this.conversations.has(entry.conversationId))
             await this.open(entry).catch((err) => this.fail(entry, err))
         const conv = this.conversations.get(entry.conversationId)
         if (!conv) return 'detached'
         conv.session = session
-        conv.file.invalidate()
         session.syncHook = (before: DocumentContents, after: DocumentContents) => {
             const events = eventsFromChange(before, after, entry.ownId, this.deps.now())
             if (events.length > 0)
@@ -405,13 +360,12 @@ export class SyncService {
         return 'synced'
     }
 
-    /** The window closed: from now on the sync service uses the file. */
+    /** The window closed: from now on the sync service writes into the library directly. */
     async detach(session: DocumentSession): Promise<void> {
         for (const c of this.conversations.values())
             if (c.session === session) {
                 await session.flush()
                 c.session = null
-                c.file.invalidate()
                 session.syncHook = null
             }
     }
@@ -426,7 +380,7 @@ export class SyncService {
             }
             let before: DocumentContents | null = null
             let after: DocumentContents | null = null
-            await c.file.update((contents) => {
+            await c.store.update((contents) => {
                 const next = withLocalDisplayName(contents, participantId, displayName)
                 if (next === contents) return null
                 before = contents
@@ -443,7 +397,7 @@ export class SyncService {
 
     /**
      * FR-176: adds members to an active discussion and tells the earlier members; returns the discussion as it is now
-     * on disk (the snapshot for the invitations is read from the file after this).
+     * saved (the snapshot for the invitations is made from it).
      */
     async addMembers(
         conversationId: string,
@@ -453,7 +407,7 @@ export class SyncService {
         if (!conv) throw new Error('conversation is not running')
         const after = await conv.sync.addMembers(members)
         if (conv.session) await conv.session.flush()
-        else await conv.file.idle()
+        await conv.store.idle()
         return after
     }
 
@@ -467,7 +421,7 @@ export class SyncService {
         if (!conv) throw new Error('conversation is not running')
         const after = await conv.sync.replaceKeys(participantId, keys)
         if (conv.session) await conv.session.flush()
-        else await conv.file.idle()
+        await conv.store.idle()
         return after
     }
 
@@ -489,7 +443,7 @@ export class SyncService {
         await this.conversations.get(conversationId)?.sync.startRejoin(inviterId)
     }
 
-    /** The registered file and shared folder of a running discussion. */
+    /** The registry entry (shared folder) of a running discussion. */
     entryOf(conversationId: string): RegistryEntry | null {
         return this.conversations.get(conversationId)?.entry ?? null
     }

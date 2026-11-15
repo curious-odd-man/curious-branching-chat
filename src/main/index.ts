@@ -8,21 +8,22 @@ import { installAssetProtocol, registerAssetScheme } from './application/assetPr
 import { systemContext } from './application/clock'
 import { createMainWindow } from './application/mainWindow'
 import { buildMenu } from './application/menu'
-import { describeRecent } from './application/recentView'
+import { describeDiscussions } from './application/recentView'
 import { electronUi } from './application/ui'
 import { IPC } from '@shared/types/ipc'
 import {
     e2eBackgroundPorts,
     e2eKeyProtector,
+    e2eLibraryFaults,
     e2eRegistry,
     e2eUpdaterConfig,
     installE2eHooks
 } from './e2e/hooks'
-import { promises as fs } from 'node:fs'
 import { BackgroundService } from './background/backgroundService'
 import { electronLoginItem, electronNotifier, electronTray } from './background/electronPorts'
 import { BACKGROUND_ARG } from './background/ports'
-import { readDocument } from './document'
+import { BackupService, LibraryService, Migration } from './library'
+import { startLibrary } from './application/libraryStartup'
 import { IdentityService } from './crypto/identityService'
 import { KeyStore } from './crypto/keyStore'
 import { safeStorageProtector } from './crypto/protector'
@@ -38,7 +39,7 @@ import { openExternalLink } from './windows/security'
 import { AssociationService } from './windows/associationService'
 import { createFileAssociation } from './windows/createAssociation'
 import { applyJumpList } from './windows/jumpList'
-import { extractDiscussionPaths } from './windows/launchArgs'
+import { extractDiscussionIds, extractDiscussionPaths } from './windows/launchArgs'
 import { guardConsoleStreams } from './windows/safeConsole'
 import { Logger } from './log/logger'
 import { saveDiagnosticsReport } from './log/saveReport'
@@ -104,13 +105,17 @@ if (!gotLock) {
     let controller: AppController | null = null
     let background: BackgroundService | null = null
     const earlyPaths: string[] = extractDiscussionPaths(process.argv.slice(1))
+    const earlyIds: string[] = extractDiscussionIds(process.argv.slice(1))
     // started by Windows at sign-in (FR-174): no window, only the tray
     const startedInBackground = process.argv.includes(BACKGROUND_ARG)
 
     app.on('second-instance', (_event, argv) => {
         const paths = extractDiscussionPaths(argv.slice(1))
-        if (!controller) earlyPaths.push(...paths)
-        else void controller.openPaths(paths)
+        const ids = extractDiscussionIds(argv.slice(1))
+        if (!controller) {
+            earlyPaths.push(...paths)
+            earlyIds.push(...ids)
+        } else void controller.openPaths(paths, ids)
     })
 
     void app.whenReady().then(async () => {
@@ -125,8 +130,51 @@ if (!gotLock) {
         })
         zoom = zoomService
         await settings.load()
+        // The recent files list of release 1.5 and older: read only, for the migration of those files (FR-206).
         const recent = new RecentFilesStore(app.getPath('userData'))
         await recent.load()
+        // ADR-003: the discussions of this computer, in %APPDATA%\BranchChat (library.sqlite and blobs\);
+        // a restore that was asked for, the check, and a damaged library are handled first (FR-207, FR-208)
+        const libraryLog = logger.area('library')
+        const opened = await startLibrary({
+            appDir: app.getPath('userData'),
+            folder: () => settings.get().backupFolder,
+            appVersion: app.getVersion(),
+            ask: async (message, detail, buttons) =>
+                (
+                    await dialog.showMessageBox({
+                        type: 'warning',
+                        title: ru.app.name,
+                        message,
+                        detail,
+                        buttons,
+                        defaultId: 0,
+                        noLink: true
+                    })
+                ).response,
+            log: libraryLog,
+            formatDate: (iso) =>
+                new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long', timeStyle: 'short' }).format(
+                    new Date(iso)
+                )
+        })
+        if (!opened) {
+            app.quit()
+            return
+        }
+        const library = new LibraryService(opened)
+        if (__E2E_HOOKS__) e2eLibraryFaults(library.repo as never)
+        const backups = new BackupService(opened, {
+            appDir: app.getPath('userData'),
+            folder: () => settings.get().backupFolder,
+            appVersion: app.getVersion(),
+            log: (message) => libraryLog.info(message)
+        })
+        // ADR-003 Q-07: image files that nothing uses any more are removed after 7 days
+        void library.repo
+            .removeUnusedBlobs(7 * 24 * 3600 * 1000)
+            .then((n) => n > 0 && libraryLog.info(`${n} unused image files removed`))
+            .catch((err) => libraryLog.warn(`cleanup of image files failed: ${String(err)}`))
         // Encryption identity (FR-155 to FR-157): keys in the user data folder, protected by Windows DPAPI.
         const keys = new KeyStore(
             join(app.getPath('userData'), 'keys'),
@@ -138,6 +186,7 @@ if (!gotLock) {
         await registry.load()
         const sync = new SyncService({
             userData: app.getPath('userData'),
+            library,
             registry,
             keys,
             settings,
@@ -156,7 +205,7 @@ if (!gotLock) {
         })
         controller = new AppController({
             settings,
-            recent,
+            library,
             sync,
             registry,
             ui: electronUi,
@@ -214,6 +263,7 @@ if (!gotLock) {
         })
         const onboarding = new Onboarding({
             userData: app.getPath('userData'),
+            library,
             keys,
             settings,
             registry,
@@ -232,54 +282,66 @@ if (!gotLock) {
                 get windowCount() {
                     return ctrl.windowCount
                 },
-                isActive: (path) => ctrl.isActive(path),
+                isActive: (id) => ctrl.isActive(id),
                 showAny: () => ctrl.showAny(),
-                openPath: async (path) => {
-                    await ctrl.openPath(path, undefined)
+                openDiscussion: async (id) => {
+                    await ctrl.openDiscussion(id, undefined)
                 },
-                showMessage: (path, threadId, messageId) =>
-                    ctrl.showMessage(path, threadId, messageId)
+                showMessage: (id, threadId, messageId) => ctrl.showMessage(id, threadId, messageId)
             },
             ...ports,
-            fileExists: (path) =>
-                fs
-                    .access(path)
-                    .then(() => true)
-                    .catch(() => false),
-            pickDiscussionFile: async () => {
-                const result = await dialog.showOpenDialog({
-                    title: ru.tray.findTitle,
-                    properties: ['openFile'],
-                    filters: [{ name: ru.fileType.name, extensions: ['branchchat'] }]
-                })
-                return result.canceled ? null : (result.filePaths[0] ?? null)
-            },
-            readDocumentId: (path) =>
-                readDocument(path)
-                    .then((d) => d.contents.manifest.documentId)
-                    .catch(() => null),
-            showError: async (message) => {
-                await dialog.showMessageBox({ type: 'warning', title: ru.app.name, message })
-            },
             quit: () => app.quit(),
             log: (message) => logger.area('background').info(message)
         })
         const bg = background
-        registerIpcHandlers(controller, settings, recent, association, updates, identity, sync, {
+        // FR-206: the files of release 1.x are offered for the library at the first start
+        const migration = new Migration({
+            library,
+            recent: () => recent.list(),
+            registry: () => registry.list(),
+            ownId: () => settings.get().participantId,
+            log: (message) => logger.area('library').info(message)
+        })
+        const migrationPending = (await migration.candidates()).length > 0
+        registerIpcHandlers(controller, settings, library, association, updates, identity, sync, {
             onboarding,
             ui: electronUi,
             background: bg,
-            zoom: zoomService
+            zoom: zoomService,
+            migration,
+            backups,
+            relaunch: () => {
+                // test builds only end; the test starts the app again
+                if (!__E2E_HOOKS__) app.relaunch()
+                app.exit(0)
+            }
         })
-        // The File > Open recent menu, the taskbar jump list and every window follow the recent files list.
-        const refreshRecent = async (): Promise<void> => {
-            const files = await describeRecent(recent.list())
+        // FR-207: a backup once a day: shortly after the first start of the day, then checked every full hour
+        const backupDelay = __E2E_HOOKS__
+            ? Number(process.env['BRANCHCHAT_E2E_BACKUP_DELAY_MS'] ?? -1)
+            : 60_000
+        if (backupDelay >= 0) {
+            const daily = (): void =>
+                void backups
+                    .dailyIfDue()
+                    .catch((err) => libraryLog.error('daily backup failed', err))
+            setTimeout(daily, backupDelay).unref()
+            const toNextHour = 3600_000 - (Date.now() % 3600_000)
+            setTimeout(() => {
+                daily()
+                setInterval(daily, 3600_000).unref()
+            }, toNextHour).unref()
+        }
+        // The File > recent menu, the taskbar jump list and every start screen follow the library.
+        const refreshRecent = (): void => {
+            const list = describeDiscussions(library.list())
+            const limit = settings.get().recentFilesLimit
             Menu.setApplicationMenu(
                 buildMenu(
                     ctrl,
                     updates,
-                    recent,
-                    files,
+                    list,
+                    limit,
                     () => bg.requestQuit(),
                     () =>
                         void saveDiagnosticsReport({
@@ -287,35 +349,63 @@ if (!gotLock) {
                             userData: app.getPath('userData'),
                             appVersion: app.getVersion()
                         }).catch((err) => appLog.error('report failed', err)),
-                    (direction) => void zoomService.change(direction)
+                    (direction) => void zoomService.change(direction),
+                    () =>
+                        void backups
+                            .make('manual')
+                            .then(async (r) => {
+                                await dialog.showMessageBox({
+                                    type: r.folderError ? 'warning' : 'info',
+                                    title: ru.app.name,
+                                    message: ru.backup.done(
+                                        new Intl.DateTimeFormat('ru-RU', {
+                                            dateStyle: 'long',
+                                            timeStyle: 'short'
+                                        }).format(new Date(r.backups[0]!.createdAt))
+                                    ),
+                                    ...(r.folderError
+                                        ? { detail: ru.backup.folderFailed(r.folderError) }
+                                        : {})
+                                })
+                            })
+                            .catch((err) => libraryLog.error('backup failed', err))
                 )
             )
-            applyJumpList(files)
-            ctrl.broadcast(IPC.recentChanged, files)
+            applyJumpList(list, limit)
+            ctrl.broadcast(IPC.libraryChanged, list)
         }
-        recent.onChange(() => void refreshRecent())
-        await refreshRecent()
-        // Started without a file: reopen the most recent discussion if the person wants that and it still exists.
-        // A file given on the command line always wins (the last file is not opened as well).
-        let initialPaths = earlyPaths
-        const last = recent.list()[0]
+        let refreshTimer: NodeJS.Timeout | null = null
+        library.onChange(() => {
+            // several changes in a row (an import, opening a discussion) build the menu once
+            if (refreshTimer) return
+            refreshTimer = setTimeout(() => {
+                refreshTimer = null
+                refreshRecent()
+            }, 50)
+        })
+        refreshRecent()
+        // Started without a file: reopen the most recent discussion if the person wants that.
+        // A file or a discussion given on the command line always wins (the last one is not opened as well).
+        const initialPaths = earlyPaths
+        let initialIds = earlyIds
+        const last = describeDiscussions(library.list())[0]
         if (
             initialPaths.length === 0 &&
+            initialIds.length === 0 &&
             !startedInBackground &&
+            !migrationPending && // the start window asks about the old files first
             settings.get().openLastFileOnStartup &&
             last
-        ) {
-            const [view] = await describeRecent([last])
-            if (view?.exists) initialPaths = [last.path]
-        }
+        )
+            initialIds = [last.id]
         await sync.start()
         await bg.start()
-        if (startedInBackground && initialPaths.length === 0) {
+        if (startedInBackground && initialPaths.length === 0 && initialIds.length === 0) {
             // no synchronized discussion any more: nothing to do in the background
             if (!bg.keepsRunning) app.quit()
             return
         }
-        await controller.openPaths(initialPaths)
+        await controller.openPaths(initialPaths, initialIds)
         void association.offerAtStartup()
 
         app.on('activate', () => {

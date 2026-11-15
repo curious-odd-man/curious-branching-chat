@@ -2,6 +2,7 @@ import { _electron as electron, type ElectronApplication, type Page } from '@pla
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { knownProfiles } from './library'
 
 export interface DialogLogEntry {
     kind: 'save' | 'open' | 'box'
@@ -39,6 +40,7 @@ export async function launchApp(
     } = {}
 ): Promise<TestApp> {
     const userData = options.userData ?? (await tempDir('bc-profile-'))
+    knownProfiles.push(userData)
     const args = [
         ...(options.electronArgs ?? []),
         '.',

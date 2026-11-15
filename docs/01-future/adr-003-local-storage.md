@@ -1,6 +1,6 @@
 # ADR-003: Local storage of discussions
 
-**Status:** Accepted (option C, variant C1; all questions answered)  
+**Status:** Accepted (option C, variant C1; all questions answered); implemented in release 2.2  
 **Date:** 2026-11-14 (accepted 2026-11-14)  
 **Context documents:** `requirements.md` (revision 13), `requirements-next.md` (draft 3), `performance.md`,
 `adr-002-sync.md`, `sync-protocol.md`  
@@ -294,4 +294,4 @@ messages then sent to the members through the shared folder?
 | 2026-11-14 | Proposed: options A to E compared                                                                    |
 | 2026-11-14 | Accepted: option C, variant C1; backups (b); merge (c); WAL; blob files; migration with one question |
 | 2026-11-14 | Q-07: unused blob files deleted after 7 days; Q-08: no import into a synchronized discussion         |
-
+| 2026-11-15 | Implemented in release 2.2 (phases 4–7); details in `release-2-implementation-plan.md`, section 1a   |

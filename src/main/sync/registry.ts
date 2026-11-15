@@ -4,13 +4,14 @@ import { z } from 'zod'
 import { StateFileWriter } from '../document/atomicWrite'
 
 /**
- * Synchronized discussions on this computer (design section 18): which local `.branchchat` file and which shared
- * folder belong to each conversation. A file with a roster that is not listed here is a detached copy (FR-154).
+ * Synchronized discussions on this computer (design section 18): which shared folder belongs to each conversation.
+ * The discussion itself is in the library (ADR-003) under the conversation ID. `filePath` is the local file of
+ * release 1.5 and older; it is kept only for the migration of that file into the library (FR-206).
  */
 const entrySchema = z
     .object({
         conversationId: z.string().min(1),
-        filePath: z.string().min(1),
+        filePath: z.string().min(1).optional(),
         sharedRoot: z.string().min(1),
         ownId: z.string().min(1)
     })
@@ -60,11 +61,9 @@ export class SyncRegistry {
         await this.persist()
     }
 
-    /** The registered file was moved or renamed (FR-168). */
-    async updatePath(conversationId: string, filePath: string): Promise<void> {
-        const entry = this.get(conversationId)
-        if (!entry) return
-        await this.put({ ...entry, filePath })
+    async remove(conversationId: string): Promise<void> {
+        this.entries = this.entries.filter((e) => e.conversationId !== conversationId)
+        await this.persist()
     }
 
     private async persist(): Promise<void> {

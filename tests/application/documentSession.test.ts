@@ -1,10 +1,14 @@
-import { promises as fs } from 'node:fs'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { plainTextToRichDoc, mainThread } from '@shared/domain'
-import { readDocument, writeDocument } from '../../src/main/document'
-import { DocumentSession, type DocumentWriter } from '../../src/main/application/documentSession'
-import { scanZip } from '../../src/main/document/zip'
+import type { SessionStore } from '../../src/main/application/documentSession'
+import type { DiscussionStore } from '../../src/main/library'
+import {
+    closeLibraries,
+    createSession,
+    libraryOf,
+    readSaved,
+    reopenSession
+} from '../helpers/library'
 import {
     anna,
     boris,
@@ -25,25 +29,44 @@ const deferred = () => {
     return { promise, resolve }
 }
 
+afterEach(() => closeLibraries())
+
+/** A store whose saves the test can watch, hold, or fail. */
+function wrapStore(
+    store: DiscussionStore,
+    before: (
+        after: Parameters<SessionStore['save']>[0],
+        assets: Parameters<SessionStore['save']>[1]
+    ) => Promise<void>
+): SessionStore {
+    return {
+        id: store.id,
+        save: async (after, assets) => {
+            await before(after, assets)
+            await store.save(after, assets)
+        },
+        readAsset: (info) => store.readAsset(info),
+        setOwner: (owner) => store.setOwner(owner)
+    }
+}
+
 describe('DocumentSession', () => {
-    it('creates the file immediately and reopens it (requirements 4.1)', async () => {
+    it('creates the discussion in the library immediately and reopens it (requirements 4.1)', async () => {
         await withTempDir(async (dir) => {
-            const file = join(dir, 'Идея.branchchat')
-            const s = await DocumentSession.create(file, { ctx: makeCtx() }, { author: anna })
-            expect((await readDocument(file)).contents.discussion.title).toBe('Идея')
+            const s = await createSession(dir, { ctx: makeCtx() }, { author: anna, title: 'Идея' })
+            expect(readSaved(s.documentId).discussion.title).toBe('Идея')
+            expect(s.title).toBe('Идея')
             expect(
                 s.view(anna.participantId).discussion.participants.map((p) => p.displayName)
             ).toEqual(['Анна'])
-            expect((await DocumentSession.open(file, { ctx: makeCtx('o') })).documentId).toBe(
-                s.documentId
-            )
+            expect(reopenSession(s.documentId, { ctx: makeCtx('o') }).documentId).toBe(s.documentId)
         })
     })
 
     it('shows a message immediately and saves it (FR-007)', async () => {
         await withTempDir(async (dir) => {
-            const file = join(dir, 'a.branchchat')
-            const s = await DocumentSession.create(file, { ctx: makeCtx() }, { author: anna })
+            const s = await createSession(dir, { ctx: makeCtx() }, { author: anna })
+            const file = s.documentId
             const threadId = mainThread(s.view(anna.participantId).discussion).threadId
             s.appendMessage(anna, threadId, text('Привет'))
             expect(mainThread(s.view(anna.participantId).discussion).messages).toHaveLength(1)
@@ -51,22 +74,19 @@ describe('DocumentSession', () => {
             await s.flush()
             expect(s.saving).toBe(false)
             expect(s.saveError).toBeNull()
-            expect(
-                mainThread((await readDocument(file)).contents.discussion).messages
-            ).toHaveLength(1)
+            expect(mainThread(readSaved(file).discussion).messages).toHaveLength(1)
         })
     })
 
     it('adds a new participant on their first message and marks earlier messages read (FR-112)', async () => {
         await withTempDir(async (dir) => {
-            const file = join(dir, 'a.branchchat')
             const ctx = makeCtx()
-            const s = await DocumentSession.create(file, { ctx }, { author: anna })
+            const s = await createSession(dir, { ctx }, { author: anna })
             const threadId = mainThread(s.view(anna.participantId).discussion).threadId
             s.appendMessage(anna, threadId, text('вопрос'))
             s.appendMessage(boris, threadId, text('ответ'))
             await s.flush()
-            const saved = (await readDocument(file)).contents
+            const saved = readSaved(s.documentId)
             expect(saved.discussion.participants.map((p) => p.participantId)).toEqual([
                 anna.participantId,
                 boris.participantId
@@ -79,95 +99,78 @@ describe('DocumentSession', () => {
 
     it('coalesces quick changes into few writes and never writes concurrently', async () => {
         await withTempDir(async (dir) => {
-            const file = join(dir, 'a.branchchat')
             let active = 0
             let maxActive = 0
             const gate = deferred()
             const writes: number[] = []
-            const writer: DocumentWriter = async (p, c, o) => {
-                active++
-                maxActive = Math.max(maxActive, active)
-                if (writes.length === 1) await gate.promise // hold the first non-create write
-                writes.push(mainThread(c.discussion).messages.length)
-                await writeDocument(p, c, o)
-                active--
-            }
-            const s = await DocumentSession.create(
-                file,
-                { ctx: makeCtx(), writer },
-                { author: anna }
-            )
+            const s = await createSession(dir, { ctx: makeCtx() }, { author: anna }, (store) => ({
+                id: store.id,
+                save: async (c, a) => {
+                    active++
+                    maxActive = Math.max(maxActive, active)
+                    if (writes.length === 0) await gate.promise // hold the first save
+                    writes.push(mainThread(c.discussion).messages.length)
+                    await store.save(c, a)
+                    active--
+                },
+                readAsset: (info) => store.readAsset(info),
+                setOwner: (owner) => store.setOwner(owner)
+            }))
+            const file = s.documentId
             const threadId = mainThread(s.view(anna.participantId).discussion).threadId
             for (let i = 0; i < 20; i++) s.appendMessage(anna, threadId, text(`m${i}`))
             gate.resolve()
             await s.flush()
             expect(maxActive).toBe(1)
-            expect(writes.length).toBeLessThan(20) // creation + a few coalesced writes
+            expect(writes.length).toBeLessThan(20) // a few coalesced saves
             expect(writes.at(-1)).toBe(20) // the last write contains everything
-            expect(
-                mainThread((await readDocument(file)).contents.discussion).messages
-            ).toHaveLength(20)
+            expect(mainThread(readSaved(file).discussion).messages).toHaveLength(20)
         })
     })
 
     it('keeps changes in memory when saving fails, reports it, and recovers (FR-008)', async () => {
         await withTempDir(async (dir) => {
-            const file = join(dir, 'sub', 'a.branchchat')
-            await fs.mkdir(join(dir, 'sub'))
-            const s = await DocumentSession.create(file, { ctx: makeCtx() }, { author: anna })
+            let fail = true
+            const s = await createSession(dir, { ctx: makeCtx() }, { author: anna }, (store) =>
+                wrapStore(store, async () => {
+                    if (fail) throw new Error('disk full')
+                })
+            )
+            const file = s.documentId
             const threadId = mainThread(s.view(anna.participantId).discussion).threadId
-            await fs.rm(join(dir, 'sub'), { recursive: true })
 
             let changes = 0
             s.onChange = () => void changes++
             s.onStatusChange = () => void changes++
             s.appendMessage(anna, threadId, text('не сохранится сразу'))
             await s.flush()
-            expect(s.saveError).toMatch(/Не удалось записать файл|Нет доступа/)
+            expect(s.saveError).toMatch(/Не удалось сохранить/)
             expect(s.view(anna.participantId).saveError).toBe(s.saveError)
             expect(mainThread(s.view(anna.participantId).discussion).messages).toHaveLength(1) // not lost
             expect(changes).toBeGreaterThanOrEqual(2) // change + save finished
 
-            await fs.mkdir(join(dir, 'sub'))
+            fail = false
             await s.retrySave()
             expect(s.saveError).toBeNull()
-            expect(
-                mainThread((await readDocument(file)).contents.discussion).messages
-            ).toHaveLength(1)
+            expect(mainThread(readSaved(file).discussion).messages).toHaveLength(1)
         })
     })
 
     it('surfaces domain errors without changing state', async () => {
         await withTempDir(async (dir) => {
-            const s = await DocumentSession.create(
-                join(dir, 'a.branchchat'),
-                { ctx: makeCtx() },
-                { author: anna }
-            )
+            const s = await createSession(dir, { ctx: makeCtx() }, { author: anna })
             const threadId = mainThread(s.view(anna.participantId).discussion).threadId
             expect(() => s.appendMessage(anna, threadId, text('   '))).toThrow(/empty/)
             expect(() => s.appendMessage(anna, 'no-such-thread', text('x'))).toThrow(/not found/)
             expect(s.saving).toBe(false)
         })
     })
-
-    it('creation fails loudly when the file cannot be written', async () => {
-        await withTempDir(async (dir) => {
-            await expect(
-                DocumentSession.create(
-                    join(dir, 'missing-dir', 'a.branchchat'),
-                    { ctx: makeCtx() },
-                    { author: anna }
-                )
-            ).rejects.toMatchObject({ code: expect.stringMatching(/WRITE_FAILED|ACCESS_DENIED/) })
-        })
-    })
 })
 
 describe('DocumentSession branches', () => {
     async function sessionWithMessage(dir: string) {
-        const file = join(dir, 'a.branchchat')
-        const s = await DocumentSession.create(file, { ctx: makeCtx() }, { author: anna })
+        const s = await createSession(dir, { ctx: makeCtx() }, { author: anna })
+        const file = s.documentId
         const threadId = mainThread(s.view(anna.participantId).discussion).threadId
         s.appendMessage(anna, threadId, text('Привет, это идея про ёлку.'))
         const messageId = mainThread(s.view(anna.participantId).discussion).messages[0]!.messageId
@@ -183,7 +186,7 @@ describe('DocumentSession branches', () => {
                 selectionEnd: 25
             })
             await s.flush()
-            const saved = (await readDocument(file)).contents
+            const saved = readSaved(file)
             const branch = saved.discussion.threads.find((t) => t.threadId === branchId)!
             expect(branch).toMatchObject({
                 sourceMessageId: messageId,
@@ -236,16 +239,14 @@ describe('DocumentSession branches', () => {
             s.setThreadTitle(boris.participantId, branchId, '  Приветствие ')
             s.setThreadStatus(boris.participantId, branchId, 'closed')
             await s.flush()
-            const closed = (await readDocument(file)).contents.discussion.threads.find(
-                (t) => t.threadId === branchId
-            )!
+            const closed = readSaved(file).discussion.threads.find((t) => t.threadId === branchId)!
             expect(closed).toMatchObject({ status: 'closed', title: 'Приветствие' })
             expect(() => s.appendMessage(boris, branchId, text('ещё'))).toThrow(/closed/)
 
             s.setThreadStatus(boris.participantId, branchId, 'open')
             s.appendMessage(boris, branchId, text('ещё'))
             await s.flush()
-            const reopened = (await readDocument(file)).contents.discussion.threads.find(
+            const reopened = readSaved(file).discussion.threads.find(
                 (t) => t.threadId === branchId
             )!
             expect(reopened.status).toBe('open')
@@ -263,8 +264,8 @@ describe('DocumentSession branches', () => {
 
 describe('DocumentSession read state', () => {
     async function twoPeople(dir: string) {
-        const file = join(dir, 'a.branchchat')
-        const s = await DocumentSession.create(file, { ctx: makeCtx() }, { author: anna })
+        const s = await createSession(dir, { ctx: makeCtx() }, { author: anna })
+        const file = s.documentId
         const threadId = mainThread(s.view(anna.participantId).discussion).threadId
         s.appendMessage(anna, threadId, text('вопрос 1'))
         s.appendMessage(anna, threadId, text('вопрос 2'))
@@ -283,7 +284,7 @@ describe('DocumentSession read state', () => {
             expect(s.markMessageRead(boris, ids[0]!)).toBe(true)
             expect(s.unreadTotal(boris.participantId)).toBe(1)
             await s.flush()
-            const saved = (await readDocument(file)).contents
+            const saved = readSaved(file)
             expect(saved.readState[boris.participantId]).toEqual([ids[0]])
             expect(saved.discussion.participants.map((p) => p.participantId)).toContain(
                 boris.participantId
@@ -313,7 +314,7 @@ describe('DocumentSession read state', () => {
             await s.flush()
             s.markAllRead(clara)
             await s.flush()
-            const saved = (await readDocument(file)).contents.readState
+            const saved = readSaved(file).readState
             expect(saved[boris.participantId]).toEqual([ids[0]])
             expect(saved[clara.participantId]).toEqual(ids)
         })
@@ -344,18 +345,16 @@ describe('DocumentSession read state', () => {
 describe('DocumentSession images', () => {
     const imageDoc = (assetId: string) =>
         richDoc(para({ type: 'image', attrs: { assetId } }), para(textNode('подпись')))
-    const entries = async (file: string): Promise<string[]> => {
-        const names: string[] = []
-        await scanZip(file, (e) => void names.push(e.fileName))
-        return names.filter((n) => n.startsWith('assets/'))
-    }
-    async function fresh(
-        dir: string,
-        deps: Partial<Parameters<typeof DocumentSession.create>[1]> = {}
-    ) {
-        const file = join(dir, 'a.branchchat')
-        const s = await DocumentSession.create(file, { ctx: makeCtx(), ...deps }, { author: anna })
-        return { file, s, threadId: mainThread(s.view(anna.participantId).discussion).threadId }
+    /** Image files in the library (by hash). */
+    const entries = async (file: string): Promise<string[]> =>
+        (await libraryOf(file).lib.blobs.list()).map((b) => b.sha256)
+    async function fresh(dir: string, wrap?: Parameters<typeof createSession>[3]) {
+        const s = await createSession(dir, { ctx: makeCtx() }, { author: anna }, wrap)
+        return {
+            file: s.documentId,
+            s,
+            threadId: mainThread(s.view(anna.participantId).discussion).threadId
+        }
     }
 
     it('accepts PNG, JPEG, GIF and WebP only (FR-116), with no size limit (NFR-015)', async () => {
@@ -383,18 +382,18 @@ describe('DocumentSession images', () => {
         })
     })
 
-    it('an image that is never sent leaves no trace in the file', async () => {
+    it('an image that is never sent leaves no trace in the library', async () => {
         await withTempDir(async (dir) => {
             const { file, s, threadId } = await fresh(dir)
             s.stageImage(pngBytes())
             s.appendMessage(anna, threadId, simple('без картинки'))
             await s.flush()
             expect(await entries(file)).toEqual([])
-            expect((await readDocument(file)).contents.discussion.assets).toEqual([])
+            expect(readSaved(file).discussion.assets).toEqual([])
         })
     })
 
-    it('stores a sent image in the file, registers it, and can show it before and after saving (FR-066, FR-068)', async () => {
+    it('stores a sent image in the library, registers it, and can show it before and after saving (FR-066, FR-068)', async () => {
         await withTempDir(async (dir) => {
             const { file, s, threadId } = await fresh(dir)
             const { assetId } = s.stageImage(pngBytes())
@@ -402,7 +401,7 @@ describe('DocumentSession images', () => {
             expect((await s.readAssetBytes(assetId))?.data.equals(pngBytes())).toBe(true) // from memory, not saved yet
             await s.flush()
 
-            const saved = (await readDocument(file)).contents.discussion
+            const saved = readSaved(file).discussion
             expect(saved.assets).toHaveLength(1)
             expect(saved.assets[0]).toMatchObject({
                 assetId,
@@ -410,7 +409,7 @@ describe('DocumentSession images', () => {
                 path: `assets/images/${assetId}.png`
             })
             expect(mainThread(saved).messages[0]!.assetReferences).toEqual([assetId])
-            expect(await entries(file)).toEqual([`assets/images/${assetId}.png`])
+            expect(await entries(file)).toEqual([assetId])
             const fromFile = await s.readAssetBytes(assetId)
             expect(fromFile?.mediaType).toBe('image/png')
             expect(fromFile?.data.equals(pngBytes())).toBe(true)
@@ -428,10 +427,8 @@ describe('DocumentSession images', () => {
             s.appendMessage(anna, threadId, imageDoc(first.assetId)) // used again, already in the file
             await s.flush()
             expect(await entries(file)).toHaveLength(1)
-            expect((await readDocument(file)).contents.discussion.assets).toHaveLength(1)
-            expect(
-                mainThread((await readDocument(file)).contents.discussion).messages
-            ).toHaveLength(2)
+            expect(readSaved(file).discussion.assets).toHaveLength(1)
+            expect(mainThread(readSaved(file).discussion).messages).toHaveLength(2)
         })
     })
 
@@ -450,11 +447,11 @@ describe('DocumentSession images', () => {
     it('keeps the image queued when saving fails, and writes it on retry (FR-008)', async () => {
         await withTempDir(async (dir) => {
             let fail = true
-            const writer: DocumentWriter = async (p, c, o) => {
-                if (fail && o?.newAssets) throw new Error('disk full')
-                await writeDocument(p, c, o)
-            }
-            const { file, s, threadId } = await fresh(dir, { writer })
+            const { file, s, threadId } = await fresh(dir, (store) =>
+                wrapStore(store, async (_c, assets) => {
+                    if (fail && assets.length > 0) throw new Error('disk full')
+                })
+            )
             const { assetId } = s.stageImage(pngBytes())
             s.appendMessage(anna, threadId, imageDoc(assetId))
             await s.flush()
@@ -463,25 +460,27 @@ describe('DocumentSession images', () => {
             fail = false
             await s.retrySave()
             expect(s.saveError).toBeNull()
-            expect(await entries(file)).toEqual([`assets/images/${assetId}.png`])
+            expect(await entries(file)).toEqual([assetId])
         })
     })
 
     it('shows a placeholder (null) for missing, unknown or damaged image data (FR-075)', async () => {
         await withTempDir(async (dir) => {
-            // a writer that "loses" the image data: the file lists the image but has no entry for it
-            const writer: DocumentWriter = (p, c, o) =>
-                writeDocument(p, c, o && { ...o, newAssets: [] })
-            const { file, s, threadId } = await fresh(dir, { writer })
+            // a store that "loses" the image data: the discussion lists the image but the library has no file for it
+            const { file, s, threadId } = await fresh(dir, (store) => ({
+                id: store.id,
+                save: (c) => store.save(c, []),
+                readAsset: (info) => store.readAsset(info),
+                setOwner: (owner) => store.setOwner(owner)
+            }))
             const { assetId } = s.stageImage(pngBytes())
             s.appendMessage(anna, threadId, imageDoc(assetId))
             await s.flush()
             expect(await entries(file)).toEqual([])
-            expect(await s.readAssetBytes(assetId)).toBeNull() // listed, but the data is not in the file
+            expect(await s.readAssetBytes(assetId)).toBeNull() // listed, but the data is not in the library
             expect(await s.readAssetBytes('b'.repeat(64))).toBeNull() // not listed at all
 
-            // damaged: the bytes in the file do not match the recorded checksum
-            const reopened = await DocumentSession.open(file, { ctx: makeCtx('o') })
+            const reopened = reopenSession(file, { ctx: makeCtx('o') })
             expect(reopened.view(anna.participantId).missingAssetIds).toEqual([assetId])
         })
     })
@@ -489,7 +488,7 @@ describe('DocumentSession images', () => {
     it('every session has its own id, used in image URLs', async () => {
         await withTempDir(async (dir) => {
             const { file, s } = await fresh(dir)
-            const other = await DocumentSession.open(file, { ctx: makeCtx('o') })
+            const other = reopenSession(file, { ctx: makeCtx('o') })
             expect(s.sessionId).not.toBe(other.sessionId)
             expect(s.view(anna.participantId).sessionId).toBe(s.sessionId)
         })

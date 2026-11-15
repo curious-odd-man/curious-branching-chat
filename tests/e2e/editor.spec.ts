@@ -2,7 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { join } from 'node:path'
 import { writeBigDiscussion } from './helpers/bigFile'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
-import { nodeTypes, readDiscussionFile, textNodes } from './helpers/readFile'
+import { nodeTypes, textNodes } from './helpers/readFile'
+import { createAt, savedFile } from './helpers/library'
 
 const apps: TestApp[] = []
 const dirs: string[] = []
@@ -25,21 +26,15 @@ async function workDir(): Promise<string> {
     return d
 }
 async function createDiscussion(t: TestApp, win: Page, file: string): Promise<void> {
-    await t.answer({ save: [file] })
-    await win.getByTestId('launcher-new').click()
-    await win.getByTestId('name-input').fill('Анна')
-    await win.getByTestId('name-confirm').click()
-    await expect(win.getByTestId('composer')).toBeVisible()
+    await createAt(t, win, file)
 }
 const composer = (win: Page) => win.getByTestId('composer')
 /** The messages in the file. A message appears on screen a moment before it is written, so wait for `count`. */
 async function savedMessages(file: string, count = 1) {
-    let messages: Awaited<
-        ReturnType<typeof readDiscussionFile>
-    >['discussion']['threads'][0]['messages'] = []
+    let messages: Awaited<ReturnType<typeof savedFile>>['discussion']['threads'][0]['messages'] = []
     await expect
         .poll(async () => {
-            messages = (await readDiscussionFile(file)).discussion.threads[0]!.messages
+            messages = (await savedFile(file)).discussion.threads[0]!.messages
             return messages.length
         })
         .toBeGreaterThanOrEqual(count)
@@ -143,7 +138,7 @@ test('headings, bold, italic, underline, colors and links survive saving and reo
 
     // close and reopen: identical result
     await t.close()
-    const again = await start({ userData: t.userData, files: [file] })
+    const again = await start({ userData: t.userData })
     await check(again.win)
 })
 
@@ -189,7 +184,7 @@ test('bullet and numbered lists, nested with Tab and the indent buttons, round-t
     expect(nodeTypes(saved[1]!.content).has('orderedList')).toBe(true)
 
     await t.close()
-    const again = await start({ userData: t.userData, files: [file] })
+    const again = await start({ userData: t.userData })
     await expect(again.win.getByTestId('message').first().locator('ul > li > ul > li')).toHaveCount(
         2
     )

@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { simple, writeDiscussionFile } from './helpers/craft'
-import { readEntries } from './helpers/readFile'
+import { savedFile } from './helpers/library'
 
 const apps: TestApp[] = []
 const dirs: string[] = []
@@ -37,15 +37,13 @@ interface RawThread {
     messages: RawMessage[]
 }
 
+/** The imported discussion as the library holds it. */
 async function rawFile(path: string): Promise<{ version: number; threads: RawThread[] }> {
-    const entries = await readEntries(path)
-    const manifest = JSON.parse(entries.get('manifest.json')!.toString('utf8')) as {
-        schemaVersion: number
+    const saved = await savedFile(path)
+    return {
+        version: saved.manifest.schemaVersion,
+        threads: saved.discussion.threads as unknown as RawThread[]
     }
-    const discussion = JSON.parse(entries.get('discussion.json')!.toString('utf8')) as {
-        threads: RawThread[]
-    }
-    return { version: manifest.schemaVersion, threads: discussion.threads }
 }
 
 async function send(win: Page, text: string): Promise<void> {
@@ -53,7 +51,7 @@ async function send(win: Page, text: string): Promise<void> {
     await win.getByTestId('send').click()
 }
 
-test('a version 1 file opens unchanged, and the next save writes version 2 with clocks (FR-151, FR-152)', async () => {
+test('a version 1 file is imported as version 2 with clocks; the file stays unchanged (FR-151, FR-152, FR-203)', async () => {
     const dir = await tempDir()
     dirs.push(dir)
     const file = join(dir, 'старый.branchchat')
@@ -80,11 +78,13 @@ test('a version 1 file opens unchanged, and the next save writes version 2 with 
     const win = await t.app.firstWindow()
     await expect(win.getByTestId('composer')).toBeVisible()
     await expect(win.getByText('Второе.')).toBeVisible()
-    // opening alone never rewrites the file (FR-012)
+    // the import never changes the file (FR-012)
     expect((await fs.readFile(file)).equals(before)).toBe(true)
 
     await send(win, 'Третье, уже в новом формате.')
-    await expect.poll(async () => (await rawFile(file)).version, { timeout: 10_000 }).toBe(2)
+    await expect.poll(async () => (await rawFile(file)).threads[0]!.messages.length).toBe(3)
+    expect((await rawFile(file)).version).toBe(2)
+    expect((await fs.readFile(file)).equals(before)).toBe(true)
 
     const { threads } = await rawFile(file)
     const main = threads.find((th) => th.threadId === 'main')!

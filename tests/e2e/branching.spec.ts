@@ -16,7 +16,8 @@ import {
     writeDiscussionFile,
     type CraftThread
 } from './helpers/craft'
-import { plainTextOf, readDiscussionFile, readReadState } from './helpers/readFile'
+import { plainTextOf } from './helpers/readFile'
+import { savedFile, savedReadState } from './helpers/library'
 import { selectText } from './helpers/select'
 
 const apps: TestApp[] = []
@@ -103,7 +104,7 @@ async function inheritedTexts(win: Page): Promise<string[]> {
     return (await inherited(win).locator('.rich').allTextContents()).map((s) => s.trim())
 }
 
-const savedThreads = async (file: string) => (await readDiscussionFile(file)).discussion.threads
+const savedThreads = async (file: string) => (await savedFile(file)).discussion.threads
 
 test('selections across bold, italic and link, list items, heading+paragraph and paragraphs become branches (FR-049 to FR-055)', async () => {
     const dir = await workDir()
@@ -185,7 +186,7 @@ test('selections across bold, italic and link, list items, heading+paragraph and
 
     // replying marked the source message as read for this participant (FR-112)
     await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
-    expect((await readReadState(file))['p-local']).toEqual(['m1'])
+    expect((await savedReadState(file))['p-local']).toEqual(['m1'])
 })
 
 test('nested branches three levels deep show exactly the right context, and survive reopening (FR-053, FR-056, FR-057, FR-063)', async () => {
@@ -494,12 +495,12 @@ test('the participant name is asked for before the first branch is created (FR-0
     expect(await win.getByTestId('branch-quote').textContent()).toBe('которого') // the selection was kept
 
     await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
-    const saved = await readDiscussionFile(file)
+    const saved = await savedFile(file)
     expect(saved.discussion.participants.map((x) => x.displayName)).toContain('Вера') // added on first write
     const settings = JSON.parse(await fs.readFile(join(profile, 'settings.json'), 'utf8')) as {
         participantId: string
     }
-    expect((await readReadState(file))[settings.participantId]).toEqual(['m2'])
+    expect((await savedReadState(file))[settings.participantId]).toEqual(['m2'])
 })
 
 test('each thread keeps its own unsent draft while moving between branches (FR-008)', async () => {

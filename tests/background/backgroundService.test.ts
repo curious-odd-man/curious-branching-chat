@@ -7,8 +7,6 @@ import { SettingsStore } from '../../src/main/local-state/settings'
 import type { ConversationStatus, SyncService } from '../../src/main/sync/syncService'
 import { withTempDir } from '../helpers/fixtures'
 
-const FILE = '/data/Отпуск.branchchat'
-
 interface World {
     service: BackgroundService
     settings: SettingsStore
@@ -20,10 +18,6 @@ interface World {
     statuses: ConversationStatus[]
     active: boolean
     windows: number
-    adopted: Array<[string, string]>
-    errors: string[]
-    pick: string | null
-    docIds: Record<string, string>
 }
 
 async function world(dir: string): Promise<World> {
@@ -42,23 +36,16 @@ async function world(dir: string): Promise<World> {
         login: [],
         quits: 0,
         shown: [],
-        statuses: [{ conversationId: 'c1', filePath: FILE, health: null }],
+        statuses: [{ conversationId: 'c1', title: 'Отпуск', health: null }],
         active: false,
-        windows: 0,
-        adopted: [],
-        errors: [],
-        pick: null,
-        docIds: {}
+        windows: 0
     } as unknown as World
     const sync = {
         get count() {
             return w.statuses.length
         },
         statusList: () => w.statuses,
-        checkAll: async () => w.shown.push('check'),
-        adoptMovedFile: async (id: string, path: string) => {
-            w.adopted.push([id, path])
-        }
+        checkAll: async () => w.shown.push('check')
     } as unknown as SyncService
     const windows: WindowsPort = {
         get windowCount() {
@@ -68,8 +55,8 @@ async function world(dir: string): Promise<World> {
         showAny: async () => {
             w.shown.push('any')
         },
-        openPath: async (p) => {
-            w.shown.push(`open ${p}`)
+        openDiscussion: async (id) => {
+            w.shown.push(`open ${id}`)
         },
         showMessage: async (p, t, m) => {
             w.shown.push(`message ${p} ${t} ${m}`)
@@ -91,12 +78,6 @@ async function world(dir: string): Promise<World> {
         },
         notifier: { show: (n) => w.notes.push({ title: n.title, body: n.body, click: n.onClick }) },
         loginItem: { set: (enabled) => w.login.push(enabled) },
-        fileExists: async (p) => p === FILE,
-        pickDiscussionFile: async () => w.pick,
-        readDocumentId: async (p) => w.docIds[p] ?? null,
-        showError: async (message) => {
-            w.errors.push(message)
-        },
         quit: () => {
             w.quits++
         }
@@ -163,14 +144,14 @@ describe('BackgroundService (release 1.4)', () => {
             const w = await world(dir)
             const arrival = {
                 conversationId: 'c1',
-                filePath: FILE,
+                title: 'Отпуск',
                 messages: [message('m1')],
                 contents
             }
             w.service.newMessages(arrival)
             expect(w.notes.map((n) => [n.title, n.body])).toEqual([['Борис — Отпуск', 'текст m1']])
             w.notes[0]!.click()
-            expect(w.shown).toEqual([`message ${FILE} t-main m1`])
+            expect(w.shown).toEqual(['message c1 t-main m1'])
             w.active = true
             w.service.newMessages(arrival)
             expect(w.notes).toHaveLength(1)
@@ -199,27 +180,15 @@ describe('BackgroundService (release 1.4)', () => {
         })
     })
 
-    it('a missing file: "Найти файл…" accepts only the same discussion (D-27)', async () => {
+    it('a discussion in the tray menu opens by its ID', async () => {
         await withTempDir(async (dir) => {
             const w = await world(dir)
-            w.statuses = [
-                { conversationId: 'c2', filePath: '/gone/Работа.branchchat', health: null }
-            ]
             await w.service.start()
-            const find = w.tray.items!.find((i) => i.kind === 'action' && i.id === 'find:c2')
-            expect(find).toBeDefined()
-            w.pick = '/new/other.branchchat'
-            w.docIds[w.pick] = 'c-other'
-            w.tray.act('find:c2')
+            const open = w.tray.items!.find((i) => i.kind === 'action' && i.id === 'open:c1')
+            expect(open).toMatchObject({ label: 'Отпуск' })
+            w.tray.act('open:c1')
             await new Promise((r) => setTimeout(r, 10))
-            expect(w.errors).toHaveLength(1)
-            expect(w.adopted).toEqual([])
-            w.pick = '/new/Работа.branchchat'
-            w.docIds[w.pick] = 'c2'
-            w.tray.act('find:c2')
-            await new Promise((r) => setTimeout(r, 10))
-            expect(w.adopted).toEqual([['c2', '/new/Работа.branchchat']])
-            expect(w.shown).toContain('open /new/Работа.branchchat')
+            expect(w.shown).toEqual(['open c1'])
         })
     })
 

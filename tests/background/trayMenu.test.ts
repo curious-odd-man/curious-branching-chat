@@ -11,8 +11,7 @@ const healthy = {
 }
 const d = (name: string, extra: Partial<TrayDiscussion> = {}): TrayDiscussion => ({
     conversationId: `c-${name}`,
-    filePath: `C:\\Users\\x\\${name}.branchchat`,
-    exists: true,
+    title: name,
     health: healthy,
     ...extra
 })
@@ -21,7 +20,7 @@ const labels = (items: ReturnType<typeof trayMenuModel>) =>
         i.kind === 'separator' ? '---' : i.kind === 'info' ? `(${i.label})` : i.label
     )
 
-describe('tray menu (D-33, D-35, D-27)', () => {
+describe('tray menu (D-33, D-35)', () => {
     it('lists discussions by name, the sync state, "Проверить папки", and "Выход"', () => {
         expect(labels(trayMenuModel([d('Работа'), d('Отпуск')]))).toEqual([
             'Открыть',
@@ -37,9 +36,9 @@ describe('tray menu (D-33, D-35, D-27)', () => {
         ])
     })
 
-    it('shows a missing file with "Найти файл…", and each sync problem', () => {
+    it('shows each sync problem', () => {
         const items = trayMenuModel([
-            d('Отпуск', { exists: false, health: null }),
+            d('Отпуск', { health: null }),
             d('Работа', { health: { ...healthy, folder: 'missing' } }),
             d('Семья', { health: { ...healthy, quarantined: 2 } })
         ])
@@ -47,8 +46,7 @@ describe('tray menu (D-33, D-35, D-27)', () => {
             'Открыть',
             '---',
             '(Общие обсуждения)',
-            '(Файл не найден: Отпуск)',
-            'Найти файл «Отпуск»…',
+            'Отпуск',
             'Работа',
             'Семья',
             '---',
@@ -58,10 +56,8 @@ describe('tray menu (D-33, D-35, D-27)', () => {
             '---',
             'Выход'
         ])
-        expect(items.find((i) => i.kind === 'action' && i.label.startsWith('Найти'))).toMatchObject(
-            {
-                id: 'find:c-Отпуск'
-            }
-        )
+        expect(items.find((i) => i.kind === 'action' && i.label === 'Отпуск')).toMatchObject({
+            id: 'open:c-Отпуск'
+        })
     })
 })

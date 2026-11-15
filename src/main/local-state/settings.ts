@@ -29,7 +29,11 @@ const settingsSchema = z
         /** FR-173: the one-time notice about the tray was shown. */
         trayNoticeShown: z.boolean().optional(),
         /** FR-301: text size of all windows, in percent. */
-        textSize: z.number().optional()
+        textSize: z.number().optional(),
+        /** FR-207: the folder for backups that the person chose (null or absent: only the app folder). */
+        backupFolder: z.string().min(1).nullable().optional(),
+        /** FR-209: the one-time warning about backups in a cloud folder was shown. */
+        backupFolderWarned: z.boolean().optional()
     })
     .passthrough()
 type Settings = z.infer<typeof settingsSchema>
@@ -97,8 +101,26 @@ export class SettingsStore {
             notifyShowText: this.data.notifyShowText ?? true,
             startWithWindows: this.data.startWithWindows ?? false,
             startWithWindowsSettled: this.data.startWithWindowsSettled ?? false,
-            textSize: clampTextSize(this.data.textSize ?? TEXT_SIZE_DEFAULT)
+            textSize: clampTextSize(this.data.textSize ?? TEXT_SIZE_DEFAULT),
+            backupFolder: this.data.backupFolder ?? null
         }
+    }
+
+    /** FR-207: the folder for backups (null: only %APPDATA%\BranchChat\backups). */
+    async setBackupFolder(folder: string | null): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        this.data = { ...this.data, backupFolder: folder }
+        await this.persist()
+        return this.get()
+    }
+
+    /** FR-209: true the first time only (then the warning about cloud folders is shown). */
+    async takeBackupFolderWarning(): Promise<boolean> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        if (this.data.backupFolderWarned) return false
+        this.data = { ...this.data, backupFolderWarned: true }
+        await this.persist()
+        return true
     }
 
     async setDisplayName(name: string): Promise<SettingsView> {

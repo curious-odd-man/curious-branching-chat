@@ -6,6 +6,10 @@ import { DISCUSSION_EXTENSION } from '@shared/types/constants'
 import type { IpcResult } from '@shared/types/ipc'
 import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
+import { TitlePrompt } from './components/TitlePrompt'
+import { MigrationDialog } from './components/MigrationDialog'
+import { RestoreDialog } from './components/RestoreDialog'
+import type { MigrationCandidate } from '@shared/types/ipc'
 import { ReadNotice } from './components/ReadNotice'
 import { SettingsDialog } from './components/SettingsDialog'
 import { ShortcutsDialog } from './components/ShortcutsDialog'
@@ -13,7 +17,7 @@ import { zoomKeyOfEvent } from '@shared/shortcuts'
 import { SharedWizard, type ReinviteTarget, type WizardMode } from './components/SharedWizard'
 import { UpdateDialog } from './components/UpdateDialog'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
-import { useDocumentView, useRecentFiles, useSettings, useUpdateState } from './hooks'
+import { useDiscussions, useDocumentView, useSettings, useUpdateState } from './hooks'
 
 export function App(): React.JSX.Element {
     const api = window.branchchat
@@ -30,7 +34,10 @@ export function App(): React.JSX.Element {
         null
     )
     const update = useUpdateState()
-    const recent = useRecentFiles()
+    const discussions = useDiscussions()
+    const [askTitle, setAskTitle] = useState(false)
+    const [migration, setMigration] = useState<MigrationCandidate[] | null>(null)
+    const [showRestore, setShowRestore] = useState(false)
     const [bannerHidden, setBannerHidden] = useState<string | null>(null)
     const [showSettings, setShowSettings] = useState(false)
     const [showShortcuts, setShowShortcuts] = useState(false)
@@ -43,6 +50,8 @@ export function App(): React.JSX.Element {
 
     useEffect(() => {
         void api.getAppInfo().then((r) => r.ok && setVersion(r.data.version))
+        // FR-206: at the first start of release 2.2 the files of release 1.x are offered for the library
+        void api.getMigration().then((r) => r.ok && r.data.length > 0 && setMigration(r.data))
     }, [api])
 
     /** Runs the action once a participant name exists; asks for it first if needed (FR-019). */
@@ -55,13 +64,11 @@ export function App(): React.JSX.Element {
         setError(r.ok ? null : (r.error?.message ?? null))
     }, [])
 
-    const startNew = useCallback(
-        () =>
-            withName(() => {
-                void api.newDocument().then(report)
-            }),
-        [api, report, withName]
-    )
+    const startNew = useCallback(() => withName(() => setAskTitle(true)), [withName])
+    const createNew = (title: string): void => {
+        setAskTitle(false)
+        void api.newDocument(title).then(report)
+    }
     const openDialog = useCallback(() => void api.openDocumentDialog().then(report), [api, report])
 
     useEffect(
@@ -78,6 +85,7 @@ export function App(): React.JSX.Element {
                 else if (command === 'join-shared') setWizard('join')
                 else if (command === 'shortcuts') setShowShortcuts(true)
                 else if (command === 'jump-to-date') setJumpRequest((n) => n + 1)
+                else if (command === 'restore') setShowRestore(true)
                 else if (command === 'invite-member') {
                     if (viewRef.current?.synced) setWizard('invite')
                 } else if (command === 'make-shared') {
@@ -263,12 +271,10 @@ export function App(): React.JSX.Element {
             {view === undefined ? null : view === null ? (
                 <Launcher
                     version={version}
-                    recent={recent}
+                    discussions={discussions ?? []}
                     onNew={startNew}
-                    onOpen={openDialog}
-                    onOpenRecent={(path) => void api.openPath(path).then(report)}
-                    onRemoveRecent={(path) => void api.removeRecentFile(path).then(report)}
-                    onClearRecent={() => void api.clearRecentFiles().then(report)}
+                    onImport={openDialog}
+                    onOpenDiscussion={(id) => void api.openDiscussion(id).then(report)}
                 />
             ) : (
                 <DiscussionScreen
@@ -312,6 +318,10 @@ export function App(): React.JSX.Element {
                         settingsRef.current = s
                     }}
                     onClose={() => setShowSettings(false)}
+                    onRestore={() => {
+                        setShowSettings(false)
+                        setShowRestore(true)
+                    }}
                 />
             )}
             {wizard &&
@@ -327,6 +337,11 @@ export function App(): React.JSX.Element {
                     />
                 )}
             {pending && <NamePrompt onSubmit={submitName} onCancel={() => setPending(null)} />}
+            {askTitle && <TitlePrompt onSubmit={createNew} onCancel={() => setAskTitle(false)} />}
+            {showRestore && <RestoreDialog onClose={() => setShowRestore(false)} />}
+            {migration && (
+                <MigrationDialog candidates={migration} onClose={() => setMigration(null)} />
+            )}
             {readNotice && (
                 <ReadNotice onConfirm={confirmReadNotice} onCancel={() => setReadNotice(null)} />
             )}

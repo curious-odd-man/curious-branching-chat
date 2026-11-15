@@ -1,25 +1,22 @@
 import { ru } from '@shared/i18n/ru'
-import type { RecentFileView } from '@shared/types/ipc'
+import type { DiscussionListItem } from '@shared/types/ipc'
+import { formatTimestamp } from '../i18n/format'
 
 interface Props {
     version: string
-    recent: readonly RecentFileView[]
+    discussions: readonly DiscussionListItem[]
     onNew(): void
-    onOpen(): void
-    onOpenRecent(path: string): void
-    onRemoveRecent(path: string): void
-    onClearRecent(): void
+    onImport(): void
+    onOpenDiscussion(id: string): void
 }
 
-/** Shown in a window that has no discussion yet. */
+/** Shown in a window that has no discussion yet: the discussions of the library, newest use first (ADR-003). */
 export function Launcher({
     version,
-    recent,
+    discussions,
     onNew,
-    onOpen,
-    onOpenRecent,
-    onRemoveRecent,
-    onClearRecent
+    onImport,
+    onOpenDiscussion
 }: Props): React.JSX.Element {
     return (
         <main className="launcher">
@@ -34,55 +31,46 @@ export function Launcher({
                 >
                     {ru.launcher.newDiscussion}
                 </button>
-                <button type="button" data-testid="launcher-open" onClick={onOpen}>
+                <button type="button" data-testid="launcher-open" onClick={onImport}>
                     {ru.launcher.openDiscussion}
                 </button>
             </div>
             <p className="hint">{ru.launcher.dropHint}</p>
-            {recent.length > 0 && (
+            {discussions.length > 0 && (
                 <section
                     className="recent"
-                    data-testid="recent-files"
+                    data-testid="discussion-list"
                     aria-labelledby="recent-heading"
                 >
                     <div className="recent-head">
                         <h2 id="recent-heading">{ru.launcher.recentHeading}</h2>
-                        <button type="button" data-testid="recent-clear" onClick={onClearRecent}>
-                            {ru.launcher.recentClear}
-                        </button>
                     </div>
                     <ul>
-                        {recent.map((file) => (
-                            <li
-                                key={file.path}
-                                className={file.exists ? 'recent-item' : 'recent-item missing'}
-                                data-testid="recent-item"
-                                data-exists={file.exists}
-                            >
-                                {/* A missing file stays clickable: opening it shows the usual "file not found" message. */}
+                        {discussions.map((d) => (
+                            <li key={d.id} className="recent-item" data-testid="discussion-item">
                                 <button
                                     type="button"
                                     className="recent-open"
-                                    data-testid="recent-open"
-                                    title={file.path}
-                                    onClick={() => onOpenRecent(file.path)}
+                                    data-testid="discussion-open"
+                                    onClick={() => onOpenDiscussion(d.id)}
                                 >
-                                    <span className="recent-name">{file.name}</span>
-                                    <span className="recent-dir">
-                                        {file.exists
-                                            ? file.directory
-                                            : `${file.directory} — ${ru.launcher.recentMissing}`}
+                                    <span className="recent-name">
+                                        {d.title}
+                                        {d.synced && (
+                                            <span className="recent-shared">
+                                                {' '}
+                                                · {ru.launcher.shared}
+                                            </span>
+                                        )}
                                     </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    className="recent-remove"
-                                    data-testid="recent-remove"
-                                    aria-label={ru.launcher.recentRemove(file.name)}
-                                    title={ru.launcher.recentRemove(file.name)}
-                                    onClick={() => onRemoveRecent(file.path)}
-                                >
-                                    ✕
+                                    <span className="recent-dir">
+                                        {d.lastMessageAt
+                                            ? ru.launcher.lastMessage(
+                                                  formatTimestamp(d.lastMessageAt),
+                                                  d.messageCount
+                                              )
+                                            : ru.launcher.noMessages}
+                                    </span>
                                 </button>
                             </li>
                         ))}

@@ -13,11 +13,13 @@ import {
     type OpenOutcome
 } from '@shared/types/ipc'
 import { DocumentError } from '../document'
-import type { RecentFilesStore } from '../local-state/recentFiles'
+import type { LibraryService } from '../library'
+import { LibraryError } from '../library/schema'
 import type { SettingsStore } from '../local-state/settings'
 import { DocumentSession } from './documentSession'
 import { AppError } from './errors'
 import { pathKey } from './paths'
+import { recentOrder } from './recentView'
 import type { Ui } from './ui'
 import type { SyncService } from '../sync/syncService'
 import type { SyncRegistry } from '../sync/registry'
@@ -36,7 +38,8 @@ export interface WindowEntry {
 
 export interface ControllerDeps {
     settings: SettingsStore
-    recent: RecentFilesStore
+    /** The discussions of this computer (ADR-003). */
+    library: LibraryService
     ui: Ui
     ctx: DomainContext
     appVersion: string
@@ -49,12 +52,13 @@ export interface ControllerDeps {
 }
 
 /**
- * Owns the windows and the open discussions: one window per document (FR-115), reuse of empty "start" windows,
- * focus instead of duplicates, the two-copies notice (FR-117), and close handling (FR-008).
+ * Owns the windows and the open discussions: one window per discussion (FR-115), reuse of empty "start" windows,
+ * focus instead of duplicates, import and export of files (FR-203, FR-204), and close handling (FR-008).
  */
 export class AppController {
     private readonly entries = new Map<number, WindowEntry>()
     private readonly opening = new Map<string, Promise<OpenOutcome>>()
+    private readonly importing = new Map<string, Promise<OpenOutcome>>()
 
     constructor(private readonly deps: ControllerDeps) {}
 
@@ -79,7 +83,9 @@ export class AppController {
         })
         win.on('closed', () => {
             this.entries.delete(entry.id)
-            if (entry.session) void this.deps.sync?.detach(entry.session)
+            const session = entry.session
+            if (session)
+                void Promise.resolve(this.deps.sync?.detach(session)).then(() => session.close())
         })
         this.updateTitle(entry)
         return entry
@@ -119,9 +125,9 @@ export class AppController {
         if (first) focusWindow(first.win)
     }
 
-    /** True if a window shows this file and that window is active (D-42: then no notification). */
-    isActive(filePath: string): boolean {
-        const entry = this.findByKey(pathKey(resolve(filePath)))
+    /** True if a window shows this discussion and that window is active (D-42: then no notification). */
+    isActive(documentId: string): boolean {
+        const entry = this.findByDocumentId(documentId)
         if (!entry || entry.win.isDestroyed()) return false
         return entry.win.isFocused() && entry.win.isVisible() && !entry.win.isMinimized()
     }
@@ -132,36 +138,27 @@ export class AppController {
      */
     async showAny(): Promise<void> {
         if (this.entries.size > 0) return this.focusAny()
-        const registered = (this.deps.registry?.list() ?? []).filter(
-            (e) => e.ownId === this.deps.settings.get().participantId
+        const ownId = this.deps.settings.get().participantId
+        const registered = new Set(
+            (this.deps.registry?.list() ?? [])
+                .filter((e) => e.ownId === ownId)
+                .map((e) => e.conversationId)
         )
-        const keys = new Set(registered.map((e) => pathKey(e.filePath)))
-        const candidates = [
-            ...this.deps.recent
-                .list()
-                .map((r) => r.path)
-                .filter((p) => keys.has(pathKey(p))),
-            ...registered.map((e) => e.filePath)
-        ]
-        for (const path of candidates) {
-            const exists = await fs
-                .access(path)
-                .then(() => true)
-                .catch(() => false)
-            if (!exists) continue
-            const outcome = await this.openPath(path, undefined)
+        const candidates = recentOrder(this.deps.library.list()).filter((d) => registered.has(d.id))
+        for (const d of candidates) {
+            const outcome = await this.openDiscussion(d.id, undefined)
             if (outcome.status === 'opened' || outcome.status === 'focused') return
         }
         if (this.entries.size === 0) focusWindow(this.createWindow().win)
     }
 
     /** A click on a notification (D-33): opens the discussion and shows the message. */
-    async showMessage(filePath: string, threadId: string, messageId: string): Promise<void> {
-        const outcome = await this.openPath(filePath, undefined)
+    async showMessage(documentId: string, threadId: string, messageId: string): Promise<void> {
+        const outcome = await this.openDiscussion(documentId, undefined)
         if (outcome.status !== 'opened' && outcome.status !== 'focused') return
-        const entry = this.findByKey(pathKey(resolve(filePath)))
+        const entry = this.findByDocumentId(documentId)
         if (!entry?.session || entry.win.isDestroyed()) return
-        entry.pendingFocus = { documentId: entry.session.documentId, threadId, messageId }
+        entry.pendingFocus = { documentId, threadId, messageId }
         entry.win.webContents.send(IPC.focusRequest)
     }
 
@@ -184,97 +181,96 @@ export class AppController {
             if (!entry.win.isDestroyed()) entry.win.webContents.send(channel, payload)
     }
 
-    // ---- opening and creating -----------------------------------------------------------------------------------
+    // ---- opening, importing, creating ---------------------------------------------------------------------------
 
-    /** Opens every path (launch arguments); makes sure at least one window exists afterwards. */
-    async openPaths(paths: readonly string[]): Promise<void> {
+    /**
+     * Launch arguments: files are imported and opened, `discussions` (jump list) are opened by ID. Makes sure at
+     * least one window exists afterwards.
+     */
+    async openPaths(paths: readonly string[], discussions: readonly string[] = []): Promise<void> {
         for (const path of paths) await this.openPath(path, undefined)
+        for (const id of discussions) await this.openDiscussion(id, undefined)
         if (this.entries.size === 0) this.createWindow()
-        else if (paths.length === 0) this.focusAny()
+        else if (paths.length === 0 && discussions.length === 0) this.focusAny()
     }
 
+    /** A `.branchchat` file (double-click, drag and drop, "Импортировать…"): imported, then opened (FR-203). */
     openPath(rawPath: string, from: WindowEntry | undefined): Promise<OpenOutcome> {
         const path = resolve(rawPath)
         const key = pathKey(path)
-        const existing = this.findByKey(key)
+        // a repeated request for a file that is still being imported (e.g. double-click spam) shares the attempt
+        const inFlight = this.importing.get(key)
+        if (inFlight) return inFlight
+        const attempt = this.doImport(path, from).finally(() => this.importing.delete(key))
+        this.importing.set(key, attempt)
+        return attempt
+    }
+
+    /** Opens a discussion of the library; a window that shows it already gets the focus. */
+    openDiscussion(documentId: string, from: WindowEntry | undefined): Promise<OpenOutcome> {
+        const existing = this.findByDocumentId(documentId)
         if (existing) {
             focusWindow(existing.win)
             return Promise.resolve({ status: 'focused' })
         }
-        // A repeated request for a file that is still being opened (e.g. double-click spam) shares the same attempt.
-        const inFlight = this.opening.get(key)
+        const inFlight = this.opening.get(documentId)
         if (inFlight) return inFlight
-        const attempt = this.doOpen(path, key, from).finally(() => this.opening.delete(key))
-        this.opening.set(key, attempt)
+        const attempt = this.doOpen(documentId, from).finally(() => this.opening.delete(documentId))
+        this.opening.set(documentId, attempt)
         return attempt
     }
 
-    /** A choice from the File > Open recent menu or the jump list: opens in the focused window. */
-    openFromMenu(path: string): Promise<OpenOutcome> {
+    /** A choice from the File > recent menu or the start screen: opens in the focused window. */
+    openFromMenu(documentId: string): Promise<OpenOutcome> {
         const focused = BrowserWindow.getFocusedWindow()
         const from = focused ? this.entries.get(focused.webContents.id) : undefined
-        return this.openPath(path, from)
+        return this.openDiscussion(documentId, from)
     }
 
+    /** "Импортировать…" (FR-203). */
     async openWithDialog(from: WindowEntry | undefined): Promise<OpenOutcome> {
         const chosen = await this.deps.ui.pickOpenPath(from?.win)
         if (!chosen) return { status: 'cancelled' }
         return this.openPath(chosen, from)
     }
 
-    async newDocument(from: WindowEntry | undefined): Promise<OpenOutcome> {
+    /** "Новое обсуждение": a new discussion in the library, named in the window (FR-202). */
+    async newDocument(from: WindowEntry | undefined, title: string): Promise<OpenOutcome> {
         const settings = this.deps.settings.get()
         if (!settings.displayName) throw new AppError('NAME_REQUIRED', ru.dialogs.nameRequired)
-        const chosen = await this.deps.ui.pickSavePath(from?.win)
-        if (!chosen) return { status: 'cancelled' }
-        const path = resolve(/\.branchchat$/i.test(chosen) ? chosen : `${chosen}.branchchat`)
-
-        if (this.findByKey(pathKey(path))) {
-            await this.deps.ui.showError(
-                from?.win,
-                ru.dialogs.createFailedTitle,
-                ru.dialogs.fileAlreadyOpen
-            )
-            return { status: 'failed', errorCode: 'ALREADY_OPEN' }
-        }
+        const name = title.trim()
+        if (!name) throw new AppError('TITLE_REQUIRED', 'a title is required')
+        const contents = DocumentSession.newContents(
+            { ctx: this.deps.ctx },
+            {
+                title: name,
+                author: {
+                    participantId: settings.participantId,
+                    displayName: settings.displayName
+                },
+                generator: { name: 'BranchChat', version: this.deps.appVersion }
+            }
+        )
         try {
-            const session = await DocumentSession.create(
-                path,
-                { ctx: this.deps.ctx },
-                {
-                    author: {
-                        participantId: settings.participantId,
-                        displayName: settings.displayName
-                    },
-                    generator: { name: 'BranchChat', version: this.deps.appVersion }
-                }
-            )
-            this.bind(this.targetFor(from), session)
-            return { status: 'opened' }
-        } catch (err) {
-            const code = err instanceof DocumentError ? err.code : 'WRITE_FAILED'
+            await this.deps.library.create(contents)
+        } catch {
             await this.deps.ui.showError(
                 from?.win,
                 ru.dialogs.createFailedTitle,
-                describeError(code),
-                path
+                describeError('SAVE_FAILED')
             )
-            return { status: 'failed', errorCode: code }
+            return { status: 'failed', errorCode: 'SAVE_FAILED' }
         }
+        return this.openDiscussion(contents.manifest.documentId, from)
     }
 
-    private async doOpen(
-        path: string,
-        key: string,
-        from: WindowEntry | undefined
-    ): Promise<OpenOutcome> {
-        let session: DocumentSession
+    private async doImport(path: string, from: WindowEntry | undefined): Promise<OpenOutcome> {
+        let result: Awaited<ReturnType<LibraryService['importFile']>>
         try {
-            // a write of the sync service to this file finishes first (design section 10)
-            await this.deps.sync?.beforeOpen(path)
-            session = await DocumentSession.open(path, { ctx: this.deps.ctx })
+            result = await this.deps.library.importFile(path)
         } catch (err) {
-            const code = err instanceof DocumentError ? err.code : 'UNKNOWN'
+            const code =
+                err instanceof DocumentError || err instanceof LibraryError ? err.code : 'UNKNOWN'
             const detail =
                 err instanceof DocumentError && err.details.length > 0
                     ? err.details.join('\n')
@@ -287,65 +283,66 @@ export class AppController {
             )
             return { status: 'failed', errorCode: code }
         }
-        const sameDocument = this.findByDocumentId(session.documentId)
-        if (sameDocument?.session && pathKey(sameDocument.session.path) !== key) {
-            session.notices.push(ru.notices.twoCopies(sameDocument.session.path, path))
+        const notice =
+            result.status === 'merged'
+                ? ru.notices.merged(basename(path), result.addedMessages)
+                : result.status === 'unchanged'
+                  ? ru.notices.nothingNew(basename(path))
+                  : null
+        const open = this.findByDocumentId(result.id)
+        if (open?.session && notice) {
+            open.session.notices.push(notice)
+            this.push(open)
+        }
+        const outcome = await this.openDiscussion(result.id, from)
+        if (!open && notice) {
+            const entry = this.findByDocumentId(result.id)
+            if (entry?.session) {
+                entry.session.notices.push(notice)
+                this.push(entry)
+            }
+        }
+        return outcome
+    }
+
+    private async doOpen(documentId: string, from: WindowEntry | undefined): Promise<OpenOutcome> {
+        let session: DocumentSession
+        try {
+            const store = this.deps.library.store(documentId)
+            session = DocumentSession.open(store, await store.load(), { ctx: this.deps.ctx })
+        } catch (err) {
+            const code = err instanceof LibraryError ? err.code : 'UNKNOWN'
+            await this.deps.ui.showError(from?.win, ru.dialogs.openFailedTitle, describeError(code))
+            return { status: 'failed', errorCode: code }
         }
         const entry = this.targetFor(from)
-        await this.connectSync(entry, session, path)
+        if (this.deps.sync && session.current.sync) {
+            const result = await this.deps.sync.attach(session)
+            if (result === 'detached') session.notices.push(ru.notices.detached)
+        }
         this.bind(entry, session)
         return { status: 'opened' }
     }
 
-    /**
-     * FR-154, FR-168: the registered copy of a synchronized discussion is synchronized; if the registered file is
-     * missing, the person is asked whether this is the moved file; any other copy is detached.
-     */
-    private async connectSync(
-        entry: WindowEntry,
-        session: DocumentSession,
-        path: string
-    ): Promise<void> {
-        const sync = this.deps.sync
-        if (!sync || !session.current.sync) return
-        const registered = this.deps.registry?.get(session.documentId)
-        if (
-            registered &&
-            pathKey(registered.filePath) !== pathKey(path) &&
-            (await sync.registeredFileMissing(session.documentId)) &&
-            (await this.deps.ui.confirmMovedDiscussion(entry.win))
-        )
-            await sync.adoptMovedFile(session.documentId, path)
-        const result = await sync.attach(session)
-        if (result === 'detached') session.notices.push(ru.notices.detached)
-    }
-
-    /** "Отправить копию…": a copy without the roster, for manual sharing (FR-167). */
-    async saveCopy(from: WindowEntry | undefined): Promise<boolean> {
+    /** "Экспортировать…": the discussion as a `.branchchat` file, without the member list (FR-204, FR-167). */
+    async exportDiscussion(from: WindowEntry | undefined): Promise<boolean> {
         const session = from?.session
         if (!session) throw new AppError('NO_DOCUMENT', 'No open discussion')
         const chosen = await this.deps.ui.pickCopyPath(
             from.win,
-            ru.dialogs.copyDefaultName(session.fileName.replace(/\.branchchat$/i, ''))
+            ru.dialogs.exportDefaultName(safeFileName(session.title))
         )
         if (!chosen) return false
         const target = resolve(/\.branchchat$/i.test(chosen) ? chosen : `${chosen}.branchchat`)
-        if (pathKey(target) === pathKey(session.path) || this.findByKey(pathKey(target))) {
-            await this.deps.ui.showError(
-                from.win,
-                ru.dialogs.copyFailedTitle,
-                ru.dialogs.fileAlreadyOpen
-            )
-            return false
-        }
         try {
-            await session.saveCopyWithoutSync(target)
+            await session.flush()
+            await this.deps.library.exportTo(session.current, target)
             return true
         } catch (err) {
             const code = err instanceof DocumentError ? err.code : 'WRITE_FAILED'
             await this.deps.ui.showError(
                 from.win,
-                ru.dialogs.copyFailedTitle,
+                ru.dialogs.exportFailedTitle,
                 describeError(code),
                 target
             )
@@ -370,9 +367,11 @@ export class AppController {
     private bind(entry: WindowEntry, session: DocumentSession): void {
         entry.session = session
         // Every discussion that was opened or created becomes the most recent one.
-        void this.deps.recent
-            .add(session.path, this.deps.settings.get().recentFilesLimit)
-            .catch(() => undefined) // the list is a convenience; a failed write must not disturb opening
+        try {
+            this.deps.library.markOpened(session.documentId)
+        } catch {
+            // the order of the list is a convenience; a failed write must not disturb opening
+        }
         session.onChange = () => this.push(entry)
         session.onStatusChange = () => this.pushStatus(entry, session)
         this.push(entry)
@@ -396,7 +395,7 @@ export class AppController {
         if (entry.win.isDestroyed()) return
         if (!entry.session) return entry.win.setTitle(ru.app.name)
         const unread = entry.session.unreadTotal(this.deps.settings.get().participantId)
-        entry.win.setTitle(ru.discussion.windowTitle(entry.session.fileName, unread))
+        entry.win.setTitle(ru.discussion.windowTitle(entry.session.title, unread))
     }
 
     /** An empty start window is reused; otherwise a new window is created (one window per document). */
@@ -405,12 +404,6 @@ export class AppController {
         for (const entry of this.entries.values())
             if (!entry.session && !entry.win.isDestroyed()) return entry
         return this.createWindow()
-    }
-
-    private findByKey(key: string): WindowEntry | undefined {
-        for (const entry of this.entries.values())
-            if (entry.session && pathKey(entry.session.path) === key) return entry
-        return undefined
     }
 
     private findByDocumentId(documentId: string): WindowEntry | undefined {
@@ -444,6 +437,16 @@ export class AppController {
             entry.closeRequested = false
         }
     }
+}
+
+/** A file name from a discussion name: characters Windows does not allow become "_". */
+export function safeFileName(title: string): string {
+    const name = [...title]
+        .map((ch) => (ch.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(ch) ? '_' : ch))
+        .join('')
+        .replace(/[. ]+$/, '')
+        .trim()
+    return (name || ru.dialogs.defaultFileName).slice(0, 120)
 }
 
 function focusWindow(win: BrowserWindow): void {

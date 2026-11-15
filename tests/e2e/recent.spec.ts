@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { simple, writeDiscussionFile } from './helpers/craft'
 
-// Recently opened discussions: the start screen list, the File menu, reopening the last file at startup, and the
-// two settings (how many files are remembered; open the last file on startup).
+// Release 2.2 (ADR-003): the start screen lists the discussions of the library, most recently used first; the File
+// menu and the jump list show the newest ones; the last discussion opens at startup.
 
 const apps: TestApp[] = []
 const dirs: string[] = []
@@ -29,11 +29,8 @@ async function discussion(dir: string, name: string): Promise<string> {
     ])
     return file
 }
-/** A profile with a name (so no dialogs interfere), the given settings and recent list. */
-async function profile(
-    recent: string[] | null,
-    settings: Record<string, unknown> = {}
-): Promise<string> {
+/** A profile with a name (so no dialogs interfere) and the given settings. */
+async function profile(settings: Record<string, unknown> = {}): Promise<string> {
     const dir = await folder('bc-recent-profile-')
     await fs.writeFile(
         join(dir, 'settings.json'),
@@ -45,115 +42,59 @@ async function profile(
             ...settings
         })
     )
-    if (recent)
-        await fs.writeFile(
-            join(dir, 'recent.json'),
-            JSON.stringify({
-                version: 1,
-                // newest first, as the application keeps it
-                files: recent.map((path, i) => ({
-                    path,
-                    openedAt: `2026-01-0${9 - i}T00:00:00.000Z`
-                }))
-            })
-        )
     return dir
 }
-const readRecent = async (userData: string): Promise<string[]> =>
-    (
-        JSON.parse(await fs.readFile(join(userData, 'recent.json'), 'utf8')) as {
-            files: { path: string }[]
-        }
-    ).files.map((f) => f.path)
-
 async function start(userData: string, files: string[] = []): Promise<{ t: TestApp; win: Page }> {
     const t = await launchApp({ userData, files })
     apps.push(t)
     return { t, win: await t.app.firstWindow() }
 }
-
-test('the start screen lists recent discussions, newest first; a missing file is greyed out', async () => {
-    const dir = await folder('bc-recent-')
-    const a = await discussion(dir, 'Первое')
-    const b = await discussion(dir, 'Ёлка')
-    const gone = join(dir, 'Исчезло.branchchat')
-    const userData = await profile([b, gone, a], { openLastFileOnStartup: false })
-    const { win } = await start(userData)
-
-    const items = win.getByTestId('recent-item')
-    await expect(items).toHaveCount(3)
-    await expect(items.nth(0)).toContainText('Ёлка') // the first entry of the stored list is the newest
-    await expect(items.nth(1)).toContainText('Исчезло')
-    await expect(items.nth(2)).toContainText('Первое')
-    await expect(items.nth(0)).toHaveAttribute('data-exists', 'true')
-    await expect(items.nth(1)).toHaveAttribute('data-exists', 'false')
-    await expect(items.nth(1)).toContainText('файл не найден')
-})
-
-test('clicking an entry opens it; a missing one shows the usual message and stays in the list', async () => {
-    const dir = await folder('bc-recent-')
-    const a = await discussion(dir, 'Открой меня')
-    const gone = join(dir, 'Нет.branchchat')
-    const userData = await profile([a, gone], { openLastFileOnStartup: false })
+/** Imports the files into the library of the profile, one after the other (the last one is the most recent). */
+async function seed(userData: string, files: string[]): Promise<void> {
     const { t, win } = await start(userData)
+    for (const f of files) {
+        const r = await win.evaluate((p) => window.branchchat.openPath(p), f)
+        expect(r.ok).toBe(true)
+    }
+    await t.close()
+    apps.splice(apps.indexOf(t), 1)
+}
+const listed = (win: Page): Promise<string[]> =>
+    win.getByTestId('discussion-open').locator('.recent-name').allInnerTexts()
+const menuLabels = (t: TestApp): Promise<string[]> =>
+    t.app.evaluate(({ Menu }) => {
+        const file = Menu.getApplicationMenu()!.items[0]!
+        const recent = file.submenu!.items.find((i) => i.label === 'Открыть недавние')!
+        return recent.submenu!.items.map((i) => i.label || i.type)
+    })
 
-    await win.getByTestId('recent-open').filter({ hasText: 'Нет' }).click()
-    await expect
-        .poll(async () => (await t.dialogs()).filter((d) => d.kind === 'box').length)
-        .toBe(1)
-    expect((await t.dialogs()).find((d) => d.kind === 'box')!.detail).toContain('не найден')
-    await expect(win.getByTestId('recent-item')).toHaveCount(2)
-
-    await win.getByTestId('recent-open').filter({ hasText: 'Открой меня' }).click()
-    await expect(win.getByTestId('message').filter({ hasText: 'Текст «Открой меня»' })).toHaveCount(
-        1
-    )
+test('the start screen lists the discussions, last used first, with the newest message', async () => {
+    const dir = await folder('bc-recent-')
+    const files = [await discussion(dir, 'Первое'), await discussion(dir, 'Второе')]
+    const userData = await profile({ openLastFileOnStartup: false })
+    await seed(userData, files)
+    const { win } = await start(userData)
+    await expect.poll(() => listed(win)).toEqual(['Второе', 'Первое'])
+    await expect(win.getByTestId('discussion-item').first()).toContainText('1 сообщение')
 })
 
-test('an entry can be removed, and the whole list cleared', async () => {
+test('a click in the list opens the discussion; opening one puts it on top', async () => {
     const dir = await folder('bc-recent-')
-    const files = [
-        await discussion(dir, 'А'),
-        await discussion(dir, 'Б'),
-        await discussion(dir, 'В')
-    ]
-    const userData = await profile(files, { openLastFileOnStartup: false })
-    const { win } = await start(userData)
-
-    await expect(win.getByTestId('recent-item')).toHaveCount(3)
-    await win
-        .getByTestId('recent-item')
-        .filter({ hasText: 'Б' })
-        .getByTestId('recent-remove')
-        .click()
-    await expect(win.getByTestId('recent-item')).toHaveCount(2)
-    await expect.poll(() => readRecent(userData)).toEqual([files[0], files[2]])
-
-    await win.getByTestId('recent-clear').click()
-    await expect(win.getByTestId('recent-files')).toHaveCount(0)
-    await expect.poll(() => readRecent(userData)).toEqual([])
-    // the discussion files themselves are untouched
-    for (const f of files) expect((await fs.stat(f)).isFile()).toBe(true)
-})
-
-test('opening a discussion puts it on top of the list, once', async () => {
-    const dir = await folder('bc-recent-')
-    const a = await discussion(dir, 'Старое')
-    const b = await discussion(dir, 'Новое')
-    const userData = await profile([a], { openLastFileOnStartup: false })
-    const { win } = await start(userData)
-
-    await win.evaluate((p) => window.branchchat.openPath(p), b)
-    await expect.poll(() => readRecent(userData)).toEqual([b, a])
-    await win.evaluate((p) => window.branchchat.openPath(p), a)
-    await expect.poll(() => readRecent(userData)).toEqual([a, b])
+    const files = [await discussion(dir, 'Старое'), await discussion(dir, 'Новое')]
+    const userData = await profile({ openLastFileOnStartup: false })
+    await seed(userData, files)
+    const { t, win } = await start(userData)
+    await expect.poll(() => listed(win)).toEqual(['Новое', 'Старое'])
+    await win.getByTestId('discussion-open').filter({ hasText: 'Старое' }).click()
+    await expect(win.getByTestId('message').filter({ hasText: 'Текст «Старое»' })).toHaveCount(1)
+    await expect.poll(() => menuLabels(t)).toEqual(['Старое', 'Новое'])
 })
 
 test('startup: the most recent discussion opens by itself (default)', async () => {
     const dir = await folder('bc-recent-')
-    const a = await discussion(dir, 'Позавчера')
-    const b = await discussion(dir, 'Вчера')
-    const userData = await profile([b, a]) // no explicit setting: on by default
+    const files = [await discussion(dir, 'Позавчера'), await discussion(dir, 'Вчера')]
+    const userData = await profile() // no explicit setting: on by default
+    await seed(userData, files)
     const { t, win } = await start(userData)
 
     await expect(win.getByTestId('message').filter({ hasText: 'Текст «Вчера»' })).toHaveCount(1)
@@ -162,32 +103,27 @@ test('startup: the most recent discussion opens by itself (default)', async () =
     )
 })
 
-test('startup: nothing opens when the last file is missing, the option is off, or the list is empty', async () => {
+test('startup: nothing opens when the option is off or the library is empty', async () => {
     const dir = await folder('bc-recent-')
-    const a = await discussion(dir, 'Есть')
-    const gone = join(dir, 'Нет.branchchat')
-
-    const missing = await start(await profile([gone, a])) // the newest entry is missing
-    await expect(missing.win.getByTestId('launcher-new')).toBeVisible()
-    await expect(missing.win.getByTestId('recent-item')).toHaveCount(2)
-    await missing.t.close()
+    const off = await profile({ openLastFileOnStartup: false })
+    await seed(off, [await discussion(dir, 'Есть')])
+    const first = await start(off)
+    await expect(first.win.getByTestId('launcher-new')).toBeVisible()
+    await expect(first.win.getByTestId('discussion-item')).toHaveCount(1)
+    await first.t.close()
     apps.pop()
 
-    const off = await start(await profile([a], { openLastFileOnStartup: false }))
-    await expect(off.win.getByTestId('launcher-new')).toBeVisible()
-    await off.t.close()
-    apps.pop()
-
-    const empty = await start(await profile(null))
+    const empty = await start(await profile())
     await expect(empty.win.getByTestId('launcher-new')).toBeVisible()
-    await expect(empty.win.getByTestId('recent-files')).toHaveCount(0)
+    await expect(empty.win.getByTestId('discussion-list')).toHaveCount(0)
 })
 
-test('startup: a file given on the command line wins; the last file is not opened as well', async () => {
+test('startup: a file given on the command line wins; the last discussion is not opened as well', async () => {
     const dir = await folder('bc-recent-')
-    const last = await discussion(dir, 'Последнее')
+    const userData = await profile()
+    await seed(userData, [await discussion(dir, 'Последнее')])
     const clicked = await discussion(dir, 'Двойной щелчок')
-    const { t, win } = await start(await profile([last]), [clicked])
+    const { t, win } = await start(userData, [clicked])
 
     await expect(
         win.getByTestId('message').filter({ hasText: 'Текст «Двойной щелчок»' })
@@ -197,22 +133,12 @@ test('startup: a file given on the command line wins; the last file is not opene
     )
 })
 
-test('File > Open recent lists the files and opens the chosen one', async () => {
+test('File > Open recent lists the discussions and opens the chosen one', async () => {
     const dir = await folder('bc-recent-')
-    const a = await discussion(dir, 'Из меню')
-    const gone = join(dir, 'Пропало.branchchat')
-    const { t, win } = await start(await profile([a, gone], { openLastFileOnStartup: false }))
-    await expect(win.getByTestId('recent-item')).toHaveCount(2)
-
-    const labels = (): Promise<string[]> =>
-        t.app.evaluate(({ Menu }) => {
-            const file = Menu.getApplicationMenu()!.items[0]!
-            const recent = file.submenu!.items.find((i) => i.label === 'Открыть недавние')!
-            return recent.submenu!.items.map((i) => i.label || i.type)
-        })
-    await expect
-        .poll(labels)
-        .toEqual(['Из меню', 'Пропало (не найден)', 'separator', 'Очистить список'])
+    const userData = await profile({ openLastFileOnStartup: false })
+    await seed(userData, [await discussion(dir, 'Из меню'), await discussion(dir, 'Другое')])
+    const { t, win } = await start(userData)
+    await expect.poll(() => menuLabels(t)).toEqual(['Другое', 'Из меню'])
 
     await t.app.evaluate(({ Menu }) => {
         const file = Menu.getApplicationMenu()!.items[0]!
@@ -222,12 +148,13 @@ test('File > Open recent lists the files and opens the chosen one', async () => 
     await expect(win.getByTestId('message').filter({ hasText: 'Текст «Из меню»' })).toHaveCount(1)
 })
 
-test('Settings: the startup option and the number of remembered files are saved and applied', async () => {
+test('Settings: the startup option and the number of recent discussions are saved and applied', async () => {
     const dir = await folder('bc-recent-')
     const files = await Promise.all(['1', '2', '3', '4'].map((n) => discussion(dir, `Файл ${n}`)))
-    const userData = await profile(files, { openLastFileOnStartup: false })
+    const userData = await profile({ openLastFileOnStartup: false })
+    await seed(userData, files)
     const { t, win } = await start(userData)
-    await expect(win.getByTestId('recent-item')).toHaveCount(4)
+    await expect(win.getByTestId('discussion-item')).toHaveCount(4)
 
     await t.app.evaluate(({ Menu }) => {
         Menu.getApplicationMenu()!
@@ -247,34 +174,26 @@ test('Settings: the startup option and the number of remembered files are saved 
     await win.getByTestId('settings-open-last').check()
     await expect.poll(async () => (await saved())['openLastFileOnStartup']).toBe(true)
 
-    // lowering the number forgets the oldest entries
+    // a lower number shortens the File menu; the start screen still lists every discussion
     const limit = win.getByTestId('settings-recent-limit')
     await limit.fill('2')
     await limit.press('Enter')
     await expect.poll(async () => (await saved())['recentFilesLimit']).toBe(2)
-    await expect.poll(() => readRecent(userData)).toEqual([files[0], files[1]])
+    await expect.poll(() => menuLabels(t)).toEqual(['Файл 4', 'Файл 3'])
 
     // a negative or fractional number is ignored
     await limit.fill('-1')
     await limit.blur()
     await expect(limit).toHaveValue('2')
     expect((await saved())['recentFilesLimit']).toBe(2)
-
     await limit.fill('1.5')
     await limit.blur()
     await expect(limit).toHaveValue('2')
 
-    // 0 keeps no list at all
+    // 0: the menu is empty
     await limit.fill('0')
     await limit.press('Enter')
-    await expect.poll(() => readRecent(userData)).toEqual([])
-})
-
-test('the number of remembered files is respected when files are opened', async () => {
-    const dir = await folder('bc-recent-')
-    const files = await Promise.all(['1', '2', '3'].map((n) => discussion(dir, `Файл ${n}`)))
-    const userData = await profile([], { openLastFileOnStartup: false, recentFilesLimit: 2 })
-    const { win } = await start(userData)
-    for (const f of files) await win.evaluate((p) => window.branchchat.openPath(p), f)
-    await expect.poll(() => readRecent(userData)).toEqual([files[2], files[1]])
+    await expect.poll(() => menuLabels(t)).toEqual(['Список пуст'])
+    await win.keyboard.press('Escape')
+    await expect(win.getByTestId('discussion-item')).toHaveCount(4)
 })

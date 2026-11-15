@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { mainThread, type Author } from '@shared/domain'
 import type { DocumentContents } from '@shared/types'
 import { normalizeSynced } from '@shared/sync'
@@ -9,7 +9,9 @@ import type { SyncInfo } from '@shared/validation'
 import { DocumentSession } from '../../src/main/application/documentSession'
 import { b64, fingerprintOf } from '../../src/main/crypto/identity'
 import { KeyStore, type KeyProtector } from '../../src/main/crypto/keyStore'
-import { newDocumentContents, readDocument, writeDocument } from '../../src/main/document'
+import { newDocumentContents, readDocument } from '../../src/main/document'
+import type { LibraryService } from '../../src/main/library'
+import { closeLibraries, libraryIn } from '../helpers/library'
 import { SettingsStore } from '../../src/main/local-state/settings'
 import { SyncRegistry } from '../../src/main/sync/registry'
 import { SyncService } from '../../src/main/sync/syncService'
@@ -21,10 +23,14 @@ const protector: KeyProtector = {
     decrypt: (s) => Buffer.from(s.subarray(2))
 }
 
+afterEach(() => closeLibraries())
+
 interface Profile {
     author: Author
     dir: string
+    /** The ID of the synchronized discussion. */
     file: string
+    lib: LibraryService
     settings: SettingsStore
     keys: KeyStore
     registry: SyncRegistry
@@ -37,7 +43,7 @@ async function profiles(dir: string): Promise<{ a: Profile; b: Profile; shared: 
     const shared = join(dir, 'shared')
     await fs.mkdir(shared)
     const people = [anna, boris]
-    const made: Array<Omit<Profile, 'sync' | 'registry' | 'file'>> = []
+    const made: Array<Omit<Profile, 'sync' | 'registry' | 'file' | 'lib'>> = []
     for (const author of people) {
         const pdir = join(dir, author.participantId)
         await fs.mkdir(pdir, { recursive: true })
@@ -72,18 +78,19 @@ async function profiles(dir: string): Promise<{ a: Profile; b: Profile; shared: 
     const start: DocumentContents = normalizeSynced({ ...base, sync: roster })
     const out: Profile[] = []
     for (const p of made) {
-        const file = join(p.dir, 'Общее.branchchat')
-        await writeDocument(file, start, { discardExisting: true })
+        const file = start.manifest.documentId
+        const lib = await libraryIn(p.dir)
+        await lib.create(start)
         const registry = new SyncRegistry(join(p.dir, 'sync'))
         await registry.load()
         await registry.put({
             conversationId: start.manifest.documentId,
-            filePath: file,
             sharedRoot: shared,
             ownId: p.author.participantId
         })
         const sync = new SyncService({
             userData: p.dir,
+            library: lib,
             registry,
             keys: p.keys,
             settings: p.settings,
@@ -95,7 +102,7 @@ async function profiles(dir: string): Promise<{ a: Profile; b: Profile; shared: 
             scanIntervalMs: 3_600_000
         })
         await sync.start()
-        out.push({ ...p, file, registry, sync })
+        out.push({ ...p, file, lib, registry, sync })
     }
     return { a: out[0]!, b: out[1]!, shared }
 }
@@ -105,17 +112,25 @@ const texts = (c: DocumentContents): string[] =>
         (m) => (m.content.content[0] as { content: Array<{ text: string }> }).content[0]!.text
     )
 
+/** What the library of a profile holds now (read from the database). */
+const saved = (p: Profile): DocumentContents => p.lib.repo.load(p.file).contents
+
+async function openSession(p: Profile, ctx: ReturnType<typeof makeCtx>): Promise<DocumentSession> {
+    const store = p.lib.store(p.file)
+    return DocumentSession.open(store, await store.load(), { ctx })
+}
+
 async function idle(...sessions: DocumentSession[]): Promise<void> {
     await new Promise((r) => setTimeout(r, 50))
     for (const s of sessions) await s.flush()
 }
 
-describe('sync service with document sessions and files (design section 10)', () => {
-    it('syncs between an open window and a closed file in both directions', async () => {
+describe('sync service with document sessions and the library (design section 10)', () => {
+    it('syncs between an open window and a closed discussion in both directions', async () => {
         await withTempDir(async (dir) => {
             const { a, b } = await profiles(dir)
             const ctx = makeCtx('a')
-            const sa = await DocumentSession.open(a.file, { ctx })
+            const sa = await openSession(a, ctx)
             expect(await a.sync.attach(sa)).toBe('synced')
             sa.appendMessage(
                 anna,
@@ -125,12 +140,12 @@ describe('sync service with document sessions and files (design section 10)', ()
             await idle(sa)
             await a.sync.scanAll() // flushes the outbox
 
-            // Boris has no window: the file is updated directly
+            // Boris has no window: the library is updated directly
             await b.sync.scanAll()
-            expect(texts((await readDocument(b.file)).contents)).toEqual(['из окна Анны'])
+            expect(texts(saved(b))).toEqual(['из окна Анны'])
 
-            // Boris opens the file and answers with a picture
-            const sb = await DocumentSession.open(b.file, { ctx: makeCtx('b') })
+            // Boris opens the discussion and answers with a picture
+            const sb = await openSession(b, makeCtx('b'))
             expect(await b.sync.attach(sb)).toBe('synced')
             const img = sb.stageImage(pngBytes(3))
             sb.appendMessage(boris, mainThread(sb.current.discussion).threadId, {
@@ -152,8 +167,8 @@ describe('sync service with document sessions and files (design section 10)', ()
             expect(texts(sa.current)).toEqual(['из окна Анны', 'ответ'])
             const bytes = await sa.readAssetBytes(img.assetId)
             expect(bytes?.data.equals(pngBytes(3))).toBe(true)
-            // the window's save also wrote the image into Anna's file
-            const onDisk = await readDocument(a.file)
+            // the window's save also wrote the image into Anna's library
+            const onDisk = a.lib.repo.load(a.file)
             expect(onDisk.missingAssetIds).toEqual([])
             expect(texts(onDisk.contents)).toEqual(['из окна Анны', 'ответ'])
             // the read indicator counts both members from the start (FR-163)
@@ -168,39 +183,30 @@ describe('sync service with document sessions and files (design section 10)', ()
         })
     })
 
-    it('a copy at another path is detached; a moved registered file can be adopted (FR-154, FR-168)', async () => {
+    it('a discussion with a member list that is not registered here is detached (FR-154)', async () => {
         await withTempDir(async (dir) => {
             const { a } = await profiles(dir)
-            const copy = join(dir, 'копия.branchchat')
-            await fs.copyFile(a.file, copy)
-            const detached = await DocumentSession.open(copy, { ctx: makeCtx('c') })
+            await a.registry.remove(a.file)
+            const detached = await openSession(a, makeCtx('c'))
             expect(await a.sync.attach(detached)).toBe('detached')
             expect(detached.synced).toBe(false)
-
-            const moved = join(dir, 'перенесено.branchchat')
-            await fs.rename(a.file, moved)
-            const id = detached.documentId
-            expect(await a.sync.registeredFileMissing(id)).toBe(true)
-            await a.sync.adoptMovedFile(id, moved)
-            const s = await DocumentSession.open(moved, { ctx: makeCtx('m') })
-            expect(await a.sync.attach(s)).toBe('synced')
             await a.sync.stop()
         })
     })
 
-    it('a name change reaches the other member; "Отправить копию…" leaves out the roster (D-12, FR-167)', async () => {
+    it('a name change reaches the other member; "Экспортировать…" leaves out the roster (D-12, FR-167)', async () => {
         await withTempDir(async (dir) => {
             const { a, b } = await profiles(dir)
             await a.settings.setDisplayName('Аня')
             await a.sync.nameChanged('Аня')
             await a.sync.scanAll()
             await b.sync.scanAll()
-            const roster = (await readDocument(b.file)).contents.sync!
+            const roster = saved(b).sync!
             expect(roster.members.find((m) => m.participantId === 'p-anna')!.displayName).toBe(
                 'Аня'
             )
 
-            const sa = await DocumentSession.open(a.file, { ctx: makeCtx('a') })
+            const sa = await openSession(a, makeCtx('a'))
             await a.sync.attach(sa)
             sa.appendMessage(
                 { participantId: 'p-anna', displayName: 'Аня' },
@@ -208,7 +214,8 @@ describe('sync service with document sessions and files (design section 10)', ()
                 simple('копия')
             )
             const target = join(dir, 'для WhatsApp.branchchat')
-            await sa.saveCopyWithoutSync(target)
+            await sa.flush()
+            await a.lib.exportTo(sa.current, target)
             const copy = await readDocument(target)
             expect(copy.contents.sync).toBeUndefined()
             expect(copy.contents.manifest.documentId).toBe(sa.documentId)

@@ -5,7 +5,7 @@ import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { writeBigDiscussion } from './helpers/bigFile'
 import { doc, img, p, sha256, t, writeDiscussionFile } from './helpers/craft'
 import { makePng } from './helpers/png'
-import { readEntries } from './helpers/readFile'
+import { savedFile } from './helpers/library'
 
 // Performance pass (phase 9). There are no product limits to enforce (NFR-015); these tests record how the
 // application behaves on large discussions and fail only on gross regressions (budgets are deliberately loose,
@@ -31,11 +31,9 @@ async function workDir(): Promise<string> {
     dirs.push(d)
     return d
 }
+/** Messages of the imported discussion in the library. */
 async function readMessageCount(file: string): Promise<number> {
-    const entries = await readEntries(file)
-    const d = JSON.parse(entries.get('discussion.json')!.toString('utf8')) as {
-        threads: { messages: unknown[] }[]
-    }
+    const d = (await savedFile(file)).discussion
     return d.threads.reduce((n, th) => n + th.messages.length, 0)
 }
 /** A profile that already has a name and has seen the read notice, so sending needs no dialogs. */
@@ -118,12 +116,12 @@ for (const count of [5_000, 20_000]) {
         await expect
             .poll(() => readMessageCount(file), { timeout: 30_000, intervals: [20] })
             .toBe(count + 1)
-        results[`${count}: sent message saved in the file (ms)`] = now() - t1
+        results[`${count}: sent message saved in the library (ms)`] = now() - t1
         await expect(win.getByTestId('status')).toHaveText('Сохранено')
         results[`${count}: memory after send (MB)`] = await memoryMb(app)
 
         expect(results[`${count}: sent message visible (ms)`]).toBeLessThan(2_000)
-        expect(results[`${count}: sent message saved in the file (ms)`]).toBeLessThan(15_000)
+        expect(results[`${count}: sent message saved in the library (ms)`]).toBeLessThan(15_000)
     })
 }
 

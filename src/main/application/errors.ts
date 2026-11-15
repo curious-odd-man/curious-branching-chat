@@ -22,6 +22,10 @@ export type AppErrorCode =
     | 'ALREADY_MEMBER'
     | 'NOT_MEMBER'
     | 'SAME_KEY'
+    | 'SAVE_FAILED'
+    | 'TITLE_REQUIRED'
+    | 'DISCUSSION_OPEN'
+    | 'SYNCED_IMPORT'
 
 export class AppError extends Error {
     readonly code: AppErrorCode

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { collect, openEntry, scanZip } from '../../src/main/document/zip'
+import { createAt } from './helpers/library'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { writeBigDiscussion } from './helpers/bigFile'
 import { localDayKey } from '../../src/shared/domain/days'
@@ -29,14 +30,7 @@ async function workDir(): Promise<string> {
     return d
 }
 async function createDiscussion(t: TestApp, win: Page, file: string): Promise<void> {
-    await t.answer({ save: [file] })
-    await win.getByTestId('launcher-new').click()
-    const prompt = win.getByTestId('name-input')
-    if (await prompt.isVisible().catch(() => false)) {
-        await prompt.fill('Анна')
-        await win.getByTestId('name-confirm').click()
-    }
-    await expect(win.getByTestId('composer')).toBeVisible()
+    await createAt(t, win, file)
 }
 async function send(win: Page, text: string): Promise<void> {
     await win.getByTestId('composer').fill(text)

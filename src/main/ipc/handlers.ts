@@ -12,7 +12,10 @@ import {
     noPayloadSchema,
     openLinkSchema,
     openPathSchema,
-    recentPathSchema,
+    openDiscussionSchema,
+    migrationRunSchema,
+    backupRestoreSchema,
+    newDocumentSchema,
     setAssociationSchema,
     setAutoUpdateSchema,
     setOpenLastSchema,
@@ -38,8 +41,9 @@ import { AppError } from '../application/errors'
 import type { ReadAction } from '../application/documentSession'
 import { DocumentError } from '../document'
 import { openExternalLink } from '../windows/security'
-import { describeRecent } from '../application/recentView'
-import type { RecentFilesStore } from '../local-state/recentFiles'
+import { describeDiscussions } from '../application/recentView'
+import type { BackupService, LibraryService, Migration } from '../library'
+import { LibraryError } from '../library/schema'
 import type { SettingsStore } from '../local-state/settings'
 import type { UpdateService } from '../updates/updateService'
 import type { AssociationService } from '../windows/associationService'
@@ -47,8 +51,6 @@ import type { IdentityService } from '../crypto/identityService'
 import type { SyncService } from '../sync/syncService'
 import type { Onboarding } from '../sync/onboarding'
 import { groupFingerprint } from '../crypto/identity'
-import { isInside } from '../transport/folderTransport'
-import { resolve } from 'node:path'
 import type { Ui } from '../application/ui'
 import type { RosterView } from '@shared/types/ipc'
 import type { BackgroundService } from '../background/backgroundService'
@@ -61,7 +63,12 @@ function isAppPage(url: string): boolean {
 }
 
 function toError(err: unknown): { code: string; message: string } {
-    if (err instanceof AppError || err instanceof DocumentError || err instanceof DomainError)
+    if (
+        err instanceof AppError ||
+        err instanceof DocumentError ||
+        err instanceof DomainError ||
+        err instanceof LibraryError
+    )
         return {
             code: err.code,
             message: err instanceof DomainError ? err.message : describeError(err.code)
@@ -74,12 +81,21 @@ function toError(err: unknown): { code: string; message: string } {
 export function registerIpcHandlers(
     controller: AppController,
     settings: SettingsStore,
-    recent: RecentFilesStore,
+    library: LibraryService,
     association: AssociationService,
     updates: UpdateService,
     identity: IdentityService,
     sync?: SyncService,
-    shared?: { onboarding: Onboarding; ui: Ui; background?: BackgroundService; zoom?: ZoomService }
+    shared?: {
+        onboarding: Onboarding
+        ui: Ui
+        background?: BackgroundService
+        zoom?: ZoomService
+        migration?: Migration
+        backups?: BackupService
+        /** Restarts the application (after a restore was scheduled). */
+        relaunch?: () => void
+    }
 ): void {
     function handle<P, R>(
         channel: string,
@@ -121,22 +137,6 @@ export function registerIpcHandlers(
         if (!shared) throw new AppError('NO_DOCUMENT', 'not available')
         return shared.onboarding
     }
-    /** Asks where to save a local file; never inside the shared folder (FR-160). */
-    const pickLocalFile = async (
-        entry: WindowEntry | undefined,
-        root: string,
-        defaultName: string
-    ): Promise<string | null> => {
-        const chosen = await shared!.ui.pickSavePath(entry?.win, defaultName)
-        if (!chosen) return null
-        const path = resolve(/\.branchchat$/i.test(chosen) ? chosen : `${chosen}.branchchat`)
-        if (isInside(root, path))
-            throw new AppError(
-                'FILE_IN_SHARED_FOLDER',
-                'the file must be outside the shared folder'
-            )
-        return path
-    }
     handle(IPC.sharedPickFolder, noPayloadSchema, async (entry) => {
         const path = await shared?.ui.pickFolder(entry?.win)
         if (!path) return null
@@ -156,26 +156,18 @@ export function registerIpcHandlers(
         if (p.mode === 'convert') {
             const session = requireSession(entry)
             if (session.current.sync) throw new AppError('FOLDER_IN_USE', 'already shared')
-            if (isInside(p.root, session.path))
-                throw new AppError(
-                    'FILE_IN_SHARED_FOLDER',
-                    'the file must be outside the shared folder'
-                )
-            await onboarding().create({
-                root: p.root,
-                filePath: session.path,
-                keys: p.keys,
-                session
-            })
+            await onboarding().create({ root: p.root, keys: p.keys, session })
             await shared?.background?.discussionAdded()
             session.onChange()
             return true
         }
-        const path = await pickLocalFile(entry, p.root, ru.shared.defaultFileName)
-        if (!path) return false
-        await onboarding().create({ root: p.root, filePath: path, keys: p.keys })
+        const id = await onboarding().create({
+            root: p.root,
+            title: p.title ?? ru.shared.defaultFileName,
+            keys: p.keys
+        })
         await shared?.background?.discussionAdded()
-        await controller.openPath(path, entry)
+        await controller.openDiscussion(id, entry)
         return true
     })
     handle(IPC.sharedInvite, sharedInviteSchema, async (entry, p) => {
@@ -230,11 +222,9 @@ export function registerIpcHandlers(
         const found = await onboarding().findInvitation(p.root)
         if (found.state !== 'ready' || found.invitationId !== p.invitationId)
             throw new AppError('INVITATION_GONE', 'the invitation is not available')
-        const path = await pickLocalFile(entry, p.root, found.title)
-        if (!path) return false
-        await onboarding().importInvitation(p.root, p.invitationId, path)
+        const id = await onboarding().importInvitation(p.root, p.invitationId)
         await shared?.background?.discussionAdded()
-        await controller.openPath(path, entry)
+        await controller.openDiscussion(id, entry)
         return true
     })
     handle(IPC.identityCopyBundle, noPayloadSchema, async () => {
@@ -255,7 +245,7 @@ export function registerIpcHandlers(
     )
     handle(IPC.settingsSetRecentLimit, setRecentLimitSchema, async (_e, p) => {
         const updated = await settings.setRecentFilesLimit(p.limit)
-        await recent.trim(p.limit)
+        library.changed() // the File menu and the jump list show a different number
         return updated
     })
     handle(IPC.settingsSetBackgroundFlag, setBackgroundFlagSchema, (_e, p) =>
@@ -277,13 +267,69 @@ export function registerIpcHandlers(
     handle(IPC.settingsSetOpenLast, setOpenLastSchema, (_e, p) =>
         settings.setOpenLastFileOnStartup(p.enabled)
     )
-    handle(IPC.recentGet, noPayloadSchema, () => describeRecent(recent.list()))
-    handle(IPC.recentRemove, recentPathSchema, async (_e, p) => {
-        await recent.remove(p.path)
-        return null
+    handle(IPC.libraryList, noPayloadSchema, () => describeDiscussions(library.list()))
+    const backups = (): BackupService => {
+        if (!shared?.backups) throw new AppError('NO_DOCUMENT', 'not available')
+        return shared.backups
+    }
+    handle(IPC.backupGet, noPayloadSchema, async () => ({
+        lastBackupAt: backups().lastBackupAt(),
+        folder: settings.get().backupFolder,
+        backups: await backups().list()
+    }))
+    handle(IPC.backupNow, noPayloadSchema, async () => {
+        const r = await backups().make('manual')
+        return { createdAt: r.backups[0]!.createdAt, folderError: r.folderError }
     })
-    handle(IPC.recentClear, noPayloadSchema, async () => {
-        await recent.clear()
+    handle(IPC.backupPickFolder, noPayloadSchema, async (entry) => {
+        const folder = await shared?.ui.pickFolder(entry?.win, ru.backup.folderTitle)
+        if (!folder) return null
+        // FR-209: once, a warning that a cloud folder stores the messages readable for the provider
+        if (await settings.takeBackupFolderWarning()) {
+            const ok = await shared!.ui.confirm(entry?.win, {
+                title: ru.backup.cloudWarningTitle,
+                message: ru.backup.cloudWarning,
+                yes: ru.backup.cloudContinue,
+                no: ru.backup.cloudCancel
+            })
+            if (!ok) return null
+        }
+        return settings.setBackupFolder(folder)
+    })
+    handle(IPC.backupClearFolder, noPayloadSchema, () => settings.setBackupFolder(null))
+    handle(IPC.backupRestore, backupRestoreSchema, async (entry, p) => {
+        const chosen = (await backups().list()).find((b) => b.path === p.path)
+        if (!chosen) throw new AppError('INVALID_REQUEST', 'unknown backup')
+        const ok = await shared!.ui.confirm(entry?.win, {
+            title: ru.backup.restoreTitle,
+            message: ru.backup.restoreQuestion,
+            detail: ru.backup.restoreDetail(
+                new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long', timeStyle: 'short' }).format(
+                    new Date(chosen.createdAt)
+                )
+            ),
+            yes: ru.backup.restoreConfirm,
+            no: ru.backup.restoreCancel
+        })
+        if (!ok) return false
+        await backups().scheduleRestore(chosen.path)
+        setTimeout(() => shared?.relaunch?.(), 100)
+        return true
+    })
+    handle(IPC.migrationGet, noPayloadSchema, () => shared?.migration?.candidates() ?? [])
+    handle(IPC.migrationRun, migrationRunSchema, async (_e, p) => {
+        const migration = shared?.migration
+        if (!migration) return []
+        // only files that were offered (the page is not trusted with paths)
+        const offered = new Set((await migration.candidates()).map((c) => c.path))
+        const results = await migration.run(p.paths.filter((path) => offered.has(path)))
+        for (const r of results) if (r.synced && r.id) await sync?.startRegistered(r.id)
+        if (results.some((r) => r.synced && r.id)) await shared?.background?.discussionAdded()
+        library.changed()
+        return results
+    })
+    handle(IPC.migrationSkip, noPayloadSchema, () => {
+        shared?.migration?.skip()
         return null
     })
     handle(IPC.updateGetState, noPayloadSchema, () => updates.get())
@@ -312,9 +358,13 @@ export function registerIpcHandlers(
     handle(IPC.associationGet, noPayloadSchema, () => association.info())
     handle(IPC.associationSet, setAssociationSchema, (_e, p) => association.set(p.enabled))
 
-    handle(IPC.documentNew, noPayloadSchema, (entry) => controller.newDocument(entry))
+    handle(IPC.documentNew, newDocumentSchema, (entry, p) => controller.newDocument(entry, p.title))
     handle(IPC.documentOpenDialog, noPayloadSchema, (entry) => controller.openWithDialog(entry))
     handle(IPC.documentOpenPath, openPathSchema, (entry, p) => controller.openPath(p.path, entry))
+    handle(IPC.documentOpenId, openDiscussionSchema, (entry, p) =>
+        controller.openDiscussion(p.id, entry)
+    )
+    handle(IPC.documentExport, noPayloadSchema, (entry) => controller.exportDiscussion(entry))
     handle(IPC.documentGetState, noPayloadSchema, (entry) =>
         entry ? controller.viewOf(entry) : null
     )

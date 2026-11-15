@@ -49,7 +49,9 @@ export const sharedCreateSchema = z
             )
             .min(1)
             .max(100),
-        mode: z.enum(['new', 'convert'])
+        mode: z.enum(['new', 'convert']),
+        /** The name of a new discussion (mode "new"). */
+        title: z.string().max(500).optional()
     })
     .strict()
 /** FR-177: re-invite a member who lost the keys, with the person's new key. */
@@ -92,4 +94,9 @@ export const setBackgroundFlagSchema = z
         enabled: z.boolean()
     })
     .strict()
-export const recentPathSchema = z.object({ path: z.string().min(1) }).strict()
+export const backupRestoreSchema = z.object({ path: z.string().min(1).max(4096) }).strict()
+export const migrationRunSchema = z
+    .object({ paths: z.array(z.string().min(1).max(4096)).max(1000) })
+    .strict()
+export const openDiscussionSchema = z.object({ id: z.string().min(1).max(200) }).strict()
+export const newDocumentSchema = z.object({ title: z.string().min(1).max(500) }).strict()
