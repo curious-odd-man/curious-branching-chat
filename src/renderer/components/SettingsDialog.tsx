@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { ru } from '@shared/i18n/ru'
+import { TEXT_SIZE_DEFAULT, TEXT_SIZE_MAX, TEXT_SIZE_MIN, TEXT_SIZE_STEP } from '@shared/shortcuts'
 import type { AssociationInfo, BackgroundFlag, IdentityView, SettingsView } from '@shared/types/ipc'
 
 interface Props {
@@ -67,6 +68,14 @@ export function SettingsDialog({
     }
 
     const hasName = Boolean(settings?.displayName)
+
+    /** FR-301, FR-302: the same size for every window. */
+    const setTextSize = (percent: number): void => {
+        void api.setTextSize(percent).then((r) => {
+            if (r.ok) onSettingsChanged(r.data)
+            else setError(r.error.message)
+        })
+    }
 
     /** Notifications and start with Windows (release 1.4): the box changes at once; an error puts it back. */
     const [flags, setFlags] = useState<Partial<Record<BackgroundFlag, boolean>>>({})
@@ -296,6 +305,44 @@ export function SettingsDialog({
                         ru.settings.startWithWindows,
                         ru.settings.startWithWindowsHint
                     )}
+                </section>
+
+                <section data-testid="settings-text-size">
+                    <h3>{ru.settings.textSizeHeading}</h3>
+                    <div className="text-size">
+                        <button
+                            type="button"
+                            data-testid="text-size-smaller"
+                            aria-label={ru.menu.zoomOut}
+                            disabled={!settings || settings.textSize <= TEXT_SIZE_MIN}
+                            onClick={() =>
+                                setTextSize((settings?.textSize ?? 100) - TEXT_SIZE_STEP)
+                            }
+                        >
+                            −
+                        </button>
+                        <output data-testid="text-size-value">{settings?.textSize ?? 100} %</output>
+                        <button
+                            type="button"
+                            data-testid="text-size-larger"
+                            aria-label={ru.menu.zoomIn}
+                            disabled={!settings || settings.textSize >= TEXT_SIZE_MAX}
+                            onClick={() =>
+                                setTextSize((settings?.textSize ?? 100) + TEXT_SIZE_STEP)
+                            }
+                        >
+                            +
+                        </button>
+                        <button
+                            type="button"
+                            data-testid="text-size-reset"
+                            disabled={!settings || settings.textSize === TEXT_SIZE_DEFAULT}
+                            onClick={() => setTextSize(TEXT_SIZE_DEFAULT)}
+                        >
+                            {ru.settings.textSizeReset}
+                        </button>
+                    </div>
+                    <p className="hint">{ru.settings.textSizeHint}</p>
                 </section>
 
                 <section>

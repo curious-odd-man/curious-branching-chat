@@ -7,6 +7,7 @@ import {
     type IpcResult,
     type MenuCommand,
     type RecentFileView,
+    type SettingsView,
     type UpdateView
 } from '@shared/types/ipc'
 
@@ -59,6 +60,8 @@ const api: BranchChatApi = {
     setOpenLastFileOnStartup: (enabled) => invoke(IPC.settingsSetOpenLast, { enabled }),
     setFileSizeLimit: (mb) => invoke(IPC.settingsSetFileSizeLimit, { mb }),
     setBackgroundFlag: (flag, enabled) => invoke(IPC.settingsSetBackgroundFlag, { flag, enabled }),
+    setTextSize: (percent) => invoke(IPC.settingsSetTextSize, { percent }),
+    zoom: (direction) => invoke(IPC.zoomChange, { direction }),
     takeFocusRequest: () => invoke(IPC.focusTake),
     getRecentFiles: () => invoke(IPC.recentGet),
     removeRecentFile: (path) => invoke(IPC.recentRemove, { path }),
@@ -83,6 +86,7 @@ const api: BranchChatApi = {
         subscribe<DocumentStatus>(IPC.documentStatusChanged, callback),
     onMenuCommand: (callback) => subscribe<MenuCommand>(IPC.menuCommand, callback),
     onFocusRequest: (callback) => subscribe<undefined>(IPC.focusRequest, () => callback()),
+    onSettingsChanged: (callback) => subscribe<SettingsView>(IPC.settingsChanged, callback),
     getPathForFile: (file) => webUtils.getPathForFile(file as File)
 }
 

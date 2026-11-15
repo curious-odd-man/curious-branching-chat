@@ -1,6 +1,6 @@
 # BranchChat: implementation plan for release 2
 
-**Status:** Draft 1 (two questions in Section 7)  
+**Status:** Release 2.1 done in code (phases 1–3); two questions open for release 2.4 (Section 9)  
 **Date:** 2026-11-14  
 **Input:** `requirements-next.md` (ready, draft 4), `adr-003-local-storage.md` (accepted), `requirements.md`
 (revision 13), `sync-protocol.md`  
@@ -30,6 +30,35 @@ Changes to the order in `requirements-next.md`, section 4:
 - The branch map moves to release 2.3 (it needs no file change).
 - Reactions and attachments are in one release (2.4), so the export format changes once (schema version 3), not
   twice (Q-01).
+
+## 1a. Progress
+
+| Release | Phase                                 | State                                   | Notes                                              |
+|---------|---------------------------------------|-----------------------------------------|----------------------------------------------------|
+| 2.1     | 1 — Log file and diagnostics report   | Done                                    | Tag `phase-2.1-done`                               |
+| 2.1     | 2 — Text size and keyboard shortcuts  | Done                                    | Tag `phase-2.2-done`                               |
+| 2.1     | 3 — Day separators and "jump to date" | Done in code; **needs a Windows check** | Tag `phase-2.3-done`; Windows: checklist section Q |
+| 2.2–2.5 | 4–16                                  | Not started                             |                                                    |
+
+### Implementation decisions of release 2.1
+
+- The log redaction removes every run of 40 or more base64 or hex characters (keys, signatures, hashes). Paths and
+  participant IDs stay (FR-322).
+- The report reduces the sync state to safe fields: outbox items keep type, IDs, and times, but not the envelope;
+  waiting and loading events keep type, IDs, and times; the processed list and sequence numbers become counts.
+- The window's console errors, a crashed or blocked window process, uncaught errors, and unhandled rejections of the
+  main process go to the log. electron-updater writes into the log, not to the console.
+- The zoom keys are handled twice, without double steps: a real key press is caught by the main process
+  (`before-input-event`) and never reaches the page; keys that do not pass the main process (for example from test
+  tools) are caught by the page. Ctrl+mouse wheel is handled only by the page (one step per 100 wheel units); if
+  Chromium zooms by itself, the saved size is put back.
+- "Перейти к дате…" uses Ctrl+G (in the "Вид" menu, which also has the text size).
+- Day separators come only before a later day: synchronized messages are ordered by clock, and computers with
+  different clocks can put a message of yesterday after one of today.
+- The day of a message uses the `Date` fields for the system time zone: a new `Intl.DateTimeFormat` per message cost
+  about 1 s per 20,000 messages and made sending at 20,000 messages slower (found by the performance test).
+- Fixes on the way: dialogs opened with a button take the focus, so Escape works (the calendar).
+- The user guide is not changed (Q-08 of `requirements-next.md`).
 
 ## 2. Rules for all phases
 

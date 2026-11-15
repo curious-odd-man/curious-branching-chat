@@ -2,6 +2,7 @@ import type { JSONContent } from '@tiptap/core'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
 import { ru } from '@shared/i18n/ru'
+import { keysOf } from '@shared/shortcuts'
 import { assetUrl } from '@shared/types/assets'
 import { isRichDocBlank, sanitizeEditorDoc, type RichDoc } from '@shared/validation'
 import { EditorToolbar } from '../editor/EditorToolbar'
@@ -243,7 +244,11 @@ export function Composer({ sessionId, threadId, blocked, onSend }: Props): React
                 </p>
             )}
             <div className="composer-actions">
-                <small>{uploading > 0 ? ru.images.uploading : ru.composer.hint}</small>
+                <small>
+                    {uploading > 0
+                        ? ru.images.uploading
+                        : `${keysOf('send')} — ${ru.composer.hint}`}
+                </small>
                 <button
                     type="button"
                     className="primary"

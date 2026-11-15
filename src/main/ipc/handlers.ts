@@ -18,6 +18,8 @@ import {
     setOpenLastSchema,
     setFileSizeLimitSchema,
     setBackgroundFlagSchema,
+    setTextSizeSchema,
+    zoomChangeSchema,
     sharedRootSchema,
     sharedParseKeySchema,
     sharedCreateSchema,
@@ -50,6 +52,7 @@ import { resolve } from 'node:path'
 import type { Ui } from '../application/ui'
 import type { RosterView } from '@shared/types/ipc'
 import type { BackgroundService } from '../background/backgroundService'
+import type { ZoomService } from '../windows/zoom'
 
 /** Only the application's own page may call the main process: the packaged `file:` page, or the dev server. */
 function isAppPage(url: string): boolean {
@@ -76,7 +79,7 @@ export function registerIpcHandlers(
     updates: UpdateService,
     identity: IdentityService,
     sync?: SyncService,
-    shared?: { onboarding: Onboarding; ui: Ui; background?: BackgroundService }
+    shared?: { onboarding: Onboarding; ui: Ui; background?: BackgroundService; zoom?: ZoomService }
 ): void {
     function handle<P, R>(
         channel: string,
@@ -260,6 +263,13 @@ export function registerIpcHandlers(
             ? shared.background.setFlag(p.flag, p.enabled)
             : settings.setFlag(p.flag, p.enabled)
     )
+    handle(IPC.settingsSetTextSize, setTextSizeSchema, (_e, p) =>
+        shared?.zoom ? shared.zoom.set(p.percent) : settings.setTextSize(p.percent)
+    )
+    handle(IPC.zoomChange, zoomChangeSchema, async (_e, p) => {
+        await shared?.zoom?.change(p.direction)
+        return null
+    })
     handle(IPC.focusTake, noPayloadSchema, (entry) => controller.takeFocusRequest(entry))
     handle(IPC.settingsSetFileSizeLimit, setFileSizeLimitSchema, (_e, p) =>
         settings.setFileSizeLimit(p.mb)

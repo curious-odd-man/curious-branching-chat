@@ -20,6 +20,8 @@ export type ListRow =
           highlight: Highlight | null
       }
     | { kind: 'divider'; id: string; label: string }
+    /** FR-241: the first message of a later day follows. */
+    | { kind: 'day'; id: string; day: string; label: string }
     /** A message of a synchronized discussion whose parts are still arriving (D-30, D-37). */
     | { kind: 'loading'; loading: LoadingMessage }
 
@@ -196,6 +198,19 @@ export function MessageList({
                         'data-index': item.index,
                         style: { transform: `translateY(${item.start}px)` }
                     }
+                    if (row.kind === 'day')
+                        return (
+                            <div key={item.key} {...common} className="row day-row">
+                                <div
+                                    className="day-separator"
+                                    data-testid="day-separator"
+                                    data-day={row.day}
+                                    role="separator"
+                                >
+                                    <span>{row.label}</span>
+                                </div>
+                            </div>
+                        )
                     if (row.kind === 'divider')
                         return (
                             <div key={item.key} {...common} className="row divider-row">

@@ -14,6 +14,8 @@ export interface ElectronUpdaterOptions {
     onTestInstall?: () => void
     /** Test builds only: the repository shown as the release page. */
     testRepo?: { owner: string; repo: string }
+    /** electron-updater writes its own lines here (the log file, FR-321), not to the console. */
+    logger?: { info(m: string): void; warn(m: string): void; error(m: string): void }
 }
 
 function sizeOf(info: UpdateInfo): number | null {
@@ -47,6 +49,16 @@ export class ElectronUpdaterPort implements UpdaterPort {
         this.updater.allowPrerelease = false
         this.updater.allowDowngrade = false
         this.updater.disableWebInstaller = true
+        if (options.logger) {
+            const log = options.logger
+            const text = (args: unknown[]): string => args.map((a) => String(a)).join(' ')
+            this.updater.logger = {
+                info: (...a: unknown[]) => log.info(text(a)),
+                warn: (...a: unknown[]) => log.warn(text(a)),
+                error: (...a: unknown[]) => log.error(text(a)),
+                debug: () => undefined
+            }
+        }
         if (options.testFeedUrl) this.updater.forceDevUpdateConfig = true
         if (options.testConfigPath) this.updater.updateConfigPath = options.testConfigPath
         this.onTestInstall = options.onTestInstall

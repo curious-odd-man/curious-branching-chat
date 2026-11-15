@@ -73,6 +73,10 @@ export interface BranchChatApi {
     setFileSizeLimit(mb: number): Promise<IpcResult<SettingsView>>
     /** Notifications and start with Windows (release 1.4). */
     setBackgroundFlag(flag: BackgroundFlag, enabled: boolean): Promise<IpcResult<SettingsView>>
+    /** FR-301: text size of all windows, in percent. */
+    setTextSize(percent: number): Promise<IpcResult<SettingsView>>
+    /** FR-301: one step of the text size (keys and Ctrl+mouse wheel in the page). */
+    zoom(direction: 'in' | 'out' | 'reset'): Promise<IpcResult<null>>
     /** The message this window must show (a click on a notification), once. */
     takeFocusRequest(): Promise<IpcResult<FocusRequest | null>>
     getRecentFiles(): Promise<IpcResult<RecentFileView[]>>
@@ -109,6 +113,8 @@ export interface BranchChatApi {
     onMenuCommand(callback: (command: MenuCommand) => void): () => void
     /** A message waits to be shown: call takeFocusRequest(). */
     onFocusRequest(callback: () => void): () => void
+    /** The settings changed in the main process (for example the text size from the keyboard). */
+    onSettingsChanged(callback: (settings: SettingsView) => void): () => void
     /** Absolute path of a file dropped onto the window. */
     getPathForFile(file: object): string
 }

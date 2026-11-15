@@ -1,5 +1,6 @@
 import { useEditorState, type Editor } from '@tiptap/react'
 import { ru } from '@shared/i18n/ru'
+import { withKeys } from '@shared/shortcuts'
 import { ColorMenu } from './ColorMenu'
 
 const TEXT_COLORS = ['#d32f2f', '#ef6c00', '#2e7d32', '#1565c0', '#6a1b9a', '#616161'] as const
@@ -90,7 +91,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             <span className="sep" />
             <ToolButton
                 testId="tb-bold"
-                label={ru.editor.bold}
+                label={withKeys(ru.editor.bold, 'bold')}
                 active={s.bold}
                 onClick={() => run().toggleBold().run()}
             >
@@ -98,7 +99,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-italic"
-                label={ru.editor.italic}
+                label={withKeys(ru.editor.italic, 'italic')}
                 active={s.italic}
                 onClick={() => run().toggleItalic().run()}
             >
@@ -106,7 +107,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-underline"
-                label={ru.editor.underline}
+                label={withKeys(ru.editor.underline, 'underline')}
                 active={s.underline}
                 onClick={() => run().toggleUnderline().run()}
             >
@@ -131,7 +132,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-indent"
-                label={ru.editor.indent}
+                label={withKeys(ru.editor.indent, 'indent')}
                 disabled={!s.canIndent}
                 onClick={() => run().sinkListItem('listItem').run()}
             >
@@ -139,7 +140,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-outdent"
-                label={ru.editor.outdent}
+                label={withKeys(ru.editor.outdent, 'outdent')}
                 disabled={!s.canOutdent}
                 onClick={() => run().liftListItem('listItem').run()}
             >
@@ -164,7 +165,12 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
                         : run().unsetBackgroundColor().run()
                 }
             />
-            <ToolButton testId="tb-link" label={ru.editor.link} active={s.link} onClick={onLink}>
+            <ToolButton
+                testId="tb-link"
+                label={withKeys(ru.editor.link, 'link')}
+                active={s.link}
+                onClick={onLink}
+            >
                 🔗
             </ToolButton>
             <ToolButton testId="tb-image" label={ru.images.insert} onClick={onImage}>
@@ -173,7 +179,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             <span className="sep" />
             <ToolButton
                 testId="tb-undo"
-                label={ru.editor.undo}
+                label={withKeys(ru.editor.undo, 'undo')}
                 disabled={!s.canUndo}
                 onClick={() => run().undo().run()}
             >
@@ -181,7 +187,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-redo"
-                label={ru.editor.redo}
+                label={withKeys(ru.editor.redo, 'redo')}
                 disabled={!s.canRedo}
                 onClick={() => run().redo().run()}
             >

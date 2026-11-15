@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { BackgroundFlag, SettingsView } from '@shared/types/ipc'
+import { clampTextSize, TEXT_SIZE_DEFAULT } from '@shared/shortcuts'
 import { FILE_SIZE_LIMIT_MB } from '@shared/sync'
 import { StateFileWriter } from '../document/atomicWrite'
 
@@ -26,7 +27,9 @@ const settingsSchema = z
         /** FR-174: the automatic switch-on of "start with Windows" has happened (it happens only once). */
         startWithWindowsSettled: z.boolean().optional(),
         /** FR-173: the one-time notice about the tray was shown. */
-        trayNoticeShown: z.boolean().optional()
+        trayNoticeShown: z.boolean().optional(),
+        /** FR-301: text size of all windows, in percent. */
+        textSize: z.number().optional()
     })
     .passthrough()
 type Settings = z.infer<typeof settingsSchema>
@@ -93,7 +96,8 @@ export class SettingsStore {
             notifyNewMessages: this.data.notifyNewMessages ?? true,
             notifyShowText: this.data.notifyShowText ?? true,
             startWithWindows: this.data.startWithWindows ?? false,
-            startWithWindowsSettled: this.data.startWithWindowsSettled ?? false
+            startWithWindowsSettled: this.data.startWithWindowsSettled ?? false,
+            textSize: clampTextSize(this.data.textSize ?? TEXT_SIZE_DEFAULT)
         }
     }
 
@@ -161,6 +165,14 @@ export class SettingsStore {
             // a choice of the person settles the automatic switch-on (FR-174)
             ...(flag === 'startWithWindows' ? { startWithWindowsSettled: true } : {})
         }
+        await this.persist()
+        return this.get()
+    }
+
+    /** FR-301, FR-302: the text size of all windows (80–200 %, steps of 10). */
+    async setTextSize(percent: number): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        this.data = { ...this.data, textSize: clampTextSize(percent) }
         await this.persist()
         return this.get()
     }

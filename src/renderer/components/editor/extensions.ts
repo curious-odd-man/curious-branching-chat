@@ -12,6 +12,7 @@ import { BackgroundColor, Color, TextStyle } from '@tiptap/extension-text-style'
 import Underline from '@tiptap/extension-underline'
 import { Placeholder, UndoRedo } from '@tiptap/extensions'
 import { isAllowedLinkHref } from '@shared/validation'
+import { editorKeyOf } from '@shared/shortcuts'
 
 interface Callbacks {
     placeholder: string
@@ -32,11 +33,11 @@ const Shortcuts = Extension.create<Callbacks>({
     }),
     addKeyboardShortcuts() {
         return {
-            'Mod-Enter': () => {
+            [editorKeyOf('send')]: () => {
                 this.options.onSubmit()
                 return true
             },
-            'Mod-k': () => {
+            [editorKeyOf('link')]: () => {
                 this.options.onLinkShortcut()
                 return true
             }

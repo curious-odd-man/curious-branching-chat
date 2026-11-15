@@ -8,6 +8,8 @@ import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
 import { ReadNotice } from './components/ReadNotice'
 import { SettingsDialog } from './components/SettingsDialog'
+import { ShortcutsDialog } from './components/ShortcutsDialog'
+import { zoomKeyOfEvent } from '@shared/shortcuts'
 import { SharedWizard, type ReinviteTarget, type WizardMode } from './components/SharedWizard'
 import { UpdateDialog } from './components/UpdateDialog'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
@@ -31,6 +33,8 @@ export function App(): React.JSX.Element {
     const recent = useRecentFiles()
     const [bannerHidden, setBannerHidden] = useState<string | null>(null)
     const [showSettings, setShowSettings] = useState(false)
+    const [showShortcuts, setShowShortcuts] = useState(false)
+    const [jumpRequest, setJumpRequest] = useState(0)
     const [wizard, setWizard] = useState<WizardMode | null>(null)
     const [reinviteTarget, setReinviteTarget] = useState<ReinviteTarget | null>(null)
     const [readNotice, setReadNotice] = useState<{ retry: () => void } | null>(null)
@@ -72,6 +76,8 @@ export function App(): React.JSX.Element {
                     })
                 } else if (command === 'new-shared') setWizard('new')
                 else if (command === 'join-shared') setWizard('join')
+                else if (command === 'shortcuts') setShowShortcuts(true)
+                else if (command === 'jump-to-date') setJumpRequest((n) => n + 1)
                 else if (command === 'invite-member') {
                     if (viewRef.current?.synced) setWizard('invite')
                 } else if (command === 'make-shared') {
@@ -79,6 +85,42 @@ export function App(): React.JSX.Element {
                 } else openDialog()
             }),
         [api, startNew, openDialog]
+    )
+
+    // FR-301: zoom keys that did not pass the main process, and Ctrl + mouse wheel (one step per notch).
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent): void => {
+            const direction = zoomKeyOfEvent(e)
+            if (!direction) return
+            e.preventDefault()
+            void api.zoom(direction)
+        }
+        let wheel = 0
+        const onWheel = (e: WheelEvent): void => {
+            if (!e.ctrlKey) return
+            e.preventDefault()
+            // a touchpad sends many small steps; one step needs 100 units
+            wheel += e.deltaY
+            if (Math.abs(wheel) < 100) return
+            void api.zoom(wheel < 0 ? 'in' : 'out')
+            wheel = 0
+        }
+        window.addEventListener('keydown', onKey, true)
+        window.addEventListener('wheel', onWheel, { passive: false })
+        return () => {
+            window.removeEventListener('keydown', onKey, true)
+            window.removeEventListener('wheel', onWheel)
+        }
+    }, [api])
+
+    // The settings changed in the main process (text size from the keyboard or the mouse wheel, FR-301).
+    useEffect(
+        () =>
+            api.onSettingsChanged((next) => {
+                setSettings(next)
+                settingsRef.current = next
+            }),
+        [api, setSettings]
     )
 
     // A click on a notification (D-33): show that message. The request waits in the main process until this page asks.
@@ -249,6 +291,7 @@ export function App(): React.JSX.Element {
                     }
                     onRetrySave={() => void api.retrySave().then(report)}
                     onInvite={() => setWizard('invite')}
+                    jumpRequest={jumpRequest}
                     onReinvite={(target) => {
                         setReinviteTarget(target)
                         setWizard('reinvite')
@@ -256,6 +299,7 @@ export function App(): React.JSX.Element {
                 />
             )}
             {update?.dialogOpen && <UpdateDialog view={update} />}
+            {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
             {showSettings && (
                 <SettingsDialog
                     settings={settings}

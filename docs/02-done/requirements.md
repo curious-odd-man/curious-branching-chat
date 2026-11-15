@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements plus synchronized discussions (revision 13)  
+**Status:** MVP requirements plus synchronized discussions and release 2.1 (revision 14)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -597,6 +597,31 @@ format is in `sync-protocol.md`. The release column says in which release the re
 - **FR-178.** Members cannot leave a synchronized discussion and cannot remove another member. There is no
   administrator after creation. There is no forward secrecy and no key backup (design, settled decisions).
 
+### 5.13. Release 2.1: dates, text size, shortcuts, log file
+
+These requirements come from `requirements-next.md` (sections 2.5, 2.11, 2.12, 2.13); the numbers stay the same.
+
+- **FR-241.** The message list shows a separator with the date between messages of different days (local time):
+  "Сегодня", "Вчера", or the date (with the year only for another year). Messages are ordered by their clock, so a
+  separator comes only before a later day; a message of an earlier day stays under the current separator.
+- **FR-242.** "Вид > Перейти к дате…" (Ctrl+G) and the 📅 button open a month calendar. Only days with messages of the
+  current branch can be chosen. The choice shows the first message of that day.
+- **FR-301.** Ctrl+plus (also Ctrl+=), Ctrl+minus, Ctrl+0, the "Вид" menu, and Ctrl+mouse wheel change the text size
+  of all windows from 80 % to 200 %, in steps of 10 %.
+- **FR-302.** The size is kept in the settings and shown in Settings, with buttons −, +, and "Обычный размер".
+- **FR-311.** F1 and "Справка > Сочетания клавиш" show all keyboard shortcuts, grouped (window, messages, text
+  formatting, dialogs).
+- **FR-312.** The list, the menu shortcuts, the editor shortcuts, and the button texts come from one table
+  (`src/shared/shortcuts.ts`); a test refuses a shortcut that is not in it.
+- **FR-321.** BranchChat writes a log file `%APPDATA%\BranchChat\logs\main.log`: start, errors, sync, updates, tray,
+  window crashes. At 2 MB it is rotated; 5 files are kept.
+- **FR-322.** The log contains no message text, no keys, and no file contents; long runs of base64 or hex characters
+  are removed. File paths (they can contain the Windows user name and file names) and participant IDs are allowed.
+- **FR-323.** "Справка > Сохранить отчёт…" first shows what the report contains, then saves a ZIP: the log files, the
+  versions of the app and Windows, the settings without the name, the sync registry, and the sync states without
+  message text and keys.
+- **FR-324.** A log write error or a console error never stops the app.
+
 ## 6. Non-functional requirements
 
 - **NFR-001.** The application must work offline for all discussion operations.
@@ -845,6 +870,10 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 14
+
+- Section 5.13: release 2.1 (FR-241, FR-242, FR-301, FR-302, FR-311, FR-312, FR-321 to FR-324).
 
 ## Changes in revision 13
 

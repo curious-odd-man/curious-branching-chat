@@ -1025,3 +1025,85 @@ mark.quote {
 .sync-status .key-request .buttons {
     justify-content: flex-start;
 }
+
+/* release 2.1: text size (FR-301) and the shortcut list (FR-311) */
+.settings .text-size {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.settings .text-size output {
+    min-width: 4rem;
+    text-align: center;
+}
+.dialog.shortcuts {
+    max-height: 85vh;
+    overflow: auto;
+}
+.dialog.shortcuts table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.dialog.shortcuts td {
+    padding: 0.2rem 0.4rem;
+    vertical-align: top;
+}
+.dialog.shortcuts td:last-child {
+    white-space: nowrap;
+    text-align: right;
+}
+.dialog.shortcuts kbd {
+    padding: 0 0.3rem;
+    border: 1px solid color-mix(in srgb, CanvasText 30%, transparent);
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 0.85em;
+}
+
+/* release 2.1: day separators (FR-241) and "Перейти к дате…" (FR-242) */
+.day-separator {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0.6rem 0 0.2rem;
+    font-size: 0.8rem;
+    opacity: 0.75;
+}
+.day-separator::before,
+.day-separator::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+}
+.jump-to-date .calendar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0.4rem 0;
+}
+.jump-to-date .calendar {
+    display: grid;
+    grid-template-columns: repeat(7, 2.4rem);
+    gap: 0.2rem;
+    justify-content: center;
+}
+.jump-to-date .weekday {
+    text-align: center;
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+.jump-to-date .day {
+    height: 2.2rem;
+    border: 1px solid transparent;
+    background: transparent;
+}
+.jump-to-date .day.has-messages {
+    font-weight: 700;
+    border-color: color-mix(in srgb, CanvasText 30%, transparent);
+}
+.jump-to-date .day:disabled {
+    opacity: 0.35;
+}
+.jump-to-date .day.today {
+    text-decoration: underline;
+}

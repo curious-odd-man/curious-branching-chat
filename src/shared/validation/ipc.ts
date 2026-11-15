@@ -84,6 +84,8 @@ export const joinImportSchema = z
     .object({ root: z.string().min(1), invitationId: z.string().min(1) })
     .strict()
 export const setFileSizeLimitSchema = z.object({ mb: z.number().int().min(5).max(1000) }).strict()
+export const zoomChangeSchema = z.object({ direction: z.enum(['in', 'out', 'reset']) }).strict()
+export const setTextSizeSchema = z.object({ percent: z.number().int().min(80).max(200) }).strict()
 export const setBackgroundFlagSchema = z
     .object({
         flag: z.enum(['notifyNewMessages', 'notifyShowText', 'startWithWindows']),

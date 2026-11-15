@@ -1,6 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, Menu, session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { release } from 'node:os'
 import { ru } from '@shared/i18n/ru'
 import { AppController } from './application/appController'
 import { installAssetProtocol, registerAssetScheme } from './application/assetProtocol'
@@ -39,6 +40,9 @@ import { createFileAssociation } from './windows/createAssociation'
 import { applyJumpList } from './windows/jumpList'
 import { extractDiscussionPaths } from './windows/launchArgs'
 import { guardConsoleStreams } from './windows/safeConsole'
+import { Logger } from './log/logger'
+import { saveDiagnosticsReport } from './log/saveReport'
+import { ZoomService } from './windows/zoom'
 import { applyGlobalSecurity } from './windows/security'
 
 // A closed console pipe must not end the app (EPIPE from a log line).
@@ -57,6 +61,39 @@ if (process.platform === 'win32') app.setAppUserModelId('app.branchchat.desktop'
 
 // The scheme used to show embedded images must be registered before the app is ready.
 registerAssetScheme()
+
+// FR-321: the log file. Development and test runs also show the lines in the console.
+const logger = new Logger({
+    dir: join(app.getPath('userData'), 'logs'),
+    ...(app.isPackaged ? {} : { mirror: (line: string) => console.log(line) })
+})
+const appLog = logger.area('app')
+process.on('uncaughtExceptionMonitor', (err) => appLog.error('uncaught exception', err))
+process.on('unhandledRejection', (reason) => appLog.error('unhandled rejection', reason))
+// FR-301: set once the settings are loaded; windows made before that get the size when their page loads.
+let zoom: ZoomService | null = null
+app.on('web-contents-created', (_e, contents) => {
+    if (contents.getType() === 'window') zoom?.attach(contents)
+    const windowLog = logger.area('window')
+    contents.on('render-process-gone', (_ev, details) =>
+        windowLog.error(`window process ended: ${details.reason} (exit code ${details.exitCode})`)
+    )
+    contents.on('unresponsive', () => windowLog.warn('window does not respond'))
+    contents.on('console-message', (event: unknown, ...rest: unknown[]) => {
+        // Electron 45 gives one event object; older versions gave (event, level, message, line, source)
+        const e = event as {
+            level?: unknown
+            message?: unknown
+            lineNumber?: unknown
+            sourceId?: unknown
+        }
+        const level = e.level ?? rest[0]
+        if (level !== 'error' && level !== 3) return
+        windowLog.error(
+            `${String(e.message ?? rest[1])} (${String(e.sourceId ?? rest[3])}:${String(e.lineNumber ?? rest[2])})`
+        )
+    })
+})
 
 // One application instance; a second launch (e.g. double-clicking another .branchchat file) is forwarded here.
 const gotLock = app.requestSingleInstanceLock()
@@ -77,7 +114,16 @@ if (!gotLock) {
     })
 
     void app.whenReady().then(async () => {
+        appLog.info(
+            `start ${app.getVersion()} (Electron ${process.versions.electron}, ${process.platform} ${release()} ${process.arch})${startedInBackground ? ', in the background' : ''}`
+        )
         const settings = new SettingsStore(app.getPath('userData'), randomUUID)
+        const zoomService = new ZoomService({
+            current: () => settings.get().textSize,
+            save: (percent) => settings.setTextSize(percent),
+            publish: (view) => controller?.broadcast(IPC.settingsChanged, view)
+        })
+        zoom = zoomService
         await settings.load()
         const recent = new RecentFilesStore(app.getPath('userData'))
         await recent.load()
@@ -104,7 +150,7 @@ if (!gotLock) {
                       stableMs: 300
                   }
                 : {}),
-            log: (message) => console.log(`[sync] ${message}`),
+            log: (message) => logger.area('sync').info(message),
             onNewMessages: (arrival) => background?.newMessages(arrival),
             onStatusChange: () => void background?.refresh()
         })
@@ -134,12 +180,15 @@ if (!gotLock) {
         const testUpdates = __E2E_HOOKS__ ? e2eUpdaterConfig() : null
         const ctrl = controller
         const updates = new UpdateService({
-            port: new ElectronUpdaterPort(testUpdates?.options),
+            port: new ElectronUpdaterPort({
+                ...testUpdates?.options,
+                logger: logger.area('updates')
+            }),
             currentVersion: app.getVersion(),
             publish: (view) => ctrl.broadcast(IPC.updateChanged, view),
             openLink: openExternalLink,
             autoCheckEnabled: () => settings.get().autoUpdateCheck,
-            log: (message) => console.log(`[updates] ${message}`)
+            log: (message) => logger.area('updates').info(message)
         })
         setTimeout(() => void updates.checkAutomatically(), testUpdates?.startupDelayMs ?? 20_000)
         setInterval(
@@ -213,18 +262,34 @@ if (!gotLock) {
                 await dialog.showMessageBox({ type: 'warning', title: ru.app.name, message })
             },
             quit: () => app.quit(),
-            log: (message) => console.log(`[background] ${message}`)
+            log: (message) => logger.area('background').info(message)
         })
         const bg = background
         registerIpcHandlers(controller, settings, recent, association, updates, identity, sync, {
             onboarding,
             ui: electronUi,
-            background: bg
+            background: bg,
+            zoom: zoomService
         })
         // The File > Open recent menu, the taskbar jump list and every window follow the recent files list.
         const refreshRecent = async (): Promise<void> => {
             const files = await describeRecent(recent.list())
-            Menu.setApplicationMenu(buildMenu(ctrl, updates, recent, files, () => bg.requestQuit()))
+            Menu.setApplicationMenu(
+                buildMenu(
+                    ctrl,
+                    updates,
+                    recent,
+                    files,
+                    () => bg.requestQuit(),
+                    () =>
+                        void saveDiagnosticsReport({
+                            logger,
+                            userData: app.getPath('userData'),
+                            appVersion: app.getVersion()
+                        }).catch((err) => appLog.error('report failed', err)),
+                    (direction) => void zoomService.change(direction)
+                )
+            )
             applyJumpList(files)
             ctrl.broadcast(IPC.recentChanged, files)
         }

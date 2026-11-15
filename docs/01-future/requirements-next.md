@@ -1,6 +1,7 @@
 # BranchChat: requirements for release 2
 
-**Status:** Ready for an implementation plan (draft 4; all questions answered)  
+**Status:** Ready (draft 4). Release 2.1 done: sections 2.5, 2.11, 2.12, 2.13 are now in `requirements.md`
+(revision 14, section 5.13).  
 **Date:** 2026-11-14  
 **Base:** `requirements.md` (revision 13) stays valid. This document adds requirements; where it changes an earlier
 requirement, it says so.  

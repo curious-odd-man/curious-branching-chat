@@ -23,6 +23,8 @@ export const IPC = {
     settingsSetOpenLast: 'settings:set-open-last',
     settingsSetFileSizeLimit: 'settings:set-file-size-limit',
     settingsSetBackgroundFlag: 'settings:set-background-flag',
+    settingsSetTextSize: 'settings:set-text-size',
+    zoomChange: 'zoom:change',
     focusTake: 'focus:take',
     recentGet: 'recent:get',
     recentRemove: 'recent:remove',
@@ -63,6 +65,7 @@ export const IPC = {
     identitySaveBundle: 'identity:save-bundle',
     menuCommand: 'menu:command',
     focusRequest: 'focus:request',
+    settingsChanged: 'settings:changed',
     /** main -> renderer: the recent files list changed. */
     recentChanged: 'recent:changed',
     updateChanged: 'update:changed'
@@ -96,6 +99,8 @@ export interface SettingsView {
     startWithWindows: boolean
     /** The first synchronized discussion (or the person) has decided it; the wizard then says nothing (FR-174). */
     startWithWindowsSettled: boolean
+    /** FR-301: text size of all windows, in percent (80–200). */
+    textSize: number
 }
 
 /** On/off settings of the background section (release 1.4). */
@@ -258,7 +263,15 @@ export interface FocusRequest {
 }
 
 export type MenuCommand =
-    'new' | 'open' | 'settings' | 'new-shared' | 'join-shared' | 'make-shared' | 'invite-member'
+    | 'new'
+    | 'open'
+    | 'settings'
+    | 'new-shared'
+    | 'join-shared'
+    | 'make-shared'
+    | 'invite-member'
+    | 'shortcuts'
+    | 'jump-to-date'
 
 /** What the person is told about an available update (FR-098). Notes are plain text. */
 export interface UpdateInfoView {

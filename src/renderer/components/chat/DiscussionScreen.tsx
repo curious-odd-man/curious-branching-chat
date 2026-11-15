@@ -1,6 +1,10 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     branchesBySourceMessage,
+    daySeparators,
+    firstMessageOfEachDay,
+    localDayKey,
+    previousDayKey,
     buildReadSets,
     type MarkSync,
     findMessage,
@@ -19,7 +23,9 @@ import { Composer } from './Composer'
 import { ImageViewer } from './ImageViewer'
 import { MessageList, type ListRow } from './MessageList'
 import { RosterDialog, type ReinviteTarget } from '../SharedWizard'
-import { formatTimestamp } from '../../i18n/format'
+import { formatDayLabel, formatTimestamp } from '../../i18n/format'
+import { JumpToDateDialog } from './JumpToDateDialog'
+import { withKeys } from '@shared/shortcuts'
 
 interface Props {
     view: DocumentView
@@ -40,6 +46,8 @@ interface Props {
     onInvite(): void
     /** FR-177: "Повторно пригласить…" for a member. */
     onReinvite(target: ReinviteTarget): void
+    /** FR-242: a new value (Ctrl+G or the menu) opens "Перейти к дате…". */
+    jumpRequest?: number
 }
 
 export function DiscussionScreen({
@@ -56,8 +64,15 @@ export function DiscussionScreen({
     onSetTitle,
     onRetrySave,
     onInvite,
-    onReinvite
+    onReinvite,
+    jumpRequest
 }: Props): React.JSX.Element {
+    // the local day; checked every minute, so "Сегодня" moves at midnight
+    const [today, setToday] = useState(() => localDayKey(new Date().toISOString()))
+    useEffect(() => {
+        const timer = setInterval(() => setToday(localDayKey(new Date().toISOString())), 60_000)
+        return () => clearInterval(timer)
+    }, [])
     const [dismissed, setDismissed] = useState<string[]>([])
     const [showRoster, setShowRoster] = useState(false)
     const [checking, setChecking] = useState(false)
@@ -125,8 +140,38 @@ export function DiscussionScreen({
             out.push({ kind: 'message', message, inherited: false, highlight: null })
         }
         while (li < loading.length) out.push({ kind: 'loading', loading: loading[li++]! })
+        // FR-241: a separator before the first message of each later day
+        const yesterday = previousDayKey(today)
+        const separators = daySeparators(out, (r) =>
+            r.kind === 'message'
+                ? r.message.createdAt
+                : r.kind === 'loading'
+                  ? r.loading.createdAt
+                  : null
+        )
+        for (const { index, day } of [...separators].reverse())
+            out.splice(index, 0, {
+                kind: 'day',
+                id: `day-${day}`,
+                day,
+                label: formatDayLabel(day, today, yesterday)
+            })
         return out
-    }, [context, isBranch, thread, view.loading])
+    }, [context, isBranch, thread, view.loading, today])
+
+    // FR-242: the days of the branch's own messages, with the first message of each day
+    const days = useMemo(
+        () => firstMessageOfEachDay(context.own, (m) => m.createdAt),
+        [context.own]
+    )
+    const [showJump, setShowJump] = useState(false)
+    // only a new request opens the dialog (the screen can mount again with the old value, after a jump)
+    const handledJump = useRef(jumpRequest)
+    useEffect(() => {
+        if (jumpRequest === handledJump.current) return
+        handledJump.current = jumpRequest
+        setShowJump(true)
+    }, [jumpRequest])
 
     const closed = isBranch && thread.status === 'closed'
     const goToSource = (): void => {
@@ -145,6 +190,16 @@ export function DiscussionScreen({
         <div className="discussion">
             <header className="discussion-header">
                 <h1 title={view.filePath}>{view.fileName}</h1>
+                <button
+                    type="button"
+                    className="roster-button"
+                    data-testid="jump-to-date"
+                    title={withKeys(ru.days.jumpTitle, 'jumpToDate')}
+                    aria-label={ru.days.jumpTitle}
+                    onClick={() => setShowJump(true)}
+                >
+                    📅
+                </button>
                 {view.synced && (
                     <button
                         type="button"
@@ -176,6 +231,18 @@ export function DiscussionScreen({
                     >
                         {checking ? ru.syncStatus.checking : `⟳ ${ru.syncStatus.check}`}
                     </button>
+                )}
+                {showJump && (
+                    <JumpToDateDialog
+                        days={new Set(days.keys())}
+                        today={today}
+                        onClose={() => setShowJump(false)}
+                        onPick={(day) => {
+                            setShowJump(false)
+                            const message = days.get(day)
+                            if (message) onSelectThread(threadId, message.messageId)
+                        }}
+                    />
                 )}
                 {showRoster && (
                     <RosterDialog

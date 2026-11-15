@@ -41,26 +41,26 @@ export const ru = {
     composer: {
         placeholder: 'Напишите сообщение…',
         send: 'Отправить',
-        hint: 'Ctrl+Enter — отправить',
+        hint: 'отправить',
         ariaLabel: 'Текст сообщения',
         cannotSend: 'Не удалось подготовить сообщение к отправке.'
     },
     editor: {
         toolbar: 'Форматирование',
         heading: (level: number): string => `Заголовок ${level}`,
-        bold: 'Жирный (Ctrl+B)',
-        italic: 'Курсив (Ctrl+I)',
-        underline: 'Подчёркнутый (Ctrl+U)',
+        bold: 'Жирный',
+        italic: 'Курсив',
+        underline: 'Подчёркнутый',
         bulletList: 'Маркированный список',
         orderedList: 'Нумерованный список',
-        indent: 'Увеличить отступ (Tab)',
-        outdent: 'Уменьшить отступ (Shift+Tab)',
+        indent: 'Увеличить отступ',
+        outdent: 'Уменьшить отступ',
         textColor: 'Цвет текста',
         backgroundColor: 'Цвет фона',
         noColor: 'Без цвета',
-        link: 'Ссылка (Ctrl+K)',
-        undo: 'Отменить (Ctrl+Z)',
-        redo: 'Повторить (Ctrl+Y)',
+        link: 'Ссылка',
+        undo: 'Отменить',
+        redo: 'Повторить',
         colorNames: {
             '#d32f2f': 'Красный',
             '#ef6c00': 'Оранжевый',
@@ -237,6 +237,59 @@ export const ru = {
         close: 'Закрыть',
         ariaLabel: 'Кто прочитал это сообщение'
     },
+    days: {
+        today: 'Сегодня',
+        yesterday: 'Вчера',
+        jumpTitle: 'Перейти к дате',
+        jumpHint: 'Отмечены дни, в которые есть сообщения этой ветки.',
+        previousMonth: 'Предыдущий месяц',
+        nextMonth: 'Следующий месяц',
+        weekdays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
+        noMessages: 'В этой ветке ещё нет сообщений.',
+        close: 'Закрыть'
+    },
+    shortcuts: {
+        title: 'Сочетания клавиш',
+        groups: {
+            window: 'Окно',
+            messages: 'Сообщения',
+            editor: 'Оформление текста',
+            dialogs: 'Диалоги'
+        },
+        actions: {
+            newDiscussion: 'Новое обсуждение',
+            open: 'Открыть обсуждение',
+            settings: 'Настройки',
+            zoomIn: 'Крупнее',
+            zoomOut: 'Мельче',
+            zoomReset: 'Обычный размер текста',
+            shortcuts: 'Этот список',
+            jumpToDate: 'Перейти к дате',
+            send: 'Отправить сообщение',
+            newLine: 'Новая строка в сообщении',
+            pasteImage: 'Вставить картинку',
+            link: 'Ссылка',
+            bold: 'Жирный',
+            italic: 'Курсив',
+            underline: 'Подчёркнутый',
+            undo: 'Отменить',
+            redo: 'Повторить',
+            indent: 'Увеличить отступ в списке',
+            outdent: 'Уменьшить отступ в списке',
+            confirm: 'Подтвердить',
+            close: 'Закрыть диалог или меню'
+        },
+        wheel: 'Ctrl + колесо мыши — крупнее или мельче',
+        close: 'Закрыть'
+    },
+    report: {
+        title: 'Отчёт для поддержки',
+        contents:
+            'В отчёт войдут: журнал работы программы, версии программы и Windows, настройки без вашего имени, состояние синхронизации без ключей.\n\nВ отчёте нет текста сообщений, названий обсуждений и ключей. Пути к файлам могут содержать имя пользователя Windows и названия файлов.',
+        save: 'Сохранить…',
+        cancel: 'Отмена',
+        saved: 'Отчёт сохранён. Его можно отправить для поддержки.'
+    },
     notifications: {
         image: '[изображение]',
         title: (author: string, discussion: string): string => `${author} — ${discussion}`,
@@ -278,6 +331,10 @@ export const ru = {
         recentLimitHint:
             'Список виден на начальном экране, в меню «Файл» и на значке в панели задач. 0 — не хранить список. Если уменьшить число, самые старые записи будут забыты.',
         nameSaved: 'Имя сохранено.',
+        textSizeHeading: 'Размер текста',
+        textSizeReset: 'Обычный размер',
+        textSizeHint:
+            'Для всех окон. Также Ctrl и плюс, Ctrl и минус, Ctrl+0 или Ctrl и колесо мыши.',
         backgroundHeading: 'Работа в фоне',
         notifyNew: 'Уведомления о новых сообщениях',
         notifyNewHint:
@@ -425,6 +482,13 @@ export const ru = {
         joinShared: 'Присоединиться к обсуждению…',
         makeShared: 'Сделать обсуждение общим…',
         inviteMember: 'Пригласить участника…',
+        saveReport: 'Сохранить отчёт…',
+        view: 'Вид',
+        zoomIn: 'Крупнее',
+        zoomOut: 'Мельче',
+        zoomReset: 'Обычный размер',
+        shortcuts: 'Сочетания клавиш',
+        jumpToDate: 'Перейти к дате…',
         sendCopy: 'Отправить копию…'
     },
     contextMenu: {

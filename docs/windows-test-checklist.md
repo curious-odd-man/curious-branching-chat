@@ -243,3 +243,18 @@ The three Google Drive tests in the design document, Section 23, are done. The r
 5. B: "Всё-таки принять": C's waiting message arrives at B; B's next message reaches C; the lines go away.
 6. Old files in C's inbox (written for the old key) do not appear as "Файлов … не удалось использовать".
 
+## Q. Release 2.1: log file, report, text size, shortcuts, dates
+
+1. Start the app: `%APPDATA%\BranchChat\logs\main.log` exists and has the start line. Close with "Выход".
+2. "Справка > Сохранить отчёт…": the dialog lists the content; "Сохранить…" writes a ZIP. Open it: no message text,
+   no participant name in `settings.json`, no keys.
+3. Check for updates once, with the window open: lines with `[updates]` are in the log, no error dialog.
+4. Ctrl and plus, Ctrl and minus, Ctrl+0, Ctrl and the keypad plus and minus, Ctrl and the mouse wheel: the text size
+   changes in steps; Settings show the value. A second window has the same size. Restart: the size stays.
+5. At 150 % and 200 % Windows display scale, with 200 % text size: dialogs fit on the screen and can be scrolled.
+6. F1 shows the list; each shortcut in the list works.
+7. A discussion with messages on several days: separators "Сегодня", "Вчера", and dates. Leave the app open over
+   midnight: "Сегодня" becomes "Вчера".
+8. Ctrl+G: the calendar opens at the newest month; days without messages cannot be chosen; a chosen day shows its
+   first message.
+

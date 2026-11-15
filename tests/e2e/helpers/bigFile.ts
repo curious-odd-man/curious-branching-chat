@@ -1,10 +1,17 @@
 import { promises as fs } from 'node:fs'
 import yazl from 'yazl'
 
-/** Writes a valid discussion with `count` messages straight into a .branchchat file (no application code involved). */
-export async function writeBigDiscussion(path: string, count: number): Promise<void> {
+/**
+ * Writes a valid discussion with `count` messages straight into a .branchchat file (no application code involved).
+ * Messages are `stepMs` apart (one minute by default).
+ */
+export async function writeBigDiscussion(
+    path: string,
+    count: number,
+    stepMs = 60_000
+): Promise<void> {
     const base = Date.UTC(2026, 0, 1, 9, 0, 0)
-    const iso = (i: number): string => new Date(base + i * 60_000).toISOString()
+    const iso = (i: number): string => new Date(base + i * stepMs).toISOString()
     const people = [
         { participantId: 'p-anna', displayName: 'Анна' },
         { participantId: 'p-boris', displayName: 'Борис' }

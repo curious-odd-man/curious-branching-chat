@@ -41,6 +41,7 @@ src/
     transport/   the shared folder: staging, move, listing, path safety, watching
     sync/        synchronized discussions: registry, local sync state, sync service, wizards (onboarding)
     background/  tray, notifications, start with Windows (release 1.4)
+    log/         log file with rotation and redaction, diagnostics report (release 2.1)
     e2e/         test hooks, compiled only into `--mode e2e` builds
     ipc/         validated IPC handlers
   preload/     the narrow contextBridge API

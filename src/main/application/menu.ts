@@ -1,5 +1,6 @@
 import { app, dialog, Menu, type MenuItemConstructorOptions } from 'electron'
 import { ru } from '@shared/i18n/ru'
+import { acceleratorOf } from '@shared/shortcuts'
 import type { RecentFileView } from '@shared/types/ipc'
 import type { RecentFilesStore } from '../local-state/recentFiles'
 import type { UpdateService } from '../updates/updateService'
@@ -12,7 +13,11 @@ export function buildMenu(
     recent: RecentFilesStore,
     recentFiles: readonly RecentFileView[],
     /** "Выход": the whole application closes, also from the tray (release 1.4). */
-    exit: () => void = () => app.quit()
+    exit: () => void = () => app.quit(),
+    /** "Справка > Сохранить отчёт…" (FR-323). */
+    saveReport: () => void = () => undefined,
+    /** "Вид": text size (FR-301). */
+    zoom: (direction: 'in' | 'out' | 'reset') => void = () => undefined
 ): Menu {
     const template: MenuItemConstructorOptions[] = [
         {
@@ -20,12 +25,12 @@ export function buildMenu(
             submenu: [
                 {
                     label: ru.menu.newDiscussion,
-                    accelerator: 'CmdOrCtrl+N',
+                    accelerator: acceleratorOf('newDiscussion'),
                     click: () => controller.sendMenuCommand('new')
                 },
                 {
                     label: ru.menu.open,
-                    accelerator: 'CmdOrCtrl+O',
+                    accelerator: acceleratorOf('open'),
                     click: () => controller.sendMenuCommand('open')
                 },
                 {
@@ -58,7 +63,7 @@ export function buildMenu(
                 { type: 'separator' },
                 {
                     label: ru.menu.settings,
-                    accelerator: 'CmdOrCtrl+,',
+                    accelerator: acceleratorOf('settings'),
                     click: () => controller.sendMenuCommand('settings')
                 },
                 { type: 'separator' },
@@ -81,9 +86,46 @@ export function buildMenu(
             ]
         },
         {
+            label: ru.menu.view,
+            submenu: [
+                // the keys are handled for each window (several keys, the keypad, the mouse wheel): the menu only
+                // shows them
+                {
+                    label: ru.menu.zoomIn,
+                    accelerator: acceleratorOf('zoomIn'),
+                    registerAccelerator: false,
+                    click: () => zoom('in')
+                },
+                {
+                    label: ru.menu.zoomOut,
+                    accelerator: acceleratorOf('zoomOut'),
+                    registerAccelerator: false,
+                    click: () => zoom('out')
+                },
+                {
+                    label: ru.menu.zoomReset,
+                    accelerator: acceleratorOf('zoomReset'),
+                    registerAccelerator: false,
+                    click: () => zoom('reset')
+                },
+                { type: 'separator' },
+                {
+                    label: ru.menu.jumpToDate,
+                    accelerator: acceleratorOf('jumpToDate'),
+                    click: () => controller.sendMenuCommand('jump-to-date')
+                }
+            ]
+        },
+        {
             label: ru.menu.help,
             submenu: [
+                {
+                    label: ru.menu.shortcuts,
+                    accelerator: acceleratorOf('shortcuts'),
+                    click: () => controller.sendMenuCommand('shortcuts')
+                },
                 { label: ru.menu.checkUpdates, click: () => void updates.checkManually() },
+                { label: ru.menu.saveReport, click: () => saveReport() },
                 { type: 'separator' },
                 {
                     label: ru.menu.about,
