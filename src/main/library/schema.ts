@@ -85,6 +85,22 @@ const MIGRATIONS: ReadonlyArray<(db: Database) => void> = [
 
             -- normalized text (lower case, ё → е); rowid = message.rowid
             CREATE VIRTUAL TABLE search_index USING fts5 (text, tokenize = 'unicode61 remove_diacritics 0');
+        `),
+    // release 2.3: the author of a message (unread counts in the list, FR-221) and drafts (FR-251 to FR-254)
+    (db) =>
+        db.exec(`
+            ALTER TABLE message ADD COLUMN author_id TEXT NOT NULL DEFAULT '';
+            UPDATE message SET author_id = COALESCE(json_extract(data, '$.authorId'), '');
+            CREATE INDEX message_by_author ON message (discussion_id, author_id);
+
+            CREATE TABLE draft (
+                discussion_id TEXT NOT NULL REFERENCES discussion (id) ON DELETE CASCADE,
+                thread_id     TEXT NOT NULL,
+                content       TEXT NOT NULL,
+                images        TEXT NOT NULL,
+                updated_at    TEXT NOT NULL,
+                PRIMARY KEY (discussion_id, thread_id)
+            ) STRICT, WITHOUT ROWID;
         `)
 ]
 

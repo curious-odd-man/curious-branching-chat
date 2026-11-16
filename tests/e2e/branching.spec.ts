@@ -503,7 +503,7 @@ test('the participant name is asked for before the first branch is created (FR-0
     expect((await savedReadState(file))[settings.participantId]).toEqual(['m2'])
 })
 
-test('each thread keeps its own unsent draft while moving between branches (FR-008)', async () => {
+test('each thread keeps its own unsent draft while moving between branches and after a restart (FR-251)', async () => {
     const dir = await workDir()
     const file = join(dir, 'черновики.branchchat')
     await writeDiscussionFile(file, [
@@ -524,14 +524,17 @@ test('each thread keeps its own unsent draft while moving between branches (FR-0
     await expect(composer(win)).toHaveText('черновик ветки')
     await expect(composer(win)).toBeFocused() // focus returns to the field after the switch
 
-    // sending in the branch does not touch the main thread's draft; closing still warns about it
+    // sending in the branch does not touch the main thread's draft; after a restart it is still there (FR-251)
     await win.keyboard.press('Control+Enter')
     await expect(win.getByTestId('message').filter({ hasText: 'черновик ветки' })).toHaveCount(1)
-    await t.answer({ box: [1] })
-    await t.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
-    await expect
-        .poll(async () => (await t.dialogs()).filter((d) => d.kind === 'box').length)
-        .toBe(1)
     await win.getByTestId('panel-main').click()
     await expect(composer(win)).toHaveText('черновик основной')
+    await t.close()
+    apps.splice(apps.indexOf(t), 1)
+    const again = await launchApp({ userData: t.userData })
+    apps.push(again)
+    const win2 = await again.app.firstWindow()
+    await expect(composer(win2)).toHaveText('черновик основной')
+    await win2.locator('[data-testid=panel-branch][data-thread-id=a]').click()
+    await expect(composer(win2)).toHaveText('')
 })

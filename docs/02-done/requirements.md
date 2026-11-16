@@ -1,6 +1,6 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements plus synchronized discussions, release 2.1, and release 2.2 (revision 15)  
+**Status:** MVP requirements plus synchronized discussions and releases 2.1 to 2.3 (revision 16)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
 **UI language:** Russian  
@@ -669,6 +669,46 @@ These requirements come from `requirements-next.md` (section 2.1) and ADR-003 (o
   FR-154 (a detached copy of a file), and FR-168 (a moved file) do not apply: a discussion with a member list that is
   not registered on this computer is shown as a separate copy. "Отправить копию…" is now "Экспортировать…".
 
+### 5.15. Release 2.3: discussion list, drafts, search, branch map
+
+These requirements come from `requirements-next.md` (sections 2.2, 2.3, 2.6, 2.8); the numbers stay the same.
+
+- **FR-221.** A window with a discussion has the list of discussions on the left: name, time of the last message,
+  number of unread messages, a mark for shared discussions (👥) and for drafts (✎). A click opens the discussion in
+  the same window. Below a window width of 1000 px the list lies over the discussion and opens with ☰.
+- **FR-222.** The list is sorted by the last message (default) or by name, and filtered by a text in the name (case
+  and ё/е do not matter).
+- **FR-223.** The list can be hidden (◀, ☰) and its width changed by dragging its edge; both are kept.
+- **FR-224.** A discussion keeps its branch and scroll position while the window shows another one.
+- **FR-225.** One main window: discussions opened from the tray, a notification, Explorer, or the jump list open there.
+  "Открыть в новом окне" (⧉) opens a discussion in a separate window. A discussion that is open in a window is not
+  opened a second time; its window comes to the front. Before a window shows another discussion, its changes and
+  drafts are saved; if the save fails, the window keeps the discussion and says why.
+- **FR-251.** A draft (text and images) is kept for each discussion and branch in the library, also after the app
+  closes or the computer restarts. Sending the message removes the draft.
+- **FR-252.** Drafts are local: not in an export, not synchronized, not in the search.
+- **FR-253.** The list marks discussions with a draft.
+- **FR-254.** Closing a window no longer asks about unsent drafts (it asks only when the last save failed).
+- **FR-211.** "Вид > Найти в обсуждении…" (Ctrl+F) and 🔍 open a search field in the discussion. The search finds
+  messages in all branches, open and closed.
+- **FR-212.** The search ignores case, treats ё and е as the same letter, and finds words that start with each search
+  word; all words must be in the message.
+- **FR-213.** Results show the author, the time, the branch, and the text around the match, with the matches marked.
+  Enter and Shift+Enter (or the arrows, or ↑ ↓) go to the next and the previous result; the window opens the branch,
+  shows the message, and highlights the words in the shown messages until the search closes.
+- **FR-214.** The search reads the text of messages and the branch titles (attachment names after release 2.4); not
+  the text inside images.
+- **FR-215.** "Вид > Найти во всех обсуждениях…" (Ctrl+Shift+F) and 🔍 above the list search in all discussions of the
+  library. Results are grouped by discussion; a click opens the discussion, the branch, and the message.
+- **NFR-201.** In a library of 100,000 messages, the results come in less than 0.5 s.
+- **FR-271.** "Вид > Карта веток…" (Ctrl+Shift+M) and 🌳 show all branches as a tree: title, state, number of
+  messages, number of unread messages.
+- **FR-272.** A click or Enter opens a branch; the arrows, Home, and End move in the tree. The current branch is
+  marked.
+- **FR-273.** The map can show only open branches (a closed branch above an open one stays, dimmed) or only branches
+  with unread messages.
+- Change: FR-008 no longer applies to drafts (FR-254); the shortcut list has a group "Поиск".
+
 ## 6. Non-functional requirements
 
 - **NFR-001.** The application must work offline for all discussion operations.
@@ -920,6 +960,10 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 16
+
+- Section 5.15: release 2.3 (FR-211 to FR-215, NFR-201, FR-221 to FR-225, FR-251 to FR-254, FR-271 to FR-273).
 
 ## Changes in revision 15
 

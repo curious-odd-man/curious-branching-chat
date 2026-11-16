@@ -100,6 +100,47 @@ export const ru = {
         menuEmpty: 'Список пуст',
         jumpListCategory: 'Недавние'
     },
+    branchMap: {
+        title: 'Карта веток',
+        onlyOpen: 'Только открытые',
+        onlyUnread: 'С непрочитанными',
+        open: 'открыта',
+        closed: 'закрыта',
+        messages: 'Сообщений в ветке',
+        count: (n: number): string => `${n} ${plural(n, 'сообщение', 'сообщения', 'сообщений')}`,
+        close: 'Закрыть',
+        button: 'Карта веток'
+    },
+    search: {
+        placeholder: 'Найти в обсуждении',
+        allTitle: 'Поиск во всех обсуждениях',
+        allPlaceholder: 'Найти во всех обсуждениях',
+        open: 'Найти',
+        close: 'Закрыть поиск',
+        next: 'Следующий',
+        previous: 'Предыдущий',
+        count: (current: number, total: number): string => `${current} из ${total}`,
+        nothing: 'Ничего не найдено',
+        main: 'Основное обсуждение',
+        branch: (name: string): string => `ветка «${name}»`,
+        branchTitle: 'название ветки',
+        hint: 'Регистр не важен, «ё» и «е» — одна буква; слово ищется по началу.',
+        searchAll: 'Искать во всех обсуждениях'
+    },
+    sidebar: {
+        title: 'Обсуждения',
+        filter: 'Найти обсуждение',
+        sort: 'Порядок',
+        byActivity: 'Сначала новые сообщения',
+        byName: 'По названию',
+        hide: 'Скрыть список обсуждений',
+        show: 'Показать список обсуждений',
+        shared: 'Общее обсуждение',
+        draft: 'Есть неотправленный черновик',
+        newWindow: 'Открыть в новом окне',
+        nothing: 'Ничего не найдено',
+        resize: 'Ширина списка обсуждений'
+    },
     newDiscussion: {
         title: 'Новое обсуждение',
         label: 'Название',
@@ -340,18 +381,24 @@ export const ru = {
         groups: {
             window: 'Окно',
             messages: 'Сообщения',
+            search: 'Поиск',
             editor: 'Оформление текста',
             dialogs: 'Диалоги'
         },
         actions: {
             newDiscussion: 'Новое обсуждение',
-            open: 'Открыть обсуждение',
+            open: 'Импортировать обсуждение',
             settings: 'Настройки',
             zoomIn: 'Крупнее',
             zoomOut: 'Мельче',
             zoomReset: 'Обычный размер текста',
             shortcuts: 'Этот список',
             jumpToDate: 'Перейти к дате',
+            find: 'Найти в обсуждении',
+            findAll: 'Найти во всех обсуждениях',
+            findNext: 'Следующий результат (в поле поиска)',
+            findPrevious: 'Предыдущий результат (в поле поиска)',
+            branchMap: 'Карта веток',
             send: 'Отправить сообщение',
             newLine: 'Новая строка в сообщении',
             pasteImage: 'Вставить картинку',
@@ -578,6 +625,9 @@ export const ru = {
         zoomReset: 'Обычный размер',
         shortcuts: 'Сочетания клавиш',
         jumpToDate: 'Перейти к дате…',
+        find: 'Найти в обсуждении…',
+        findAll: 'Найти во всех обсуждениях…',
+        branchMap: 'Карта веток…',
         exportDiscussion: 'Экспортировать…',
         backupNow: 'Резервная копия сейчас',
         restore: 'Восстановить из резервной копии…'
@@ -600,6 +650,9 @@ export const ru = {
         closeConfirm: 'Закрыть',
         closeCancel: 'Отмена',
         nameRequired: 'Сначала укажите своё имя.',
+        switchBlockedTitle: 'Изменения не сохранены',
+        switchBlocked:
+            'Последние изменения этого обсуждения не удалось сохранить. Нажмите «Повторить» в окне и затем откройте другое обсуждение.',
         exportTitle: 'Экспортировать обсуждение',
         exportDefaultName: (name: string): string => `${name}.branchchat`,
         exportHint:

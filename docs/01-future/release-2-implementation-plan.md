@@ -1,8 +1,8 @@
 # BranchChat: implementation plan for release 2
 
-**Status:** Releases 2.1 (phases 1–3) and 2.2 (phases 4–7) done in code; two questions open for release 2.4
-(Section 9)  
-**Date:** 2026-11-15  
+**Status:** Releases 2.1 (phases 1–3), 2.2 (phases 4–7), and 2.3 (phases 8–11) done in code; two questions open for
+release 2.4 (Section 9)  
+**Date:** 2026-11-16  
 **Input:** `requirements-next.md` (ready, draft 4), `adr-003-local-storage.md` (accepted), `requirements.md`
 (revision 13), `sync-protocol.md`  
 **Base code:** release 1.5 (tag `release-1.5-done`)
@@ -43,7 +43,11 @@ Changes to the order in `requirements-next.md`, section 4:
 | 2.2     | 5 — Sessions, import, export          | Done                                    | Tag `phase-2.5-done`                                          |
 | 2.2     | 6 — Migration of existing files       | Done                                    | Tag `phase-2.6-done`                                          |
 | 2.2     | 7 — Backups and checks                | Done in code; **needs a Windows check** | Tag `phase-2.7-done`; Windows: checklist section R            |
-| 2.3–2.5 | 8–16                                  | Not started                             |                                                               |
+| 2.3     | 8 — Discussion list in the window     | Done                                    | Tag `phase-2.8-done`                                          |
+| 2.3     | 9 — Drafts kept                       | Done                                    | Tag `phase-2.9-done`                                          |
+| 2.3     | 10 — Search                           | Done                                    | Tag `phase-2.10-done`; 100,000 messages: well under 0.5 s     |
+| 2.3     | 11 — Branch map                       | Done in code; **needs a Windows check** | Tag `phase-2.11-done`; Windows: checklist section S           |
+| 2.4–2.5 | 12–16                                 | Not started                             |                                                               |
 
 ### Implementation decisions of release 2.1
 
@@ -93,6 +97,28 @@ Changes to the order in `requirements-next.md`, section 4:
   restarting. The daily backup runs a minute after start and then at every full hour if none was made that day.
 - Test builds have one new hook, `__saveFault` (a failing save, FR-008); it is in the release leak check.
 - Phase 4 task 5 (images from the blob store) was done in phase 5, with the session change.
+
+### Implementation decisions of release 2.3
+
+- Library schema version 2 (a backup is made first): `message.author_id` (unread counts in the list) and the table
+  `draft` (discussion, branch, editor JSON, image hashes). The unread count is one query over the read marks (about
+  25 ms for 100,000 messages); the list is sent to the windows at most every 150 ms; the File menu and the jump list
+  are built again only when names or order change.
+- One main window (the oldest open window). A discussion opens in place in the window that asked; without a window
+  (tray, notification, Explorer, jump list) in the main window. Before the switch, the drafts and the discussion are
+  saved; a failed save keeps the discussion on screen with a message. The branch of each discussion and the scroll
+  position (the first visible message) are kept in the window.
+- The list is on the left of a discussion; on the start screen the start screen's own list stays. Below a window
+  width of 1000 px the list lies over the discussion and opens with ☰ (the smallest window is 720 px).
+- Drafts: saved 0.4 s after the last change, and at once before the window closes or shows another discussion (the
+  main process asks the page and waits up to 1.5 s). Images of a draft are written to the blob files and are kept by
+  the cleanup. Sending removes the draft. The close question about drafts is gone (FR-254).
+- Search: FTS5 prefix query of the normalized words (all words required); results: newest first for all
+  discussions, in discussion order inside one. Branch titles are searched in JavaScript. The text around the match
+  and the marks come from the original text. The highlight in the messages uses the CSS Custom Highlight API (no change
+  of the message DOM). The global search opens from the menu, Ctrl+Shift+F, or the 🔍 button above the list.
+- Shortcuts: new group "Поиск" (Ctrl+F, Ctrl+Shift+F, Enter, Shift+Enter); Ctrl+Shift+M opens the branch map.
+- The branch map shows a closed branch on the way to an open one when "только открытые" is on (dimmed).
 
 ## 2. Rules for all phases
 

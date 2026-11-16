@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type { BackgroundFlag, SettingsView } from '@shared/types/ipc'
+import type { BackgroundFlag, SettingsView, SidebarSettings } from '@shared/types/ipc'
 import { clampTextSize, TEXT_SIZE_DEFAULT } from '@shared/shortcuts'
 import { FILE_SIZE_LIMIT_MB } from '@shared/sync'
 import { StateFileWriter } from '../document/atomicWrite'
@@ -30,6 +30,14 @@ const settingsSchema = z
         trayNoticeShown: z.boolean().optional(),
         /** FR-301: text size of all windows, in percent. */
         textSize: z.number().optional(),
+        /** FR-222, FR-223: the discussion list of the windows. */
+        sidebar: z
+            .object({
+                hidden: z.boolean().optional(),
+                width: z.number().optional(),
+                sort: z.enum(['activity', 'name']).optional()
+            })
+            .optional(),
         /** FR-207: the folder for backups that the person chose (null or absent: only the app folder). */
         backupFolder: z.string().min(1).nullable().optional(),
         /** FR-209: the one-time warning about backups in a cloud folder was shown. */
@@ -102,8 +110,21 @@ export class SettingsStore {
             startWithWindows: this.data.startWithWindows ?? false,
             startWithWindowsSettled: this.data.startWithWindowsSettled ?? false,
             textSize: clampTextSize(this.data.textSize ?? TEXT_SIZE_DEFAULT),
-            backupFolder: this.data.backupFolder ?? null
+            backupFolder: this.data.backupFolder ?? null,
+            sidebar: {
+                hidden: this.data.sidebar?.hidden ?? false,
+                width: Math.min(480, Math.max(180, Math.round(this.data.sidebar?.width ?? 260))),
+                sort: this.data.sidebar?.sort ?? 'activity'
+            }
         }
+    }
+
+    /** FR-222, FR-223: the discussion list (hidden, width, sort). */
+    async setSidebar(change: Partial<SidebarSettings>): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        this.data = { ...this.data, sidebar: { ...this.get().sidebar, ...change } }
+        await this.persist()
+        return this.get()
     }
 
     /** FR-207: the folder for backups (null: only %APPDATA%\BranchChat\backups). */

@@ -17,6 +17,8 @@ import { zoomKeyOfEvent } from '@shared/shortcuts'
 import { SharedWizard, type ReinviteTarget, type WizardMode } from './components/SharedWizard'
 import { UpdateDialog } from './components/UpdateDialog'
 import { DiscussionScreen } from './components/chat/DiscussionScreen'
+import { DiscussionSidebar } from './components/DiscussionSidebar'
+import { SearchAllDialog } from './components/search/SearchAllDialog'
 import { useDiscussions, useDocumentView, useSettings, useUpdateState } from './hooks'
 
 export function App(): React.JSX.Element {
@@ -42,6 +44,10 @@ export function App(): React.JSX.Element {
     const [showSettings, setShowSettings] = useState(false)
     const [showShortcuts, setShowShortcuts] = useState(false)
     const [jumpRequest, setJumpRequest] = useState(0)
+    const [findRequest, setFindRequest] = useState(0)
+    const [branchMapRequest, setBranchMapRequest] = useState(0)
+    const [showSearchAll, setShowSearchAll] = useState(false)
+    const [highlightWords, setHighlightWords] = useState<string[]>([])
     const [wizard, setWizard] = useState<WizardMode | null>(null)
     const [reinviteTarget, setReinviteTarget] = useState<ReinviteTarget | null>(null)
     const [readNotice, setReadNotice] = useState<{ retry: () => void } | null>(null)
@@ -86,7 +92,12 @@ export function App(): React.JSX.Element {
                 else if (command === 'shortcuts') setShowShortcuts(true)
                 else if (command === 'jump-to-date') setJumpRequest((n) => n + 1)
                 else if (command === 'restore') setShowRestore(true)
-                else if (command === 'invite-member') {
+                else if (command === 'find') {
+                    if (viewRef.current) setFindRequest((n) => n + 1)
+                } else if (command === 'find-all') setShowSearchAll(true)
+                else if (command === 'branch-map') {
+                    if (viewRef.current) setBranchMapRequest((n) => n + 1)
+                } else if (command === 'invite-member') {
                     if (viewRef.current?.synced) setWizard('invite')
                 } else if (command === 'make-shared') {
                     if (viewRef.current && !viewRef.current.synced) setWizard('convert')
@@ -146,13 +157,21 @@ export function App(): React.JSX.Element {
         return api.onFocusRequest(pull)
     }, [api])
 
+    // FR-224: the branch of each discussion shown in this window, kept while the window shows another discussion
+    const lastThread = useRef(new Map<string, string>())
     const activeThreadId = useMemo(() => {
         if (!view) return null
+        const wanted =
+            nav?.documentId === view.documentId
+                ? nav.threadId
+                : lastThread.current.get(view.documentId)
         const exists =
-            nav?.documentId === view.documentId &&
-            view.discussion.threads.some((t) => t.threadId === nav.threadId)
-        return exists && nav ? nav.threadId : mainThread(view.discussion).threadId
+            wanted !== undefined && view.discussion.threads.some((t) => t.threadId === wanted)
+        return exists ? wanted : mainThread(view.discussion).threadId
     }, [view, nav])
+    useEffect(() => {
+        if (view && activeThreadId) lastThread.current.set(view.documentId, activeThreadId)
+    }, [view, activeThreadId])
 
     const selectThread = useCallback(
         (threadId: string, focus?: string) => {
@@ -160,6 +179,16 @@ export function App(): React.JSX.Element {
             setNav({ documentId: view.documentId, threadId, ...(focus ? { focus } : {}) })
         },
         [view]
+    )
+    const sidebarChange = useCallback(
+        (change: Parameters<typeof api.setSidebar>[0]) =>
+            void api.setSidebar(change).then((r) => {
+                if (r.ok) {
+                    setSettings(r.data)
+                    settingsRef.current = r.data
+                } else report(r)
+            }),
+        [api, report, setSettings]
     )
 
     /**
@@ -277,32 +306,53 @@ export function App(): React.JSX.Element {
                     onOpenDiscussion={(id) => void api.openDiscussion(id).then(report)}
                 />
             ) : (
-                <DiscussionScreen
-                    view={view}
-                    threadId={activeThreadId ?? ''}
-                    {...(nav?.focus && nav.threadId === activeThreadId
-                        ? { focusMessageId: nav.focus }
-                        : {})}
-                    onSelectThread={selectThread}
-                    onSend={send}
-                    onMarkMessageRead={markMessageRead}
-                    onMarkThreadRead={markThreadRead}
-                    onMarkAllRead={markAllRead}
-                    onReply={reply}
-                    onSetStatus={(threadId, status) =>
-                        void api.setBranchStatus(threadId, status).then(report)
-                    }
-                    onSetTitle={(threadId, title) =>
-                        void api.setBranchTitle(threadId, title).then(report)
-                    }
-                    onRetrySave={() => void api.retrySave().then(report)}
-                    onInvite={() => setWizard('invite')}
-                    jumpRequest={jumpRequest}
-                    onReinvite={(target) => {
-                        setReinviteTarget(target)
-                        setWizard('reinvite')
-                    }}
-                />
+                <div className="layout">
+                    {settings && (
+                        <DiscussionSidebar
+                            discussions={discussions ?? []}
+                            currentId={view.documentId}
+                            settings={settings.sidebar}
+                            onChange={sidebarChange}
+                            onOpen={(id) => void api.openDiscussion(id).then(report)}
+                            onSearchAll={() => setShowSearchAll(true)}
+                            onOpenInNewWindow={(id) =>
+                                void api.openDiscussionInNewWindow(id).then(report)
+                            }
+                        />
+                    )}
+                    <DiscussionScreen
+                        // a new screen per discussion; the branch and the scroll position come back (FR-224)
+                        key={view.documentId}
+                        view={view}
+                        threadId={activeThreadId ?? ''}
+                        {...(nav?.focus && nav.threadId === activeThreadId
+                            ? { focusMessageId: nav.focus }
+                            : {})}
+                        onSelectThread={selectThread}
+                        onSend={send}
+                        onMarkMessageRead={markMessageRead}
+                        onMarkThreadRead={markThreadRead}
+                        onMarkAllRead={markAllRead}
+                        onReply={reply}
+                        onSetStatus={(threadId, status) =>
+                            void api.setBranchStatus(threadId, status).then(report)
+                        }
+                        onSetTitle={(threadId, title) =>
+                            void api.setBranchTitle(threadId, title).then(report)
+                        }
+                        onRetrySave={() => void api.retrySave().then(report)}
+                        onInvite={() => setWizard('invite')}
+                        jumpRequest={jumpRequest}
+                        findRequest={findRequest}
+                        branchMapRequest={branchMapRequest}
+                        highlightWords={highlightWords}
+                        onHighlight={setHighlightWords}
+                        onReinvite={(target) => {
+                            setReinviteTarget(target)
+                            setWizard('reinvite')
+                        }}
+                    />
+                </div>
             )}
             {update?.dialogOpen && <UpdateDialog view={update} />}
             {showShortcuts && <ShortcutsDialog onClose={() => setShowShortcuts(false)} />}
@@ -339,6 +389,18 @@ export function App(): React.JSX.Element {
             {pending && <NamePrompt onSubmit={submitName} onCancel={() => setPending(null)} />}
             {askTitle && <TitlePrompt onSubmit={createNew} onCancel={() => setAskTitle(false)} />}
             {showRestore && <RestoreDialog onClose={() => setShowRestore(false)} />}
+            {showSearchAll && (
+                <SearchAllDialog
+                    onClose={() => setShowSearchAll(false)}
+                    onShow={(hit, words) => {
+                        setShowSearchAll(false)
+                        setHighlightWords(words)
+                        void api
+                            .openAt(hit.discussionId, hit.threadId, hit.messageId ?? '')
+                            .then(report)
+                    }}
+                />
+            )}
             {migration && (
                 <MigrationDialog candidates={migration} onClose={() => setMigration(null)} />
             )}

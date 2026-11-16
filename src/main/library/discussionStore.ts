@@ -27,7 +27,9 @@ export class DiscussionStore {
 
     constructor(
         private readonly repo: LibraryRepository,
-        readonly id: string
+        readonly id: string,
+        /** After each save (the list of discussions shows the last message and the unread count). */
+        private readonly onSaved: () => void = () => undefined
     ) {}
 
     private serial<T>(fn: () => Promise<T> | T): Promise<T> {
@@ -74,6 +76,7 @@ export class DiscussionStore {
             const missing = new Set(before.missingAssetIds)
             for (const a of newAssets) missing.delete(a.sha256)
             this.saved = { contents: after, revision, missingAssetIds: [...missing] }
+            this.onSaved()
         })
     }
 
@@ -109,6 +112,7 @@ export class DiscussionStore {
                 assets
             )
             this.saved = { contents: r.contents, revision, missingAssetIds: before.missingAssetIds }
+            this.onSaved()
         })
     }
 

@@ -216,6 +216,75 @@ export class LibraryRepository {
         })
     }
 
+    /** FR-221: unread messages per discussion for this participant (not own messages, not in the read marks). */
+    unreadCounts(localId: string): Map<string, number> {
+        const out = new Map<string, number>()
+        for (const r of this.db
+            .prepare(
+                `SELECT m.discussion_id AS id, count(*) AS n FROM message m
+                  WHERE m.author_id != ?1
+                    AND NOT EXISTS (SELECT 1 FROM mark k
+                                     WHERE k.discussion_id = m.discussion_id AND k.kind = 0
+                                       AND k.participant_id = ?1 AND k.message_id = m.message_id)
+                  GROUP BY m.discussion_id`
+            )
+            .all(localId))
+            out.set(String(r.id), Number(r.n))
+        return out
+    }
+
+    // ---- drafts (FR-251 to FR-254): local only, never in an export ------------------------------------------------
+
+    drafts(
+        id: string
+    ): Array<{ threadId: string; content: string; images: string[]; updatedAt: string }> {
+        return this.db
+            .prepare(
+                'SELECT thread_id, content, images, updated_at FROM draft WHERE discussion_id = ?'
+            )
+            .all(id)
+            .map((r) => ({
+                threadId: String(r.thread_id),
+                content: String(r.content),
+                images: JSON.parse(String(r.images)) as string[],
+                updatedAt: String(r.updated_at)
+            }))
+    }
+
+    /** Stores or (with `content` null) removes the draft of a branch. */
+    setDraft(id: string, threadId: string, content: string | null, images: string[] = []): void {
+        if (content === null)
+            this.db
+                .prepare('DELETE FROM draft WHERE discussion_id = ? AND thread_id = ?')
+                .run(id, threadId)
+        else
+            this.db
+                .prepare(
+                    `INSERT INTO draft (discussion_id, thread_id, content, images, updated_at) VALUES (?, ?, ?, ?, ?)
+                     ON CONFLICT (discussion_id, thread_id) DO UPDATE
+                        SET content = excluded.content, images = excluded.images, updated_at = excluded.updated_at`
+                )
+                .run(id, threadId, content, JSON.stringify(images), new Date().toISOString())
+    }
+
+    /** Discussions that have at least one draft (the mark in the list, FR-253). */
+    discussionsWithDrafts(): Set<string> {
+        return new Set(
+            this.db
+                .prepare('SELECT DISTINCT discussion_id FROM draft')
+                .all()
+                .map((r) => String(r.discussion_id))
+        )
+    }
+
+    /** Image hashes that drafts use (kept by the cleanup of unused image files). */
+    draftBlobs(): Set<string> {
+        const out = new Set<string>()
+        for (const r of this.db.prepare('SELECT images FROM draft').all())
+            for (const h of JSON.parse(String(r.images)) as string[]) out.add(h)
+        return out
+    }
+
     /** A value of the library itself (for example "the files of release 1.x were offered for migration"). */
     getMeta(key: string): string | null {
         const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key)
@@ -260,6 +329,7 @@ export class LibraryRepository {
                 .all()
                 .map((r) => String(r.sha256))
         )
+        for (const h of this.draftBlobs()) used.add(h)
         let removed = 0
         for (const { sha256, modifiedMs } of await this.blobs.list()) {
             if (used.has(sha256) || now - modifiedMs < minAgeMs) continue
@@ -458,14 +528,23 @@ export class LibraryRepository {
             }
             const row = this.db
                 .prepare(
-                    `INSERT INTO message (discussion_id, message_id, thread_id, ord, created_at, data)
-                     VALUES (?, ?, ?, ?, ?, ?)
+                    `INSERT INTO message (discussion_id, message_id, thread_id, ord, created_at, data, author_id)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)
                      ON CONFLICT (discussion_id, message_id) DO UPDATE
                         SET thread_id = excluded.thread_id, ord = excluded.ord, created_at = excluded.created_at,
+                            author_id = excluded.author_id,
                             data = excluded.data
                      RETURNING rowid`
                 )
-                .get(id, m.messageId, m.threadId, index, m.createdAt, JSON.stringify(m))!
+                .get(
+                    id,
+                    m.messageId,
+                    m.threadId,
+                    index,
+                    m.createdAt,
+                    JSON.stringify(m),
+                    m.authorId
+                )!
             this.db.prepare('DELETE FROM search_index WHERE rowid = ?').run(Number(row.rowid))
             this.db
                 .prepare('INSERT INTO search_index (rowid, text) VALUES (?, ?)')

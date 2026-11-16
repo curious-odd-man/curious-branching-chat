@@ -120,7 +120,9 @@ describe('recent discussions in the windows, the menu and the jump list', () => 
             title: 'Обсуждение d',
             lastMessageAt: null,
             messageCount: 0,
-            synced: true
+            synced: true,
+            unreadCount: 0,
+            hasDraft: false
         })
     })
 

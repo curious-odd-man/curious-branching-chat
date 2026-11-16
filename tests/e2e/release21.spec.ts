@@ -152,7 +152,7 @@ test('phase 2: F1 shows every shortcut, grouped (FR-311)', async () => {
     await clickMenu(t, 'Сочетания клавиш')
     const dialog = win.getByTestId('shortcuts-dialog')
     await expect(dialog).toBeVisible()
-    await expect(dialog.getByTestId('shortcuts-group')).toHaveCount(4)
+    await expect(dialog.getByTestId('shortcuts-group')).toHaveCount(5) // window, messages, search (release 2.3), editor, dialogs
     await expect(dialog.locator('[data-id="send"]')).toContainText('Ctrl+Enter')
     await expect(dialog.locator('[data-id="bold"]')).toContainText('Ctrl+B')
     await expect(dialog.locator('[data-id="zoomIn"]')).toContainText('Ctrl++')

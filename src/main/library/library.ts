@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { basename, join } from 'node:path'
 import type { DocumentContents } from '@shared/validation'
+import type { DiscussionListItem } from '@shared/types/ipc'
+import { describeDiscussions } from '../application/recentView'
 import { readDocument, readImageAsset, writeDocument } from '../document'
 import { BlobStore } from './blobs'
 import { Database } from './db'
@@ -78,7 +80,8 @@ export class LibraryService {
 
     store(id: string): DiscussionStore {
         let s = this.stores.get(id)
-        if (!s) this.stores.set(id, (s = new DiscussionStore(this.lib.repo, id)))
+        if (!s)
+            this.stores.set(id, (s = new DiscussionStore(this.lib.repo, id, () => this.changed())))
         return s
     }
 
@@ -88,6 +91,15 @@ export class LibraryService {
 
     list(): DiscussionSummary[] {
         return this.lib.repo.list()
+    }
+
+    /** The list for the windows and menus: with unread counts for this participant and draft marks. */
+    listItems(localId: string): DiscussionListItem[] {
+        return describeDiscussions(
+            this.lib.repo.list(),
+            this.lib.repo.unreadCounts(localId),
+            this.lib.repo.discussionsWithDrafts()
+        )
     }
 
     summary(id: string): DiscussionSummary | null {
@@ -215,6 +227,69 @@ export class LibraryService {
         } finally {
             await fs.rm(file, { force: true }).catch(() => undefined)
         }
+    }
+
+    /**
+     * FR-251: stores the draft of a branch. `images` are the images in the draft; bytes that are not in the library
+     * yet (`data`) are stored first, so the draft can be sent after a restart. Null removes the draft.
+     */
+    saveDraft(
+        id: string,
+        threadId: string,
+        content: string | null,
+        images: BlobRef[] = []
+    ): Promise<void> {
+        // in order: a late save of older text must not come after the removal of the draft
+        const next = this.draftChain.then(() => this.writeDraft(id, threadId, content, images))
+        this.draftChain = next.catch(() => undefined)
+        return next
+    }
+
+    private draftChain: Promise<unknown> = Promise.resolve()
+
+    private async writeDraft(
+        id: string,
+        threadId: string,
+        content: string | null,
+        images: BlobRef[]
+    ): Promise<void> {
+        const had = this.lib.repo.discussionsWithDrafts().has(id)
+        if (content !== null)
+            for (const image of images) {
+                if (image.data) await this.lib.blobs.put(image.sha256, image.data)
+                this.lib.repo.registerBlob(image)
+            }
+        this.lib.repo.setDraft(
+            id,
+            threadId,
+            content,
+            images.map((i) => i.sha256)
+        )
+        if (had !== this.lib.repo.discussionsWithDrafts().has(id)) this.changed()
+    }
+
+    /** The drafts of a discussion, with the bytes of their images (null when missing). */
+    async drafts(id: string): Promise<
+        Array<{
+            threadId: string
+            content: unknown
+            images: Array<{ sha256: string; data: Buffer | null }>
+        }>
+    > {
+        const out = []
+        for (const d of this.lib.repo.drafts(id)) {
+            const images = []
+            for (const sha256 of d.images)
+                images.push({ sha256, data: await this.lib.repo.readBlob(sha256) })
+            let content: unknown
+            try {
+                content = JSON.parse(d.content)
+            } catch {
+                continue
+            }
+            out.push({ threadId: d.threadId, content, images })
+        }
+        return out
     }
 
     close(): void {

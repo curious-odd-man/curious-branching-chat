@@ -7,7 +7,16 @@ export const openPathSchema = z.object({ path: z.string().min(1) }).strict()
 export const appendMessageSchema = z
     .object({ threadId: z.string().min(1), content: richDocSchema })
     .strict()
-export const draftSchema = z.object({ hasDraft: z.boolean() }).strict()
+/** FR-251: an editor document (TipTap JSON, checked again before it is sent as a message); null removes the draft. */
+export const draftSaveSchema = z
+    .object({
+        threadId: z.string().min(1).max(200),
+        content: z
+            .unknown()
+            .refine((v) => v === null || JSON.stringify(v).length <= 5_000_000, 'draft too large')
+    })
+    .strict()
+export const draftsFlushedSchema = z.object({ token: z.string().min(1).max(100) }).strict()
 export const noPayloadSchema = z.undefined()
 export const openLinkSchema = z.object({ url: z.string().min(1) }).strict()
 export const createBranchSchema = z
@@ -87,6 +96,13 @@ export const joinImportSchema = z
     .strict()
 export const setFileSizeLimitSchema = z.object({ mb: z.number().int().min(5).max(1000) }).strict()
 export const zoomChangeSchema = z.object({ direction: z.enum(['in', 'out', 'reset']) }).strict()
+export const setSidebarSchema = z
+    .object({
+        hidden: z.boolean().optional(),
+        width: z.number().int().min(180).max(480).optional(),
+        sort: z.enum(['activity', 'name']).optional()
+    })
+    .strict()
 export const setTextSizeSchema = z.object({ percent: z.number().int().min(80).max(200) }).strict()
 export const setBackgroundFlagSchema = z
     .object({
@@ -97,6 +113,14 @@ export const setBackgroundFlagSchema = z
 export const backupRestoreSchema = z.object({ path: z.string().min(1).max(4096) }).strict()
 export const migrationRunSchema = z
     .object({ paths: z.array(z.string().min(1).max(4096)).max(1000) })
+    .strict()
+export const searchSchema = z.object({ query: z.string().max(500) }).strict()
+export const openAtSchema = z
+    .object({
+        id: z.string().min(1).max(200),
+        threadId: z.string().min(1).max(200),
+        messageId: z.string().max(200)
+    })
     .strict()
 export const openDiscussionSchema = z.object({ id: z.string().min(1).max(200) }).strict()
 export const newDocumentSchema = z.object({ title: z.string().min(1).max(500) }).strict()

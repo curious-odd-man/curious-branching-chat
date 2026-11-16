@@ -60,7 +60,15 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
             'onUpdateChanged',
             'onDiscussionsChanged',
             'getDiscussions',
+            'saveDraft',
+            'getDrafts',
+            'onDraftsFlushRequest',
+            'draftsFlushed',
             'openDiscussion',
+            'openDiscussionInNewWindow',
+            'searchDiscussion',
+            'searchAll',
+            'openAt',
             'exportDiscussion',
             'getMigration',
             'getBackups',
@@ -71,6 +79,7 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
             'runMigration',
             'skipMigration',
             'setRecentFilesLimit',
+            'setSidebar',
             'setOpenLastFileOnStartup',
             'setFileSizeLimit',
             'setBackgroundFlag',
@@ -101,7 +110,6 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
             'setBranchStatus',
             'setBranchTitle',
             'setDisplayName',
-            'setDraftState',
             'stageImage'
         ].sort()
     )

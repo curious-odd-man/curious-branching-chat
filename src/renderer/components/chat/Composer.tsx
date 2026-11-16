@@ -44,7 +44,6 @@ export function Composer({ sessionId, threadId, blocked, onSend }: Props): React
     const [hasDraft, setHasDraft] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [linkDraft, setLinkDraft] = useState<LinkDraft | null>(null)
-    const [otherDraft, setOtherDraft] = useState(false)
     const [uploading, setUploading] = useState(0)
     // Unsent drafts of the threads that are not on screen, so moving between branches never loses what was typed.
     const drafts = useRef(new Map<string, JSONContent>())
@@ -59,6 +58,26 @@ export function Composer({ sessionId, threadId, blocked, onSend }: Props): React
     sessionRef.current = sessionId
     const uploadingRef = useRef(0)
     uploadingRef.current = uploading
+    // FR-251: drafts are saved in the library a moment after the last change (and at once when asked)
+    const pendingSave = useRef(new Map<string, JSONContent | null>())
+    const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const flushDrafts = useRef<() => Promise<void>>(async () => undefined)
+    flushDrafts.current = async (): Promise<void> => {
+        if (saveTimer.current) clearTimeout(saveTimer.current)
+        saveTimer.current = null
+        const waiting = [...pendingSave.current]
+        pendingSave.current.clear()
+        await Promise.all(
+            waiting.map(([thread, content]) => window.branchchat.saveDraft(thread, content))
+        )
+    }
+    const scheduleSave = (thread: string, content: JSONContent): void => {
+        pendingSave.current.set(thread, jsonHasContent(content) ? content : null)
+        if (saveTimer.current) clearTimeout(saveTimer.current)
+        saveTimer.current = setTimeout(() => void flushDrafts.current(), 400)
+    }
+    const scheduleRef = useRef(scheduleSave)
+    scheduleRef.current = scheduleSave
 
     const editor = useEditor({
         extensions: createExtensions({
@@ -99,8 +118,46 @@ export function Composer({ sessionId, threadId, blocked, onSend }: Props): React
             }
         },
         autofocus: 'end',
-        onUpdate: ({ editor: e }) => setHasDraft(jsonHasContent(e.getJSON()))
+        onUpdate: ({ editor: e }) => {
+            const json = e.getJSON()
+            setHasDraft(jsonHasContent(json))
+            scheduleRef.current(activeThread.current, json)
+        }
     })
+
+    // FR-251: the drafts of this discussion come back from the library (also after a restart)
+    useEffect(() => {
+        if (!editor) return
+        let cancelled = false
+        void window.branchchat.getDrafts().then((r) => {
+            if (cancelled || !r.ok) return
+            for (const [thread, content] of Object.entries(r.data)) {
+                if (thread === activeThread.current) {
+                    if (editor.isEmpty) {
+                        editor.commands.setContent(content as JSONContent, { emitUpdate: false })
+                        setHasDraft(jsonHasContent(editor.getJSON()))
+                        editor.commands.focus('end')
+                    }
+                } else if (!drafts.current.has(thread))
+                    drafts.current.set(thread, content as JSONContent)
+            }
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [editor])
+
+    // The window closes or shows another discussion: the main process asks for the waiting drafts first.
+    useEffect(
+        () =>
+            window.branchchat.onDraftsFlushRequest((token) => {
+                void flushDrafts
+                    .current()
+                    .finally(() => void window.branchchat.draftsFlushed(token))
+            }),
+        []
+    )
+    useEffect(() => () => void flushDrafts.current(), [])
 
     // Switching threads: park the current draft, bring back the draft of the new thread.
     useEffect(() => {
@@ -110,16 +167,8 @@ export function Composer({ sessionId, threadId, blocked, onSend }: Props): React
         editor.commands.setContent(drafts.current.get(threadId) ?? '', { emitUpdate: false })
         drafts.current.delete(threadId)
         setHasDraft(jsonHasContent(editor.getJSON()))
-        setOtherDraft([...drafts.current.values()].some(jsonHasContent))
         if (!blocked) editor.commands.focus('end')
     }, [threadId, editor, blocked])
-
-    // The main process needs to know about any unsent draft to warn when the window is closed (FR-008).
-    const anyDraft = hasDraft || otherDraft
-    useEffect(() => {
-        void window.branchchat.setDraftState(anyDraft)
-        return () => void window.branchchat.setDraftState(false)
-    }, [anyDraft])
 
     sendRef.current = (): void => {
         if (!editor || uploadingRef.current > 0) return

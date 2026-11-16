@@ -333,9 +333,15 @@ if (!gotLock) {
             }, toNextHour).unref()
         }
         // The File > recent menu, the taskbar jump list and every start screen follow the library.
+        let menuSignature = ''
         const refreshRecent = (): void => {
-            const list = describeDiscussions(library.list())
+            const list = library.listItems(settings.get().participantId)
             const limit = settings.get().recentFilesLimit
+            ctrl.broadcast(IPC.libraryChanged, list)
+            // the menu and the jump list show names and order only: rebuilt when those change (not on each message)
+            const signature = JSON.stringify([limit, list.slice(0, 20).map((d) => [d.id, d.title])])
+            if (signature === menuSignature) return
+            menuSignature = signature
             Menu.setApplicationMenu(
                 buildMenu(
                     ctrl,
@@ -372,7 +378,6 @@ if (!gotLock) {
                 )
             )
             applyJumpList(list, limit)
-            ctrl.broadcast(IPC.libraryChanged, list)
         }
         let refreshTimer: NodeJS.Timeout | null = null
         library.onChange(() => {
@@ -381,7 +386,7 @@ if (!gotLock) {
             refreshTimer = setTimeout(() => {
                 refreshTimer = null
                 refreshRecent()
-            }, 50)
+            }, 150)
         })
         refreshRecent()
         // Started without a file: reopen the most recent discussion if the person wants that.

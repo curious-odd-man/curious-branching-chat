@@ -16,7 +16,9 @@ import type {
     MenuCommand,
     OpenOutcome,
     DiscussionListItem,
+    SidebarSettings,
     MigrationCandidate,
+    SearchHit,
     BackupResult,
     BackupState,
     MigrationResult,
@@ -64,14 +66,28 @@ export interface BranchChatApi {
     openDocumentDialog(): Promise<IpcResult<OpenOutcome>>
     /** A dropped `.branchchat` file: import and open (FR-203). */
     openPath(path: string): Promise<IpcResult<OpenOutcome>>
-    /** Opens a discussion of the library. */
+    /** Opens a discussion of the library in this window (FR-221). */
     openDiscussion(id: string): Promise<IpcResult<OpenOutcome>>
+    /** FR-211: search in the shown discussion. */
+    searchDiscussion(query: string): Promise<IpcResult<SearchHit[]>>
+    /** FR-215: search in all discussions. */
+    searchAll(query: string): Promise<IpcResult<SearchHit[]>>
+    /** A search result: the discussion, the branch, and the message (empty: only the branch). */
+    openAt(id: string, threadId: string, messageId: string): Promise<IpcResult<OpenOutcome>>
+    /** "Открыть в новом окне" (FR-225). */
+    openDiscussionInNewWindow(id: string): Promise<IpcResult<OpenOutcome>>
     /** "Экспортировать…" (FR-204); false if the person cancelled. */
     exportDiscussion(): Promise<IpcResult<boolean>>
     getDocumentState(): Promise<IpcResult<DocumentView | null>>
     appendMessage(threadId: string, content: RichDoc): Promise<IpcResult<null>>
     retrySave(): Promise<IpcResult<null>>
-    setDraftState(hasDraft: boolean): Promise<IpcResult<null>>
+    /** FR-251: the draft of a branch (editor JSON), or null to remove it. */
+    saveDraft(threadId: string, content: unknown): Promise<IpcResult<null>>
+    /** FR-251: the drafts of the shown discussion, by branch. */
+    getDrafts(): Promise<IpcResult<Record<string, unknown>>>
+    /** The main process asks to save waiting drafts now; answer with `draftsFlushed(token)`. */
+    onDraftsFlushRequest(callback: (token: string) => void): () => void
+    draftsFlushed(token: string): Promise<IpcResult<null>>
     /** Adds image bytes (pasted, dropped) to the draft. Nothing is saved until a message containing it is sent. */
     stageImage(data: Uint8Array): Promise<IpcResult<StagedImage>>
     /** Lets the person choose an image file; resolves with null if they cancel. */
@@ -91,6 +107,8 @@ export interface BranchChatApi {
     setBackgroundFlag(flag: BackgroundFlag, enabled: boolean): Promise<IpcResult<SettingsView>>
     /** FR-301: text size of all windows, in percent. */
     setTextSize(percent: number): Promise<IpcResult<SettingsView>>
+    /** FR-222, FR-223: the discussion list (hidden, width, sort). */
+    setSidebar(change: Partial<SidebarSettings>): Promise<IpcResult<SettingsView>>
     /** FR-301: one step of the text size (keys and Ctrl+mouse wheel in the page). */
     zoom(direction: 'in' | 'out' | 'reset'): Promise<IpcResult<null>>
     /** The message this window must show (a click on a notification), once. */

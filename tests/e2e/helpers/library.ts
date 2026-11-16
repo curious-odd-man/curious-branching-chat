@@ -68,6 +68,16 @@ export function libraryList(
     }
 }
 
+/** The number of drafts in the library of a profile (FR-251). */
+export function draftRows(userData: string): number {
+    const db = open(userData)
+    try {
+        return Number((db.prepare('SELECT count(*) AS n FROM draft').get() as Row).n)
+    } finally {
+        db.close()
+    }
+}
+
 /** Profiles of the apps that the tests started (newest last); `savedFile` looks there for imported files. */
 export const knownProfiles: string[] = []
 

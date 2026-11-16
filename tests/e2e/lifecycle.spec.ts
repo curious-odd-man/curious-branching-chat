@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { readDiscussionFile } from './helpers/readFile'
-import { exportOpen, libraryList, newDiscussion, readLibrary } from './helpers/library'
+import { draftRows, exportOpen, libraryList, newDiscussion, readLibrary } from './helpers/library'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 
 const apps: TestApp[] = []
@@ -116,28 +116,35 @@ test('cancelling the name of a new discussion creates nothing; the start screen 
     await expect(again.win.locator('h1')).toHaveText('Первое')
 })
 
-test('opens two discussions in two windows; the same discussion twice focuses the existing window', async () => {
+test('a new discussion replaces the shown one in the window; "Открыть в новом окне" opens a second window; an open discussion is focused (FR-225)', async () => {
     const dir = await workDir()
     const { t, win } = await start()
     await createDiscussion(win, 'a')
     await send(win, 'в первом')
     await expect(win.getByTestId('status')).toHaveText('Сохранено')
 
-    // a second discussion opens in a new window because the first window already has one
+    // a second discussion opens in the same window (one main window)
     await win.evaluate(() => window.branchchat.newDocument('b'))
-    const [, second] = await t.windows(2)
-    await expect(second!.locator('h1')).toHaveText('b')
+    await expect(win.locator('h1')).toHaveText('b')
+    expect(t.app.windows()).toHaveLength(1)
 
-    // opening a again does not create a third window
+    // a in a new window
     const idA = readLibrary(t.userData, 'a').id
-    const result = await second!.evaluate((id) => window.branchchat.openDiscussion(id), idA)
+    const opened = await win.evaluate((id) => window.branchchat.openDiscussionInNewWindow(id), idA)
+    expect(opened).toEqual({ ok: true, data: { status: 'opened' } })
+    const [, second] = await t.windows(2)
+    await expect(second!.locator('h1')).toHaveText('a')
+
+    // opening a again from the first window does not open it twice: its window gets the focus
+    const result = await win.evaluate((id) => window.branchchat.openDiscussion(id), idA)
     expect(result).toEqual({ ok: true, data: { status: 'focused' } })
-    // importing a file of the same discussion: merged into it (nothing new), the window gets the focus (FR-204)
+    await expect(win.locator('h1')).toHaveText('b')
+    // importing a file of the same discussion: merged into it (nothing new), its window gets the focus (FR-204)
     const file = join(dir, 'a.branchchat')
-    await exportOpen(t, win, file)
-    const again = await second!.evaluate((p) => window.branchchat.openPath(p), file)
+    await exportOpen(t, second!, file)
+    const again = await win.evaluate((p) => window.branchchat.openPath(p), file)
     expect(again).toEqual({ ok: true, data: { status: 'focused' } })
-    await expect(win.getByTestId('notice')).toContainText('нет ничего нового')
+    await expect(second!.getByTestId('notice')).toContainText('нет ничего нового')
     expect(t.app.windows()).toHaveLength(2)
     expect(libraryList(t.userData)).toHaveLength(2)
 })
@@ -276,33 +283,24 @@ test('a failed save keeps the message, shows an error, and recovers on retry (FR
     expect(readLibrary(t.userData).discussion.threads[0]!.messages).toHaveLength(1)
 })
 
-test('closing warns only for an unsent draft or a failed save (FR-008)', async () => {
+test('closing with an unsent draft asks nothing; the draft is there after the restart (FR-251, FR-254)', async () => {
     const { t, win } = await start()
     await createDiscussion(win)
-
-    // 1. unsent draft: the dialog appears; "cancel" (button 1) keeps the window
     await win.getByTestId('composer').fill('черновик')
-    expect((await t.dialogs()).filter((d) => d.kind === 'box')).toHaveLength(0) // typing alone shows nothing
-    await t.answer({ box: [1] })
-    await t.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
-    await expect
-        .poll(async () => (await t.dialogs()).filter((d) => d.kind === 'box').length)
-        .toBe(1)
-    const warning = (await t.dialogs()).find((d) => d.kind === 'box')!
-    expect(warning.type).toBe('warning')
-    expect(warning.detail).toContain('неотправленное сообщение')
-    expect(t.app.windows()).toHaveLength(1)
-    await expect(win.getByTestId('composer')).toHaveText('черновик') // nothing was lost
-
-    // 2. send it; now nothing is unsaved, so closing shows no further dialog and the app exits
-    await win.getByTestId('send').click()
-    await expect(win.getByTestId('status')).toHaveText('Сохранено')
     const exited = new Promise<void>((resolve) => t.app.process().once('exit', () => resolve()))
     await t.app
         .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
         .catch(() => undefined) // the app quits while this call is answered
     await exited
-    expect(readLibrary(t.userData).discussion.threads[0]!.messages).toHaveLength(1)
+    expect((await t.dialogs().catch(() => [])).filter((d) => d.kind === 'box')).toHaveLength(0)
+
+    const again = await start({ userData: t.userData })
+    await expect(again.win.getByTestId('composer')).toHaveText('черновик')
+    await again.win.getByTestId('send').click()
+    await expect(again.win.getByTestId('message')).toHaveCount(1)
+    await expect(again.win.getByTestId('composer')).toHaveText('')
+    await expect(again.win.getByTestId('status')).toHaveText('Сохранено')
+    await expect.poll(() => draftRows(again.t.userData)).toBe(0) // the sent text is no draft any more
 })
 
 test('closing right after sending still saves the message', async () => {

@@ -338,8 +338,15 @@ test('every window has the secure web preferences, including windows opened late
         await writeDiscussionFile(f, [
             { id: 'main', messages: [{ id: 'm1', author: 'boris', content: simple('x') }] }
         ])
-    const { app, win } = await start([a])
-    await win.evaluate((path) => window.branchchat.openPath(path), b)
+    const { app, win } = await start([a, b])
+    // b replaced a in the main window (FR-225); a goes into a second window
+    await expect(win.locator('h1')).toHaveText('b')
+    const idA = await win.evaluate(async () => {
+        const r = await window.branchchat.getDiscussions()
+        return r.ok ? r.data.find((d) => d.title === 'a')!.id : ''
+    })
+    await win.evaluate((id) => window.branchchat.openDiscussionInNewWindow(id), idA)
+    await expect.poll(() => app.app.windows().length).toBe(2)
     const prefs = await app.app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().map((w) => {
             const p = (

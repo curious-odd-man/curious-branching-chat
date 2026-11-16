@@ -10,11 +10,16 @@ export const IPC = {
     documentOpenDialog: 'document:open-dialog',
     documentOpenPath: 'document:open-path',
     documentOpenId: 'document:open-id',
+    documentOpenIdNewWindow: 'document:open-id-new-window',
     documentExport: 'document:export',
     documentGetState: 'document:get-state',
     documentAppendMessage: 'document:append-message',
     documentRetrySave: 'document:retry-save',
-    draftSet: 'draft:set',
+    draftSave: 'draft:save',
+    draftsGet: 'drafts:get',
+    draftsFlushed: 'drafts:flushed',
+    /** main -> renderer: save the waiting drafts now (the window closes or shows another discussion). */
+    draftsFlushRequest: 'drafts:flush-request',
     linkOpen: 'link:open',
     readMarkMessage: 'read:mark-message',
     readMarkThread: 'read:mark-thread',
@@ -25,10 +30,14 @@ export const IPC = {
     settingsSetOpenLast: 'settings:set-open-last',
     settingsSetFileSizeLimit: 'settings:set-file-size-limit',
     settingsSetBackgroundFlag: 'settings:set-background-flag',
+    settingsSetSidebar: 'settings:set-sidebar',
     settingsSetTextSize: 'settings:set-text-size',
     zoomChange: 'zoom:change',
     focusTake: 'focus:take',
     libraryList: 'library:list',
+    searchDiscussion: 'search:discussion',
+    searchAll: 'search:all',
+    documentOpenAt: 'document:open-at',
     backupGet: 'backup:get',
     backupNow: 'backup:now',
     backupPickFolder: 'backup:pick-folder',
@@ -109,8 +118,17 @@ export interface SettingsView {
     startWithWindowsSettled: boolean
     /** FR-301: text size of all windows, in percent (80–200). */
     textSize: number
+    /** FR-222, FR-223: the discussion list of the windows. */
+    sidebar: SidebarSettings
     /** FR-207: the folder for backups that the person chose, or null. */
     backupFolder: string | null
+}
+
+export interface SidebarSettings {
+    hidden: boolean
+    /** Width in pixels (180 to 480). */
+    width: number
+    sort: 'activity' | 'name'
 }
 
 /** FR-207: the backup section of Settings. */
@@ -129,6 +147,24 @@ export interface BackupResult {
 
 /** On/off settings of the background section (release 1.4). */
 export type BackgroundFlag = 'notifyNewMessages' | 'notifyShowText' | 'startWithWindows'
+
+/** FR-211 to FR-215: one search result (a message, or a branch whose title matches). */
+export interface SearchHit {
+    kind: 'message' | 'branch'
+    discussionId: string
+    discussionTitle: string
+    threadId: string
+    /** The branch name; empty for the main thread. */
+    threadLabel: string
+    /** Null for a branch title. */
+    messageId: string | null
+    authorName: string
+    createdAt: string
+    /** The text around the match. */
+    snippet: string
+    /** The matches in `snippet`, as [start, end). */
+    marks: Array<[number, number]>
+}
 
 /** FR-207: one backup of the library. */
 export interface BackupView {
@@ -172,6 +208,10 @@ export interface DiscussionListItem {
     lastMessageAt: string | null
     messageCount: number
     synced: boolean
+    /** Messages of others that this person has not read (FR-221). */
+    unreadCount: number
+    /** An unsent draft in some branch (FR-253). */
+    hasDraft: boolean
 }
 
 /**
@@ -328,6 +368,9 @@ export type MenuCommand =
     | 'shortcuts'
     | 'jump-to-date'
     | 'restore'
+    | 'find'
+    | 'find-all'
+    | 'branch-map'
 
 /** What the person is told about an available update (FR-098). Notes are plain text. */
 export interface UpdateInfoView {

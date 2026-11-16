@@ -201,7 +201,7 @@ test('a release 1.5 profile: the files are offered once, imported with images an
         conversationId
     )
     expect(result.ok).toBe(true)
-    const [, plans] = await again.t.windows(2)
+    const plans = again.win // FR-225: in place, in the same window
     await expect(message(plans!, 'Пока ты обновлялась')).toBeVisible({ timeout: 15_000 })
     await send(plans!, 'Я снова здесь, уже в 2.2')
     await expect(message(b.win, 'Я снова здесь, уже в 2.2')).toBeVisible({ timeout: 15_000 })

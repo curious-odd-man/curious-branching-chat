@@ -233,7 +233,7 @@ test('pictures can be dropped into the draft and chosen from a file (FR-065, FR-
     expect(await assetEntries(file)).toHaveLength(2)
 })
 
-test('a message with only a picture can be sent; an unsent picture counts as a draft (FR-008)', async () => {
+test('a message with only a picture can be sent; an unsent picture stays in the draft after a restart (FR-251)', async () => {
     const dir = await workDir()
     const file = join(dir, 'только-картинка.branchchat')
     const { t, win } = await newDiscussion(file)
@@ -242,19 +242,17 @@ test('a message with only a picture can be sent; an unsent picture counts as a d
     await expect(draftImages(win)).toHaveCount(1)
     await expect(win.getByTestId('send')).toBeEnabled()
 
-    // closing with only a picture in the draft warns; "cancel" keeps the window
-    await t.answer({ box: [1] })
-    await t.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
-    await expect
-        .poll(async () => (await t.dialogs()).filter((d) => d.kind === 'box').length)
-        .toBe(1)
-    await expect(draftImages(win)).toHaveCount(1)
-
-    await send(win)
-    await expect(messageImages(win)).toHaveCount(1)
-    await expect(composer(win).locator('img')).toHaveCount(0) // the draft is empty again
-    await expect(win.getByTestId('status')).toHaveText('Сохранено')
-    await expect(win.getByTestId('status')).toHaveText('Сохранено') // the file is written a moment after the screen changes
+    // closing asks nothing; after the restart the picture is still in the draft and can be sent
+    await t.close()
+    const again = await reopen(t.userData)
+    const win2 = again.win
+    await expect(draftImages(win2)).toHaveCount(1)
+    await expect.poll(() => naturalWidth(draftImages(win2))).toBe(40)
+    void win
+    await send(win2)
+    await expect(messageImages(win2)).toHaveCount(1)
+    await expect(composer(win2).locator('img')).toHaveCount(0) // the draft is empty again
+    await expect(win2.getByTestId('status')).toHaveText('Сохранено')
     const thread = await savedThread(file)
     expect(thread.messages).toHaveLength(1)
     expect(plainTextOf(thread.messages[0]!.content)).toBe('') // no text at all

@@ -119,6 +119,21 @@ export function buildMenu(
                     label: ru.menu.jumpToDate,
                     accelerator: acceleratorOf('jumpToDate'),
                     click: () => controller.sendMenuCommand('jump-to-date')
+                },
+                {
+                    label: ru.menu.find,
+                    accelerator: acceleratorOf('find'),
+                    click: () => controller.sendMenuCommand('find')
+                },
+                {
+                    label: ru.menu.findAll,
+                    accelerator: acceleratorOf('findAll'),
+                    click: () => controller.sendMenuCommand('find-all')
+                },
+                {
+                    label: ru.menu.branchMap,
+                    accelerator: acceleratorOf('branchMap'),
+                    click: () => controller.sendMenuCommand('branch-map')
                 }
             ]
         },

@@ -1,4 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { matchRanges } from '@shared/domain'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { isUnreadIn, messageMarkOf, type MarkSync } from '@shared/domain'
 import type { Message, Participant, Thread } from '@shared/types'
@@ -43,7 +44,43 @@ interface Props {
     focusMessageId?: string
     /** Delivery data of a synchronized discussion (D-41, FR-169); null for a normal discussion. */
     sync?: MarkSync | null
+    /** FR-224: the position of this list is kept under this key while the list is not shown. */
+    positionKey?: string
+    /** FR-224: open at the kept position (the discussion is shown again) instead of the newest message. */
+    restorePosition?: boolean
+    /** FR-213: the search words to highlight in the shown messages. */
+    highlightWords?: readonly string[]
 }
+
+const NO_WORDS: readonly string[] = []
+
+/** Highlights the search words in the message texts under `root` (all highlights are cleared without words). */
+function highlightIn(root: HTMLElement | null, words: readonly string[]): void {
+    const registry = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights
+    const HighlightCtor = (window as unknown as { Highlight?: new (...r: Range[]) => unknown })
+        .Highlight
+    if (!registry || !HighlightCtor) return
+    if (!root || words.length === 0) {
+        registry.delete('search')
+        return
+    }
+    const ranges: Range[] = []
+    for (const rich of root.querySelectorAll('[data-message-id] .rich')) {
+        const walker = document.createTreeWalker(rich, NodeFilter.SHOW_TEXT)
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            for (const [start, end] of matchRanges(node.nodeValue ?? '', words)) {
+                const range = document.createRange()
+                range.setStart(node, start)
+                range.setEnd(node, end)
+                ranges.push(range)
+            }
+        }
+    }
+    registry.set('search', new HighlightCtor(...ranges))
+}
+
+/** FR-224: the first visible row of each list (by key), or "at the bottom". */
+const positions = new Map<string, { rowKey: string | null; atBottom: boolean }>()
 
 /** The user counts as "at the bottom" when closer than this to the end (pixels). */
 const STICK_THRESHOLD = 80
@@ -79,7 +116,10 @@ export function MessageList({
     onReply,
     onOpenBranch,
     focusMessageId,
-    sync = null
+    sync = null,
+    positionKey,
+    restorePosition = false,
+    highlightWords = NO_WORDS
 }: Props): React.JSX.Element {
     const scroller = useRef<HTMLDivElement>(null)
     const atBottom = useRef(true)
@@ -136,6 +176,18 @@ export function MessageList({
                 }
             }
         }
+        const kept =
+            first && restorePosition && positionKey ? positions.get(positionKey) : undefined
+        if (kept && !kept.atBottom && kept.rowKey) {
+            const index = rows.findIndex((r) => rowKey(r) === kept.rowKey)
+            if (index >= 0) {
+                const toIndex = (): void => virtualizer.scrollToIndex(index, { align: 'start' })
+                toIndex()
+                atBottom.current = false
+                const frame = requestAnimationFrame(toIndex)
+                return () => cancelAnimationFrame(frame)
+            }
+        }
         if (!(first || (grew && (atBottom.current || ownLast)))) return
 
         const toEnd = (): void => virtualizer.scrollToIndex(count - 1, { align: 'end' })
@@ -147,10 +199,37 @@ export function MessageList({
         // Only the row count matters here (not the other props), so the dependency list below is deliberate.
     }, [rows.length])
 
+    // FR-213: the search words are highlighted in the rendered messages (CSS Custom Highlight API, no DOM change)
+    useEffect(() => {
+        const root = scroller.current
+        if (!root) return
+        let frame = 0
+        const apply = (): void => {
+            cancelAnimationFrame(frame)
+            frame = requestAnimationFrame(() => highlightIn(root, highlightWords))
+        }
+        apply()
+        const observer = new MutationObserver(apply)
+        observer.observe(root, { childList: true, subtree: true, characterData: true })
+        return () => {
+            observer.disconnect()
+            cancelAnimationFrame(frame)
+        }
+    }, [highlightWords])
+    useEffect(() => () => highlightIn(null, NO_WORDS), [])
+
     const onScroll = (): void => {
         const el = scroller.current
         if (!el) return
         atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD
+        if (positionKey) {
+            const top = virtualizer.getVirtualItems().find((v) => v.end > el.scrollTop)
+            const row = top ? rows[top.index] : undefined
+            positions.set(positionKey, {
+                rowKey: row ? rowKey(row) : null,
+                atBottom: atBottom.current
+            })
+        }
         // Keep the button while the list moves (a picture finished loading, rows were measured): only the position
         // follows. Collapsing the selection hides the button through the selectionchange listener below.
         if (selection) setSelection((current) => readMessageSelection(el) ?? current)

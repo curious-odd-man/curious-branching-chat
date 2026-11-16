@@ -19,12 +19,14 @@ import type { DocumentView } from '@shared/types/ipc'
 import { richTextToPlain, type RichDoc } from '@shared/validation'
 import { BranchHeader } from '../branches/BranchHeader'
 import { BranchPanel } from '../branches/BranchPanel'
+import { BranchMap } from '../branches/BranchMap'
 import { Composer } from './Composer'
 import { ImageViewer } from './ImageViewer'
 import { MessageList, type ListRow } from './MessageList'
 import { RosterDialog, type ReinviteTarget } from '../SharedWizard'
 import { formatDayLabel, formatTimestamp } from '../../i18n/format'
 import { JumpToDateDialog } from './JumpToDateDialog'
+import { SearchBar } from '../search/SearchBar'
 import { withKeys } from '@shared/shortcuts'
 
 interface Props {
@@ -48,6 +50,13 @@ interface Props {
     onReinvite(target: ReinviteTarget): void
     /** FR-242: a new value (Ctrl+G or the menu) opens "Перейти к дате…". */
     jumpRequest?: number
+    /** FR-211: a new value (Ctrl+F or the menu) opens the search field. */
+    findRequest?: number
+    /** FR-271: a new value (Ctrl+Shift+M or the menu) opens the branch map. */
+    branchMapRequest?: number
+    /** FR-213: the words to highlight (the last search). */
+    highlightWords?: readonly string[]
+    onHighlight(words: string[]): void
 }
 
 export function DiscussionScreen({
@@ -65,7 +74,11 @@ export function DiscussionScreen({
     onRetrySave,
     onInvite,
     onReinvite,
-    jumpRequest
+    jumpRequest,
+    findRequest,
+    branchMapRequest,
+    highlightWords,
+    onHighlight
 }: Props): React.JSX.Element {
     // the local day; checked every minute, so "Сегодня" moves at midnight
     const [today, setToday] = useState(() => localDayKey(new Date().toISOString()))
@@ -173,6 +186,22 @@ export function DiscussionScreen({
         setShowJump(true)
     }, [jumpRequest])
 
+    // FR-224: only the first list after the discussion is shown again opens at the kept position
+    const firstList = useRef(threadId)
+    const [showSearch, setShowSearch] = useState(false)
+    const handledFind = useRef(findRequest)
+    useEffect(() => {
+        if (findRequest === handledFind.current) return
+        handledFind.current = findRequest
+        setShowSearch(true)
+    }, [findRequest])
+    const [showMap, setShowMap] = useState(false)
+    const handledMap = useRef(branchMapRequest)
+    useEffect(() => {
+        if (branchMapRequest === handledMap.current) return
+        handledMap.current = branchMapRequest
+        setShowMap(true)
+    }, [branchMapRequest])
     const closed = isBranch && thread.status === 'closed'
     const goToSource = (): void => {
         if (thread.parentThreadId && thread.sourceMessageId) {
@@ -190,6 +219,26 @@ export function DiscussionScreen({
         <div className="discussion">
             <header className="discussion-header">
                 <h1 data-testid="discussion-title">{view.discussion.title}</h1>
+                <button
+                    type="button"
+                    className="roster-button"
+                    data-testid="open-search"
+                    title={withKeys(ru.search.open, 'find')}
+                    aria-label={ru.search.open}
+                    onClick={() => setShowSearch(true)}
+                >
+                    🔍
+                </button>
+                <button
+                    type="button"
+                    className="roster-button"
+                    data-testid="open-branch-map"
+                    title={withKeys(ru.branchMap.button, 'branchMap')}
+                    aria-label={ru.branchMap.button}
+                    onClick={() => setShowMap(true)}
+                >
+                    🌳
+                </button>
                 <button
                     type="button"
                     className="roster-button"
@@ -272,6 +321,18 @@ export function DiscussionScreen({
                 )}
             </header>
             <SyncStatusLine status={view.syncStatus} />
+            {showSearch && (
+                <SearchBar
+                    onShow={(hit, words) => {
+                        onHighlight(words)
+                        onSelectThread(hit.threadId, hit.messageId ?? undefined)
+                    }}
+                    onClose={() => {
+                        setShowSearch(false)
+                        onHighlight([])
+                    }}
+                />
+            )}
 
             {view.saveError && (
                 <div className="banner error" role="alert" data-testid="save-error">
@@ -341,6 +402,9 @@ export function DiscussionScreen({
                         onReply={onReply}
                         onOpenBranch={(id) => onSelectThread(id)}
                         sync={markSync}
+                        positionKey={`${view.documentId}:${threadId}`}
+                        restorePosition={firstList.current === threadId}
+                        {...(highlightWords ? { highlightWords } : {})}
                         {...(focusMessageId ? { focusMessageId } : {})}
                     />
                     <Composer
@@ -359,6 +423,18 @@ export function DiscussionScreen({
                     />
                 </div>
             </div>
+            {showMap && (
+                <BranchMap
+                    discussion={discussion}
+                    currentThreadId={threadId}
+                    unread={unread}
+                    onClose={() => setShowMap(false)}
+                    onSelect={(id) => {
+                        setShowMap(false)
+                        onSelectThread(id)
+                    }}
+                />
+            )}
             {viewer && (
                 <ImageViewer
                     url={images.url(viewer.assetId)}

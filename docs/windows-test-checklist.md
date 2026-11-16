@@ -292,3 +292,23 @@ Drive for Desktop for the backup folder. Keep a copy of `%APPDATA%\BranchChat` b
     last backup; "Восстановить копию" opens the discussions of the backup; `library.damaged-<time>.sqlite` is kept.
 12. Antivirus on (Windows Defender real-time protection): steps 1, 3, 8 work; no error in `logs\main.log`.
 13. A discussion of 20,000 messages: sending stays immediate; the log shows no slow saves.
+
+## S. Release 2.3: discussion list, drafts, search, branch map
+
+1. Import or create 20 discussions. The list on the left shows all 20 with the time of the last message; unread counts
+   are right; shared discussions have 👥. Sort by name and back; filter with "ЕЛ" finds "Ёлка".
+2. Click through 10 discussions: each opens in the same window, without delay. Go to a branch in one, scroll up, open
+   another one, come back: the same branch and position.
+3. Drag the edge of the list wider; hide it (◀); restart: the width and the hidden state stay. Make the window narrow
+   (720 px): the list opens with ☰ over the discussion and closes after a choice. Check at 150 % Windows scale.
+4. ⧉ opens a discussion in a second window. Choosing it again in the first window brings the second window to the
+   front. A click on a tray notification opens the discussion in the main window.
+5. Type a draft (text and a screenshot) in a branch, switch to another discussion: ✎ in the list. Close BranchChat
+   with "Выход" (no question), start: the draft is there, with the picture; send it: ✎ is gone.
+6. Ctrl+F: search "ёлк" and "ЕЛК" in Russian text with ё: the same results, the matches marked; Enter, Shift+Enter, ↑ ↓
+   move; a result in a closed branch opens that branch; the words are highlighted in the messages.
+7. Ctrl+Shift+F (and 🔍 above the list): results of several discussions, grouped; a click opens the discussion at the
+   message, also when the discussion is open in another window.
+8. A library of 100,000 messages (or the largest available): the first results come without a noticeable delay.
+9. Ctrl+Shift+M (and 🌳): the branch map with nested and closed branches; the filters; the arrows and Enter open a
+   branch. F1 lists the new shortcuts in the group "Поиск".

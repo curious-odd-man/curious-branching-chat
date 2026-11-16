@@ -197,6 +197,16 @@ export class DocumentSession implements DiscussionOwner {
         return { assetId: image.sha256, mediaType: image.mediaType, size: image.size }
     }
 
+    /** An image of the draft that is only in memory (not sent yet), for a draft kept in the library (FR-251). */
+    stagedImage(sha256: string): PreparedImage | undefined {
+        return this.staged.get(sha256)
+    }
+
+    /** True if the discussion registers this image already (it was sent before). */
+    hasAsset(assetId: string): boolean {
+        return this.contents.discussion.assets.some((a) => a.assetId === assetId)
+    }
+
     /**
      * Bytes of an embedded image, for display (FR-068). Images that are not saved yet come from memory; the others are
      * read from the library and checked against their recorded type and checksum. Null means "show a placeholder"

@@ -6,7 +6,8 @@ import { IPC, type IpcResult } from '@shared/types/ipc'
 import {
     appendMessageSchema,
     createBranchSchema,
-    draftSchema,
+    draftSaveSchema,
+    draftsFlushedSchema,
     markMessageSchema,
     markThreadSchema,
     noPayloadSchema,
@@ -14,6 +15,8 @@ import {
     openPathSchema,
     openDiscussionSchema,
     migrationRunSchema,
+    searchSchema,
+    openAtSchema,
     backupRestoreSchema,
     newDocumentSchema,
     setAssociationSchema,
@@ -22,6 +25,7 @@ import {
     setFileSizeLimitSchema,
     setBackgroundFlagSchema,
     setTextSizeSchema,
+    setSidebarSchema,
     zoomChangeSchema,
     sharedRootSchema,
     sharedParseKeySchema,
@@ -41,8 +45,7 @@ import { AppError } from '../application/errors'
 import type { ReadAction } from '../application/documentSession'
 import { DocumentError } from '../document'
 import { openExternalLink } from '../windows/security'
-import { describeDiscussions } from '../application/recentView'
-import type { BackupService, LibraryService, Migration } from '../library'
+import { search, type BackupService, type LibraryService, type Migration } from '../library'
 import { LibraryError } from '../library/schema'
 import type { SettingsStore } from '../local-state/settings'
 import type { UpdateService } from '../updates/updateService'
@@ -253,6 +256,11 @@ export function registerIpcHandlers(
             ? shared.background.setFlag(p.flag, p.enabled)
             : settings.setFlag(p.flag, p.enabled)
     )
+    handle(IPC.settingsSetSidebar, setSidebarSchema, async (_e, p) => {
+        const updated = await settings.setSidebar(p)
+        controller.broadcast(IPC.settingsChanged, updated)
+        return updated
+    })
     handle(IPC.settingsSetTextSize, setTextSizeSchema, (_e, p) =>
         shared?.zoom ? shared.zoom.set(p.percent) : settings.setTextSize(p.percent)
     )
@@ -267,7 +275,7 @@ export function registerIpcHandlers(
     handle(IPC.settingsSetOpenLast, setOpenLastSchema, (_e, p) =>
         settings.setOpenLastFileOnStartup(p.enabled)
     )
-    handle(IPC.libraryList, noPayloadSchema, () => describeDiscussions(library.list()))
+    handle(IPC.libraryList, noPayloadSchema, () => library.listItems(settings.get().participantId))
     const backups = (): BackupService => {
         if (!shared?.backups) throw new AppError('NO_DOCUMENT', 'not available')
         return shared.backups
@@ -316,6 +324,16 @@ export function registerIpcHandlers(
         setTimeout(() => shared?.relaunch?.(), 100)
         return true
     })
+    handle(IPC.searchDiscussion, searchSchema, async (entry, p) => {
+        const session = entry?.session
+        if (!session) return []
+        await session.flush() // the newest messages are in the index
+        return search(library.lib.db, p.query, { discussionId: session.documentId })
+    })
+    handle(IPC.searchAll, searchSchema, (_entry, p) => search(library.lib.db, p.query))
+    handle(IPC.documentOpenAt, openAtSchema, (entry, p) =>
+        controller.openAt(entry, p.id, p.threadId, p.messageId)
+    )
     handle(IPC.migrationGet, noPayloadSchema, () => shared?.migration?.candidates() ?? [])
     handle(IPC.migrationRun, migrationRunSchema, async (_e, p) => {
         const migration = shared?.migration
@@ -364,6 +382,9 @@ export function registerIpcHandlers(
     handle(IPC.documentOpenId, openDiscussionSchema, (entry, p) =>
         controller.openDiscussion(p.id, entry)
     )
+    handle(IPC.documentOpenIdNewWindow, openDiscussionSchema, (entry, p) =>
+        controller.openDiscussion(p.id, entry, { newWindow: true })
+    )
     handle(IPC.documentExport, noPayloadSchema, (entry) => controller.exportDiscussion(entry))
     handle(IPC.documentGetState, noPayloadSchema, (entry) =>
         entry ? controller.viewOf(entry) : null
@@ -392,6 +413,8 @@ export function registerIpcHandlers(
     handle(IPC.documentAppendMessage, appendMessageSchema, (entry, p) => {
         const { session, me } = withReadNotice(entry, { type: 'send', threadId: p.threadId })
         session.appendMessage(me, p.threadId, p.content)
+        // the sent text is no draft any more (FR-251)
+        void library.saveDraft(session.documentId, p.threadId, null).catch(() => undefined)
     })
     handle(IPC.readMarkMessage, markMessageSchema, (entry, p) => {
         const { session, me } = withReadNotice(entry, { type: 'message', messageId: p.messageId })
@@ -434,7 +457,13 @@ export function registerIpcHandlers(
     )
     handle(IPC.imagePick, noPayloadSchema, (entry) => controller.pickImage(entry))
     handle(IPC.linkOpen, openLinkSchema, (_entry, p) => openExternalLink(p.url))
-    handle(IPC.draftSet, draftSchema, (entry, p) => {
-        if (entry) entry.hasDraft = p.hasDraft
+    handle(IPC.draftSave, draftSaveSchema, async (entry, p) => {
+        await controller.saveDraft(entry, p.threadId, p.content ?? null)
+        return null
+    })
+    handle(IPC.draftsGet, noPayloadSchema, (entry) => controller.drafts(entry))
+    handle(IPC.draftsFlushed, draftsFlushedSchema, (_entry, p) => {
+        controller.draftsFlushed(p.token)
+        return null
     })
 }

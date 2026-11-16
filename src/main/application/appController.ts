@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { BrowserWindow, type WebContents } from 'electron'
 import { promises as fs } from 'node:fs'
 import { basename, resolve } from 'node:path'
@@ -13,7 +14,7 @@ import {
     type OpenOutcome
 } from '@shared/types/ipc'
 import { DocumentError } from '../document'
-import type { LibraryService } from '../library'
+import type { BlobRef, LibraryService } from '../library'
 import { LibraryError } from '../library/schema'
 import type { SettingsStore } from '../local-state/settings'
 import { DocumentSession } from './documentSession'
@@ -28,8 +29,6 @@ export interface WindowEntry {
     readonly id: number
     readonly win: BrowserWindow
     session: DocumentSession | null
-    /** Renderer reports whether the composer holds an unsent, non-empty draft (FR-008). */
-    hasDraft: boolean
     closeRequested: boolean
     closing: boolean
     /** A message to show once the window's page asks for it (a click on a notification, D-33). */
@@ -59,6 +58,8 @@ export class AppController {
     private readonly entries = new Map<number, WindowEntry>()
     private readonly opening = new Map<string, Promise<OpenOutcome>>()
     private readonly importing = new Map<string, Promise<OpenOutcome>>()
+    /** FR-225: the main window (the oldest open one); discussions without a window open there. */
+    private mainId: number | null = null
 
     constructor(private readonly deps: ControllerDeps) {}
 
@@ -70,12 +71,12 @@ export class AppController {
             id: win.webContents.id,
             win,
             session: null,
-            hasDraft: false,
             closeRequested: false,
             closing: false,
             pendingFocus: null
         }
         this.entries.set(entry.id, entry)
+        if (this.mainId === null || !this.entries.has(this.mainId)) this.mainId = entry.id
         win.on('close', (event) => {
             if (entry.closing) return
             event.preventDefault()
@@ -83,6 +84,7 @@ export class AppController {
         })
         win.on('closed', () => {
             this.entries.delete(entry.id)
+            if (this.mainId === entry.id) this.mainId = this.entries.keys().next().value ?? null
             const session = entry.session
             if (session)
                 void Promise.resolve(this.deps.sync?.detach(session)).then(() => session.close())
@@ -162,6 +164,26 @@ export class AppController {
         entry.win.webContents.send(IPC.focusRequest)
     }
 
+    /**
+     * A search result (FR-213, FR-215): opens the discussion (in place, or brings its window to the front), then the
+     * branch and the message. `messageId` empty: only the branch.
+     */
+    async openAt(
+        from: WindowEntry | undefined,
+        documentId: string,
+        threadId: string,
+        messageId: string
+    ): Promise<OpenOutcome> {
+        const outcome = await this.openDiscussion(documentId, from)
+        if (outcome.status !== 'opened' && outcome.status !== 'focused') return outcome
+        const entry = this.findByDocumentId(documentId)
+        if (entry?.session && !entry.win.isDestroyed()) {
+            entry.pendingFocus = { documentId, threadId, messageId }
+            entry.win.webContents.send(IPC.focusRequest)
+        }
+        return outcome
+    }
+
     /** The page takes the waiting message to show (once). */
     takeFocusRequest(entry: WindowEntry | undefined): FocusRequest | null {
         if (!entry) return null
@@ -206,8 +228,16 @@ export class AppController {
         return attempt
     }
 
-    /** Opens a discussion of the library; a window that shows it already gets the focus. */
-    openDiscussion(documentId: string, from: WindowEntry | undefined): Promise<OpenOutcome> {
+    /**
+     * Opens a discussion of the library (FR-221, FR-225): in the window it was asked from, in place; without one (tray,
+     * notification, Explorer, jump list) in the main window. `newWindow`: "Открыть в новом окне". A window that shows
+     * the discussion already gets the focus instead.
+     */
+    openDiscussion(
+        documentId: string,
+        from: WindowEntry | undefined,
+        options: { newWindow?: boolean } = {}
+    ): Promise<OpenOutcome> {
         const existing = this.findByDocumentId(documentId)
         if (existing) {
             focusWindow(existing.win)
@@ -215,7 +245,9 @@ export class AppController {
         }
         const inFlight = this.opening.get(documentId)
         if (inFlight) return inFlight
-        const attempt = this.doOpen(documentId, from).finally(() => this.opening.delete(documentId))
+        const attempt = this.doOpen(documentId, from, options.newWindow === true).finally(() =>
+            this.opening.delete(documentId)
+        )
         this.opening.set(documentId, attempt)
         return attempt
     }
@@ -305,7 +337,25 @@ export class AppController {
         return outcome
     }
 
-    private async doOpen(documentId: string, from: WindowEntry | undefined): Promise<OpenOutcome> {
+    private async doOpen(
+        documentId: string,
+        from: WindowEntry | undefined,
+        newWindow: boolean
+    ): Promise<OpenOutcome> {
+        const target = newWindow ? null : this.targetFor(from)
+        // switching in place: the shown discussion and its drafts are saved first; a failed save keeps it on screen
+        if (target?.session) {
+            await this.flushDrafts(target)
+            await target.session.flush()
+            if (target.session.saveError) {
+                await this.deps.ui.showError(
+                    target.win,
+                    ru.dialogs.switchBlockedTitle,
+                    ru.dialogs.switchBlocked
+                )
+                return { status: 'cancelled' }
+            }
+        }
         let session: DocumentSession
         try {
             const store = this.deps.library.store(documentId)
@@ -315,7 +365,13 @@ export class AppController {
             await this.deps.ui.showError(from?.win, ru.dialogs.openFailedTitle, describeError(code))
             return { status: 'failed', errorCode: code }
         }
-        const entry = this.targetFor(from)
+        const entry = target && !target.win.isDestroyed() ? target : this.createWindow()
+        const previous = entry.session
+        if (previous) {
+            entry.session = null
+            await this.deps.sync?.detach(previous)
+            await previous.close()
+        }
         if (this.deps.sync && session.current.sync) {
             const result = await this.deps.sync.attach(session)
             if (result === 'detached') session.notices.push(ru.notices.detached)
@@ -358,6 +414,81 @@ export class AppController {
             : this.entries.values().next().value
     }
 
+    // ---- drafts (FR-251 to FR-254) --------------------------------------------------------------------------------
+
+    private readonly flushWaits = new Map<string, () => void>()
+
+    /** FR-251: the draft of a branch of the window's discussion; null (or empty) removes it. */
+    async saveDraft(
+        entry: WindowEntry | undefined,
+        threadId: string,
+        content: unknown
+    ): Promise<void> {
+        const session = entry?.session
+        if (!session) throw new AppError('NO_DOCUMENT', 'No open discussion')
+        if (!session.current.discussion.threads.some((t) => t.threadId === threadId))
+            throw new AppError('INVALID_REQUEST', 'unknown branch')
+        const id = session.documentId
+        if (content === null || !hasDraftContent(content))
+            return this.deps.library.saveDraft(id, threadId, null)
+        const images: BlobRef[] = []
+        for (const assetId of imageIdsOf(content)) {
+            const staged = session.stagedImage(assetId)
+            if (staged)
+                images.push({
+                    sha256: staged.sha256,
+                    mediaType: staged.mediaType,
+                    size: staged.size,
+                    data: staged.data
+                })
+            else if (session.hasAsset(assetId)) {
+                const info = session.current.discussion.assets.find((a) => a.assetId === assetId)!
+                images.push({ sha256: info.sha256, mediaType: info.mediaType, size: info.size })
+            }
+        }
+        await this.deps.library.saveDraft(id, threadId, JSON.stringify(content), images)
+    }
+
+    /** FR-251: the drafts of the window's discussion; their images are added to the draft images again. */
+    async drafts(entry: WindowEntry | undefined): Promise<Record<string, unknown>> {
+        const session = entry?.session
+        if (!session) return {}
+        const out: Record<string, unknown> = {}
+        for (const d of await this.deps.library.drafts(session.documentId)) {
+            if (!session.current.discussion.threads.some((t) => t.threadId === d.threadId)) continue
+            for (const image of d.images)
+                if (image.data && !session.hasAsset(image.sha256)) {
+                    try {
+                        session.stageImage(image.data)
+                    } catch {
+                        // a damaged image file: the draft shows a placeholder
+                    }
+                }
+            out[d.threadId] = d.content
+        }
+        return out
+    }
+
+    /** Asks the page to save its waiting drafts now (before the window closes or shows another discussion). */
+    private flushDrafts(entry: WindowEntry): Promise<void> {
+        if (!entry.session || entry.win.isDestroyed()) return Promise.resolve()
+        const token = randomUUID()
+        return new Promise<void>((resolve) => {
+            const done = (): void => {
+                clearTimeout(timer)
+                this.flushWaits.delete(token)
+                resolve()
+            }
+            const timer = setTimeout(done, 1500)
+            this.flushWaits.set(token, done)
+            entry.win.webContents.send(IPC.draftsFlushRequest, token)
+        })
+    }
+
+    draftsFlushed(token: string): void {
+        this.flushWaits.get(token)?.()
+    }
+
     // ---- state shown to windows ---------------------------------------------------------------------------------
 
     viewOf(entry: WindowEntry): DocumentView | null {
@@ -398,9 +529,14 @@ export class AppController {
         entry.win.setTitle(ru.discussion.windowTitle(entry.session.title, unread))
     }
 
-    /** An empty start window is reused; otherwise a new window is created (one window per document). */
+    /**
+     * FR-225: the window that asked, else the main window, else an empty start window, else a new one. The discussion
+     * replaces the one shown there.
+     */
     private targetFor(from: WindowEntry | undefined): WindowEntry {
-        if (from && !from.session && !from.win.isDestroyed()) return from
+        if (from && !from.win.isDestroyed()) return from
+        const main = this.mainId !== null ? this.entries.get(this.mainId) : undefined
+        if (main && !main.win.isDestroyed()) return main
         for (const entry of this.entries.values())
             if (!entry.session && !entry.win.isDestroyed()) return entry
         return this.createWindow()
@@ -419,12 +555,11 @@ export class AppController {
         if (entry.closeRequested) return
         entry.closeRequested = true
         try {
+            // FR-254: drafts are kept in the library, so an unsent draft is no reason to ask
+            await this.flushDrafts(entry)
             if (entry.session) await entry.session.flush()
-            const problems = {
-                unsentDraft: entry.hasDraft,
-                saveFailed: entry.session?.saveError != null
-            }
-            if (problems.unsentDraft || problems.saveFailed) {
+            const problems = { unsentDraft: false, saveFailed: entry.session?.saveError != null }
+            if (problems.saveFailed) {
                 const closeAnyway = await this.deps.ui.confirmClose(entry.win, problems)
                 if (!closeAnyway) {
                     this.deps.onCloseCancelled?.()
@@ -447,6 +582,29 @@ export function safeFileName(title: string): string {
         .replace(/[. ]+$/, '')
         .trim()
     return (name || ru.dialogs.defaultFileName).slice(0, 120)
+}
+
+/** Image IDs in an editor document (TipTap JSON). */
+function imageIdsOf(node: unknown, out: string[] = []): string[] {
+    if (typeof node !== 'object' || node === null) return out
+    const n = node as { type?: unknown; attrs?: { assetId?: unknown }; content?: unknown }
+    if (
+        n.type === 'image' &&
+        typeof n.attrs?.assetId === 'string' &&
+        !out.includes(n.attrs.assetId)
+    )
+        out.push(n.attrs.assetId)
+    if (Array.isArray(n.content)) for (const c of n.content) imageIdsOf(c, out)
+    return out
+}
+
+/** Visible text or an image: a draft worth keeping. */
+function hasDraftContent(node: unknown): boolean {
+    if (typeof node !== 'object' || node === null) return false
+    const n = node as { type?: unknown; text?: unknown; content?: unknown }
+    if (n.type === 'image') return true
+    if (typeof n.text === 'string' && n.text.trim().length > 0) return true
+    return Array.isArray(n.content) && n.content.some(hasDraftContent)
 }
 
 function focusWindow(win: BrowserWindow): void {

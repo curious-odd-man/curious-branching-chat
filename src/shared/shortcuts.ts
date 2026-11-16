@@ -3,9 +3,15 @@
  * (key bindings), the button texts, and the shortcut list (F1) all read this table, so the list is always complete.
  */
 
-export type ShortcutGroup = 'window' | 'messages' | 'editor' | 'dialogs'
+export type ShortcutGroup = 'window' | 'messages' | 'search' | 'editor' | 'dialogs'
 
-export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = ['window', 'messages', 'editor', 'dialogs']
+export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
+    'window',
+    'messages',
+    'search',
+    'editor',
+    'dialogs'
+]
 
 export interface Shortcut {
     id: ShortcutId
@@ -27,6 +33,11 @@ export type ShortcutId =
     | 'zoomReset'
     | 'shortcuts'
     | 'jumpToDate'
+    | 'find'
+    | 'findAll'
+    | 'findNext'
+    | 'findPrevious'
+    | 'branchMap'
     | 'send'
     | 'newLine'
     | 'pasteImage'
@@ -51,6 +62,16 @@ export const SHORTCUTS: readonly Shortcut[] = [
     { id: 'zoomReset', group: 'window', keys: ['Ctrl+0'], accelerator: 'CmdOrCtrl+0' },
     { id: 'shortcuts', group: 'window', keys: ['F1'], accelerator: 'F1' },
     { id: 'jumpToDate', group: 'messages', keys: ['Ctrl+G'], accelerator: 'CmdOrCtrl+G' },
+    { id: 'find', group: 'search', keys: ['Ctrl+F'], accelerator: 'CmdOrCtrl+F' },
+    { id: 'findAll', group: 'search', keys: ['Ctrl+Shift+F'], accelerator: 'CmdOrCtrl+Shift+F' },
+    { id: 'findNext', group: 'search', keys: ['Enter'] },
+    { id: 'findPrevious', group: 'search', keys: ['Shift+Enter'] },
+    {
+        id: 'branchMap',
+        group: 'messages',
+        keys: ['Ctrl+Shift+M'],
+        accelerator: 'CmdOrCtrl+Shift+M'
+    },
     { id: 'send', group: 'messages', keys: ['Ctrl+Enter'], editorKey: 'Mod-Enter' },
     { id: 'newLine', group: 'messages', keys: ['Enter'] },
     { id: 'pasteImage', group: 'messages', keys: ['Ctrl+V'] },
