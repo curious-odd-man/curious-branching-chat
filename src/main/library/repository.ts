@@ -222,13 +222,14 @@ export class LibraryRepository {
         for (const r of this.db
             .prepare(
                 `SELECT m.discussion_id AS id, count(*) AS n FROM message m
-                  WHERE m.author_id != ?1
+                  WHERE m.author_id != ?
                     AND NOT EXISTS (SELECT 1 FROM mark k
                                      WHERE k.discussion_id = m.discussion_id AND k.kind = 0
-                                       AND k.participant_id = ?1 AND k.message_id = m.message_id)
+                                       AND k.participant_id = ? AND k.message_id = m.message_id)
                   GROUP BY m.discussion_id`
             )
-            .all(localId))
+            // Plain "?" only: some node:sqlite versions do not bind numbered parameters ("?1").
+            .all(localId, localId))
             out.set(String(r.id), Number(r.n))
         return out
     }
