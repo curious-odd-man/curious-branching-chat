@@ -186,7 +186,7 @@ test('test windows open outside the screen and do not take the focus (quiet test
         })
         expect(state.visible).toBe(true)
         expect(state.focused).toBe(false)
-        expect(state.x).toBeLessThan(-10000)
+        expect(state.x).toBeLessThanOrEqual(-10000)
     } finally {
         await t.close()
     }

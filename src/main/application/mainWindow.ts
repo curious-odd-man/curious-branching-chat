@@ -29,7 +29,9 @@ export function createMainWindow(): BrowserWindow {
         minWidth: 720,
         minHeight: 480,
         show: false,
-        ...(quiet ? { x: -30000, y: -30000, skipTaskbar: true } : {}),
+        // -10000 gives whole device pixels at 100 %, 125 %, 150 %, and 200 % and stays far from the Windows limit
+        // (±32767 device pixels); a position near the limit is moved and rounded, and the window size changes
+        ...(quiet ? { x: -10000, y: -10000, skipTaskbar: true } : {}),
         webPreferences: {
             // a quiet window is off the screen: keep timers and drawing at full speed
             ...(quiet ? { backgroundThrottling: false } : {}),

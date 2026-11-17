@@ -126,9 +126,29 @@ for (const scale of [1, 1.25, 1.5, 2]) {
             const w = BrowserWindow.getAllWindows()[0]!
             w.setSize(720, 480)
         })
-        await expect
-            .poll(() => win.evaluate(() => document.documentElement.clientWidth))
-            .toBeLessThanOrEqual(720)
+        try {
+            await expect
+                .poll(() => win.evaluate(() => document.documentElement.clientWidth))
+                .toBeLessThanOrEqual(720)
+        } catch (err) {
+            // the window sizes as Windows reports them, to find the cause of a failure
+            const diag = await app.app.evaluate(({ BrowserWindow, screen }) => {
+                const w = BrowserWindow.getAllWindows()[0]!
+                const bounds = w.getBounds()
+                return {
+                    bounds,
+                    content: w.getContentBounds(),
+                    minimum: w.getMinimumSize(),
+                    displayScale: screen.getDisplayMatching(bounds).scaleFactor,
+                    primaryScale: screen.getPrimaryDisplay().scaleFactor
+                }
+            })
+            const clientWidth = await win.evaluate(() => document.documentElement.clientWidth)
+            throw new Error(
+                `${(err as Error).message}\nclientWidth ${clientWidth}, window ${JSON.stringify(diag)}`,
+                { cause: err }
+            )
+        }
         await expectLayoutFits(win, `${scale * 100}% smallest window`)
         const size = await app.app.evaluate(({ BrowserWindow }) =>
             BrowserWindow.getAllWindows()[0]!.getMinimumSize()
