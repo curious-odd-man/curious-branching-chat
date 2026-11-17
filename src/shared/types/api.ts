@@ -1,4 +1,6 @@
 import type { RichDoc } from '../validation/richText'
+import type { Attachment, ReactionEmoji } from '../validation/schemas'
+import type { Language } from '../i18n'
 import type { StagedImage } from './assets'
 import type {
     AppInfo,
@@ -23,7 +25,10 @@ import type {
     BackupState,
     MigrationResult,
     SettingsView,
-    UpdateView
+    UpdateView,
+    AttachResult,
+    SmallLimit,
+    DraftView
 } from './ipc'
 
 /** The only surface the renderer can reach (exposed by the preload script as `window.branchchat`). */
@@ -79,12 +84,47 @@ export interface BranchChatApi {
     /** "Экспортировать…" (FR-204); false if the person cancelled. */
     exportDiscussion(): Promise<IpcResult<boolean>>
     getDocumentState(): Promise<IpcResult<DocumentView | null>>
-    appendMessage(threadId: string, content: RichDoc): Promise<IpcResult<null>>
+    appendMessage(
+        threadId: string,
+        content: RichDoc,
+        attachments?: Attachment[]
+    ): Promise<IpcResult<null>>
+    /** FR-231: adds or removes a reaction of the person. */
+    toggleReaction(messageId: string, emoji: ReactionEmoji): Promise<IpcResult<null>>
+    /** FR-261: "Прикрепить файл…": a file dialog; the chosen files are stored and returned for the draft. */
+    pickAttachments(): Promise<IpcResult<AttachResult>>
+    /** FR-261: dropped or pasted files (by path). */
+    addAttachmentPaths(paths: string[]): Promise<IpcResult<AttachResult>>
+    /** FR-261: a pasted file without a path (bytes). */
+    addAttachmentBytes(
+        name: string,
+        type: string,
+        data: Uint8Array
+    ): Promise<IpcResult<AttachResult>>
+    /** FR-262: "Сохранить как…"; false if the person cancelled. */
+    saveAttachment(messageId: string, index: number): Promise<IpcResult<boolean>>
+    /** FR-262, FR-267: "Открыть" (with a warning for types that can run code); false if the person cancelled. */
+    openAttachment(messageId: string, index: number): Promise<IpcResult<boolean>>
+    /** FR-268: members of the shown discussion whose limit is smaller than `size`. */
+    attachmentReceivers(size: number): Promise<IpcResult<SmallLimit[]>>
+    /** FR-292: the language after the next start. */
+    setLanguage(language: Language): Promise<IpcResult<SettingsView>>
+    /** FR-293: "Перезапустить сейчас". */
+    relaunch(): Promise<IpcResult<null>>
+    /** The language that this window runs with (fixed until a restart). */
+    readonly language: Language
+    /** FR-265: the largest file that can be attached, in MB. */
+    setAttachmentLimit(mb: number): Promise<IpcResult<SettingsView>>
+
     retrySave(): Promise<IpcResult<null>>
-    /** FR-251: the draft of a branch (editor JSON), or null to remove it. */
-    saveDraft(threadId: string, content: unknown): Promise<IpcResult<null>>
+    /** FR-251: the draft of a branch (editor JSON and files), or null to remove it. */
+    saveDraft(
+        threadId: string,
+        content: unknown,
+        attachments?: Attachment[]
+    ): Promise<IpcResult<null>>
     /** FR-251: the drafts of the shown discussion, by branch. */
-    getDrafts(): Promise<IpcResult<Record<string, unknown>>>
+    getDrafts(): Promise<IpcResult<Record<string, DraftView>>>
     /** The main process asks to save waiting drafts now; answer with `draftsFlushed(token)`. */
     onDraftsFlushRequest(callback: (token: string) => void): () => void
     draftsFlushed(token: string): Promise<IpcResult<null>>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 interface Props {
     testId: string
@@ -57,8 +57,8 @@ export function ColorMenu({ testId, label, glyph, colors, onPick }: Props): Reac
                             role="menuitem"
                             className="swatch"
                             style={{ backgroundColor: color }}
-                            title={ru.editor.colorNames[color] ?? color}
-                            aria-label={ru.editor.colorNames[color] ?? color}
+                            title={texts().editor.colorNames[color] ?? color}
+                            aria-label={texts().editor.colorNames[color] ?? color}
                             data-testid={`${testId}-${color.slice(1)}`}
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => pick(color)}
@@ -72,7 +72,7 @@ export function ColorMenu({ testId, label, glyph, colors, onPick }: Props): Reac
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => pick(null)}
                     >
-                        {ru.editor.noColor}
+                        {texts().editor.noColor}
                     </button>
                 </div>
             )}

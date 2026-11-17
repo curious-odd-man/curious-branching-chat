@@ -37,7 +37,8 @@ src/
                  import/merge/export, migration of 1.x files, backups
     document/    .branchchat ZIP reading/writing (import and export), images, file migrations
     windows/     launch arguments, process-wide security
-    application/ controller (windows, open/new/close), document session (autosave queue), menu, dialogs
+    application/ controller (windows, open/new/close), document session (autosave queue), menu, dialogs,
+                 attachments (save, open with the Mark of the Web; release 2.4)
     local-state/ participant settings (name, ID)
     crypto/      encryption identity, key store (safeStorage), signed and encrypted events, parts
     transport/   the shared folder: staging, move, listing, path safety, watching
@@ -62,13 +63,13 @@ Electron, Node built-ins or `main/`.
 | Path                                | Content                                                               |
 |-------------------------------------|-----------------------------------------------------------------------|
 | `library.sqlite` (+ `-wal`, `-shm`) | all discussions (SQLite, WAL), the search index                       |
-| `blobs\<2 hex>\<sha256>`            | images, one file per content hash                                     |
-| `backups\<date>\`, `backups\blobs\` | the last 7 backups and their images (FR-207)                          |
+| `blobs\<2 hex>\<sha256>`            | images and attachments, one file per content hash                     |
+| `backups\<date>\`, `backups\blobs\` | the last 7 backups and their images and attachments (FR-207)          |
 | `settings.json`, `keys\`, `sync\`   | settings, encryption keys, sync registry and states                   |
 | `logs\`                             | log files (release 2.1)                                               |
 | `recent.json`                       | the recent files of release 1.x, read once for the migration (FR-206) |
 
-`.branchchat` files are only for import and export.
+`.branchchat` files are only for import and export. Opened attachments are copies in `%TEMP%\BranchChat\open`.
 
 ## Document format (schema version 2)
 

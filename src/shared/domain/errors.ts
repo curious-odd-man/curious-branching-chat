@@ -7,6 +7,8 @@ export type DomainErrorCode =
     | 'MAIN_THREAD_NOT_CLOSABLE'
     | 'INVALID_SELECTION'
     | 'THREAD_CLOSED'
+    | 'INVALID_REACTION'
+    | 'TOO_MANY_ATTACHMENTS'
 
 export class DomainError extends Error {
     readonly code: DomainErrorCode

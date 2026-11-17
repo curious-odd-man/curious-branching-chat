@@ -42,6 +42,8 @@ describe('SettingsStore', () => {
                 startWithWindowsSettled: false,
                 textSize: 100,
                 backupFolder: null,
+                attachmentLimitMb: 100,
+                language: 'ru',
                 sidebar: { hidden: false, width: 260, sort: 'activity' }
             })
             expect(await a.setDisplayName('  Анна  ')).toEqual({
@@ -59,6 +61,8 @@ describe('SettingsStore', () => {
                 startWithWindowsSettled: false,
                 textSize: 100,
                 backupFolder: null,
+                attachmentLimitMb: 100,
+                language: 'ru',
                 sidebar: { hidden: false, width: 260, sort: 'activity' }
             })
 
@@ -79,6 +83,8 @@ describe('SettingsStore', () => {
                 startWithWindowsSettled: false,
                 textSize: 100,
                 backupFolder: null,
+                attachmentLimitMb: 100,
+                language: 'ru',
                 sidebar: { hidden: false, width: 260, sort: 'activity' }
             })
         })
@@ -187,6 +193,8 @@ describe('background settings (release 1.4)', () => {
                 startWithWindowsSettled: false,
                 textSize: 100,
                 backupFolder: null,
+                attachmentLimitMb: 100,
+                language: 'ru',
                 sidebar: { hidden: false, width: 260, sort: 'activity' }
             })
         })

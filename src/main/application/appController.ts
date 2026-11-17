@@ -3,16 +3,18 @@ import { BrowserWindow, type WebContents } from 'electron'
 import { promises as fs } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import type { DomainContext } from '@shared/domain'
-import { describeError, ru } from '@shared/i18n/ru'
+import { describeError, texts } from '@shared/i18n'
 import type { StagedImage } from '@shared/types/assets'
 import {
     IPC,
     type DocumentStatus,
     type DocumentView,
+    type DraftView,
     type FocusRequest,
     type MenuCommand,
     type OpenOutcome
 } from '@shared/types/ipc'
+import type { Attachment } from '@shared/validation'
 import { DocumentError } from '../document'
 import type { BlobRef, LibraryService } from '../library'
 import { LibraryError } from '../library/schema'
@@ -269,7 +271,7 @@ export class AppController {
     /** "Новое обсуждение": a new discussion in the library, named in the window (FR-202). */
     async newDocument(from: WindowEntry | undefined, title: string): Promise<OpenOutcome> {
         const settings = this.deps.settings.get()
-        if (!settings.displayName) throw new AppError('NAME_REQUIRED', ru.dialogs.nameRequired)
+        if (!settings.displayName) throw new AppError('NAME_REQUIRED', texts().dialogs.nameRequired)
         const name = title.trim()
         if (!name) throw new AppError('TITLE_REQUIRED', 'a title is required')
         const contents = DocumentSession.newContents(
@@ -288,7 +290,7 @@ export class AppController {
         } catch {
             await this.deps.ui.showError(
                 from?.win,
-                ru.dialogs.createFailedTitle,
+                texts().dialogs.createFailedTitle,
                 describeError('SAVE_FAILED')
             )
             return { status: 'failed', errorCode: 'SAVE_FAILED' }
@@ -309,7 +311,7 @@ export class AppController {
                     : undefined
             await this.deps.ui.showError(
                 from?.win,
-                ru.dialogs.openFailedTitle,
+                texts().dialogs.openFailedTitle,
                 `${basename(path)}\n${describeError(code)}`,
                 detail
             )
@@ -317,9 +319,9 @@ export class AppController {
         }
         const notice =
             result.status === 'merged'
-                ? ru.notices.merged(basename(path), result.addedMessages)
+                ? texts().notices.merged(basename(path), result.addedMessages)
                 : result.status === 'unchanged'
-                  ? ru.notices.nothingNew(basename(path))
+                  ? texts().notices.nothingNew(basename(path))
                   : null
         const open = this.findByDocumentId(result.id)
         if (open?.session && notice) {
@@ -350,8 +352,8 @@ export class AppController {
             if (target.session.saveError) {
                 await this.deps.ui.showError(
                     target.win,
-                    ru.dialogs.switchBlockedTitle,
-                    ru.dialogs.switchBlocked
+                    texts().dialogs.switchBlockedTitle,
+                    texts().dialogs.switchBlocked
                 )
                 return { status: 'cancelled' }
             }
@@ -362,7 +364,11 @@ export class AppController {
             session = DocumentSession.open(store, await store.load(), { ctx: this.deps.ctx })
         } catch (err) {
             const code = err instanceof LibraryError ? err.code : 'UNKNOWN'
-            await this.deps.ui.showError(from?.win, ru.dialogs.openFailedTitle, describeError(code))
+            await this.deps.ui.showError(
+                from?.win,
+                texts().dialogs.openFailedTitle,
+                describeError(code)
+            )
             return { status: 'failed', errorCode: code }
         }
         const entry = target && !target.win.isDestroyed() ? target : this.createWindow()
@@ -374,7 +380,7 @@ export class AppController {
         }
         if (this.deps.sync && session.current.sync) {
             const result = await this.deps.sync.attach(session)
-            if (result === 'detached') session.notices.push(ru.notices.detached)
+            if (result === 'detached') session.notices.push(texts().notices.detached)
         }
         this.bind(entry, session)
         return { status: 'opened' }
@@ -386,7 +392,7 @@ export class AppController {
         if (!session) throw new AppError('NO_DOCUMENT', 'No open discussion')
         const chosen = await this.deps.ui.pickCopyPath(
             from.win,
-            ru.dialogs.exportDefaultName(safeFileName(session.title))
+            texts().dialogs.exportDefaultName(safeFileName(session.title))
         )
         if (!chosen) return false
         const target = resolve(/\.branchchat$/i.test(chosen) ? chosen : `${chosen}.branchchat`)
@@ -398,7 +404,7 @@ export class AppController {
             const code = err instanceof DocumentError ? err.code : 'WRITE_FAILED'
             await this.deps.ui.showError(
                 from.win,
-                ru.dialogs.exportFailedTitle,
+                texts().dialogs.exportFailedTitle,
                 describeError(code),
                 target
             )
@@ -422,14 +428,15 @@ export class AppController {
     async saveDraft(
         entry: WindowEntry | undefined,
         threadId: string,
-        content: unknown
+        content: unknown,
+        attachments: Attachment[] = []
     ): Promise<void> {
         const session = entry?.session
         if (!session) throw new AppError('NO_DOCUMENT', 'No open discussion')
         if (!session.current.discussion.threads.some((t) => t.threadId === threadId))
             throw new AppError('INVALID_REQUEST', 'unknown branch')
         const id = session.documentId
-        if (content === null || !hasDraftContent(content))
+        if (content === null || (!hasDraftContent(content) && attachments.length === 0))
             return this.deps.library.saveDraft(id, threadId, null)
         const images: BlobRef[] = []
         for (const assetId of imageIdsOf(content)) {
@@ -446,14 +453,20 @@ export class AppController {
                 images.push({ sha256: info.sha256, mediaType: info.mediaType, size: info.size })
             }
         }
-        await this.deps.library.saveDraft(id, threadId, JSON.stringify(content), images)
+        await this.deps.library.saveDraft(
+            id,
+            threadId,
+            JSON.stringify(content),
+            images,
+            attachments
+        )
     }
 
     /** FR-251: the drafts of the window's discussion; their images are added to the draft images again. */
-    async drafts(entry: WindowEntry | undefined): Promise<Record<string, unknown>> {
+    async drafts(entry: WindowEntry | undefined): Promise<Record<string, DraftView>> {
         const session = entry?.session
         if (!session) return {}
-        const out: Record<string, unknown> = {}
+        const out: Record<string, DraftView> = {}
         for (const d of await this.deps.library.drafts(session.documentId)) {
             if (!session.current.discussion.threads.some((t) => t.threadId === d.threadId)) continue
             for (const image of d.images)
@@ -464,7 +477,7 @@ export class AppController {
                         // a damaged image file: the draft shows a placeholder
                     }
                 }
-            out[d.threadId] = d.content
+            out[d.threadId] = { content: d.content, attachments: d.attachments }
         }
         return out
     }
@@ -524,9 +537,9 @@ export class AppController {
 
     private updateTitle(entry: WindowEntry): void {
         if (entry.win.isDestroyed()) return
-        if (!entry.session) return entry.win.setTitle(ru.app.name)
+        if (!entry.session) return entry.win.setTitle(texts().app.name)
         const unread = entry.session.unreadTotal(this.deps.settings.get().participantId)
-        entry.win.setTitle(ru.discussion.windowTitle(entry.session.title, unread))
+        entry.win.setTitle(texts().discussion.windowTitle(entry.session.title, unread))
     }
 
     /**
@@ -581,7 +594,7 @@ export function safeFileName(title: string): string {
         .join('')
         .replace(/[. ]+$/, '')
         .trim()
-    return (name || ru.dialogs.defaultFileName).slice(0, 120)
+    return (name || texts().dialogs.defaultFileName).slice(0, 120)
 }
 
 /** Image IDs in an editor document (TipTap JSON). */

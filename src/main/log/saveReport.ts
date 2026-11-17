@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog } from 'electron'
 import { promises as fs } from 'node:fs'
 import { release } from 'node:os'
 import { join } from 'node:path'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { Logger } from './logger'
 import { writeReport } from './report'
 
@@ -23,10 +23,10 @@ export async function saveDiagnosticsReport(deps: SaveReportDeps): Promise<void>
     const parent = BrowserWindow.getFocusedWindow() ?? undefined
     const box = {
         type: 'info' as const,
-        title: ru.report.title,
-        message: ru.report.title,
-        detail: ru.report.contents,
-        buttons: [ru.report.save, ru.report.cancel],
+        title: texts().report.title,
+        message: texts().report.title,
+        detail: texts().report.contents,
+        buttons: [texts().report.save, texts().report.cancel],
         defaultId: 0,
         cancelId: 1,
         noLink: true
@@ -38,8 +38,8 @@ export async function saveDiagnosticsReport(deps: SaveReportDeps): Promise<void>
 
     const stamp = new Date().toISOString().slice(0, 10)
     const options = {
-        title: ru.report.title,
-        defaultPath: join(app.getPath('documents'), `BranchChat-отчёт-${stamp}.zip`),
+        title: texts().report.title,
+        defaultPath: join(app.getPath('documents'), texts().report.fileName(stamp)),
         filters: [{ name: 'ZIP', extensions: ['zip'] }]
     }
     const target = parent
@@ -74,8 +74,8 @@ export async function saveDiagnosticsReport(deps: SaveReportDeps): Promise<void>
     })
     const done = {
         type: 'info' as const,
-        title: ru.report.title,
-        message: ru.report.saved,
+        title: texts().report.title,
+        message: texts().report.saved,
         detail: target.filePath,
         buttons: ['OK'],
         noLink: true

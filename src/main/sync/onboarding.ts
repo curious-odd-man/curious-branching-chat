@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { compareText } from '@shared/i18n'
 import { join } from 'node:path'
 import { SYNC_PROTOCOL_VERSION, normalizeSynced, type KeyBundle } from '@shared/sync'
 import type { DocumentContents, RosterMember } from '@shared/validation'
@@ -133,7 +134,7 @@ export class Onboarding {
                 // not a valid key: ignored
             }
         }
-        return out.sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'))
+        return out.sort((a, b) => compareText(a.displayName, b.displayName))
     }
 
     /** A key pasted as text (D-21). */

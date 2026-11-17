@@ -15,6 +15,7 @@ import {
     readStateAfterSend,
     setThreadStatus,
     setThreadTitle,
+    toggleReaction,
     type Author,
     type DomainContext
 } from '@shared/domain'
@@ -24,12 +25,12 @@ import {
     withLocalDisplayName,
     type LoadingMessage
 } from '@shared/sync'
-import type { ReadState, ThreadStatus } from '@shared/validation'
+import type { Attachment, ReactionEmoji, ReadState, ThreadStatus } from '@shared/validation'
 import { collectImageAssetIds, type RichDoc } from '@shared/validation'
 import type { StagedImage } from '@shared/types/assets'
 import type { DocumentContents } from '@shared/validation'
 import type { DocumentView } from '@shared/types/ipc'
-import { describeError } from '@shared/i18n/ru'
+import { describeError } from '@shared/i18n'
 import type { AssetInfo } from '@shared/validation'
 import { DocumentError, newDocumentContents, prepareImage, type PreparedImage } from '../document'
 import type { BlobRef, DiscussionChange, DiscussionOwner } from '../library'
@@ -41,6 +42,9 @@ export interface SessionStore {
     save(after: DocumentContents, newAssets: BlobRef[]): Promise<void>
     readAsset(info: AssetInfo): Promise<Buffer | null>
     setOwner(owner: DiscussionOwner | null): void
+    /** Release 2.4: true if the bytes of an attachment are in the library. */
+    hasBlobNow?(sha256: string): boolean
+    blobSizeNow?(sha256: string): number | null
 }
 
 /** What a caller is about to do, to find out beforehand whether it will change the person's read state. */
@@ -223,7 +227,16 @@ export class DocumentSession implements DiscussionOwner {
     }
 
     /** FR-112 (1): writing in a thread also marks that thread's earlier messages as read. */
-    appendMessage(author: Author, threadId: string, content: RichDoc): void {
+    appendMessage(
+        author: Author,
+        threadId: string,
+        content: RichDoc,
+        attachments: Attachment[] = []
+    ): void {
+        // FR-261: the files of the draft are in the library already (stored when they were attached)
+        for (const a of attachments)
+            if (this.store.blobSizeNow && this.store.blobSizeNow(a.sha256) !== a.size)
+                throw new DomainError('UNKNOWN_ASSET', `attachment ${a.sha256} is not stored`)
         const before = this.contents.discussion
         const readState = readStateAfterSend(
             before,
@@ -253,7 +266,8 @@ export class DocumentSession implements DiscussionOwner {
         const { discussion } = appendMessage(this.deps.ctx, withAssets, {
             threadId,
             author,
-            content
+            content,
+            attachments
         })
         this.pendingAssets.push(
             ...added.map((a) => ({
@@ -359,6 +373,26 @@ export class DocumentSession implements DiscussionOwner {
         return unreadSummary(this.contents.discussion, this.contents.readState, participantId).total
     }
 
+    /** FR-231: adds or removes a reaction of the local person; no read mark and no notification (FR-234). */
+    toggleReaction(author: Author, messageId: string, emoji: ReactionEmoji): void {
+        this.commit({
+            ...this.contents,
+            discussion: toggleReaction(this.contents.discussion, author, messageId, emoji)
+        })
+    }
+
+    /** Hashes of attachments whose bytes are not in the library (still loading, too large, or missing). */
+    missingAttachments(): string[] {
+        const has = this.store.hasBlobNow
+        if (!has) return []
+        const out = new Set<string>()
+        for (const t of this.contents.discussion.threads)
+            for (const m of t.messages)
+                for (const a of m.attachments ?? [])
+                    if (!out.has(a.sha256) && !has.call(this.store, a.sha256)) out.add(a.sha256)
+        return [...out]
+    }
+
     /** Close or reopen a branch (FR-059, FR-060). `by` is the local participant ID (FR-153). */
     setThreadStatus(by: string, threadId: string, status: ThreadStatus): void {
         this.commit({
@@ -408,6 +442,7 @@ export class DocumentSession implements DiscussionOwner {
             syncStatus: this.synced ? this.syncStatus : null,
             localParticipantId,
             missingAssetIds: this.missingAssetIds,
+            missingAttachments: this.missingAttachments(),
             saveError: this._saveError,
             saving: this.saving,
             notices: this.notices

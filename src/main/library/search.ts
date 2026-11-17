@@ -1,6 +1,12 @@
-import { branchLabel, matchRanges, normalizeSearchText, searchWords } from '@shared/domain'
+import {
+    branchLabel,
+    matchRanges,
+    messageSearchText,
+    normalizeSearchText,
+    searchWords
+} from '@shared/domain'
 import type { SearchHit } from '@shared/types/ipc'
-import { richTextToPlain, type Message, type Thread } from '@shared/validation'
+import type { Message, Thread } from '@shared/validation'
 import type { Database } from './db'
 
 const AROUND = 60
@@ -91,7 +97,7 @@ export function search(
         const id = String(r.discussion_id)
         const message = JSON.parse(String(r.data)) as Message
         const thread = threads.get(`${id}:${message.threadId}`)
-        const { snippet, marks } = around(richTextToPlain(message.content), words)
+        const { snippet, marks } = around(messageSearchText(message), words)
         return {
             kind: 'message',
             discussionId: id,

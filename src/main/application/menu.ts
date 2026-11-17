@@ -1,5 +1,5 @@
 import { app, dialog, Menu, type MenuItemConstructorOptions } from 'electron'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { acceleratorOf } from '@shared/shortcuts'
 import type { DiscussionListItem } from '@shared/types/ipc'
 import type { UpdateService } from '../updates/updateService'
@@ -22,20 +22,20 @@ export function buildMenu(
 ): Menu {
     const template: MenuItemConstructorOptions[] = [
         {
-            label: ru.menu.file,
+            label: texts().menu.file,
             submenu: [
                 {
-                    label: ru.menu.newDiscussion,
+                    label: texts().menu.newDiscussion,
                     accelerator: acceleratorOf('newDiscussion'),
                     click: () => controller.sendMenuCommand('new')
                 },
                 {
-                    label: ru.menu.open,
+                    label: texts().menu.open,
                     accelerator: acceleratorOf('open'),
                     click: () => controller.sendMenuCommand('open')
                 },
                 {
-                    label: ru.recent.menuTitle,
+                    label: texts().recent.menuTitle,
                     submenu: recentSubmenu(
                         discussions,
                         recentLimit,
@@ -43,119 +43,122 @@ export function buildMenu(
                     )
                 },
                 { type: 'separator' },
-                { label: ru.menu.newShared, click: () => controller.sendMenuCommand('new-shared') },
                 {
-                    label: ru.menu.joinShared,
+                    label: texts().menu.newShared,
+                    click: () => controller.sendMenuCommand('new-shared')
+                },
+                {
+                    label: texts().menu.joinShared,
                     click: () => controller.sendMenuCommand('join-shared')
                 },
                 {
-                    label: ru.menu.makeShared,
+                    label: texts().menu.makeShared,
                     click: () => controller.sendMenuCommand('make-shared')
                 },
                 {
-                    label: ru.menu.inviteMember,
+                    label: texts().menu.inviteMember,
                     click: () => controller.sendMenuCommand('invite-member')
                 },
                 {
-                    label: ru.menu.exportDiscussion,
+                    label: texts().menu.exportDiscussion,
                     click: () =>
                         void controller
                             .exportDiscussion(controller.focusedEntry())
                             .catch(() => undefined)
                 },
                 { type: 'separator' },
-                { label: ru.menu.backupNow, click: () => backupNow() },
-                { label: ru.menu.restore, click: () => controller.sendMenuCommand('restore') },
+                { label: texts().menu.backupNow, click: () => backupNow() },
+                { label: texts().menu.restore, click: () => controller.sendMenuCommand('restore') },
                 { type: 'separator' },
                 {
-                    label: ru.menu.settings,
+                    label: texts().menu.settings,
                     accelerator: acceleratorOf('settings'),
                     click: () => controller.sendMenuCommand('settings')
                 },
                 { type: 'separator' },
-                { label: ru.menu.closeWindow, role: 'close' },
+                { label: texts().menu.closeWindow, role: 'close' },
                 // Alt+F4 closes only the window (Windows default); with a synchronized discussion the app stays in
                 // the tray. "Выход" closes the whole application.
-                { label: ru.menu.exit, click: () => exit() }
+                { label: texts().menu.exit, click: () => exit() }
             ]
         },
         {
-            label: ru.menu.edit,
+            label: texts().menu.edit,
             submenu: [
-                { label: ru.menu.undo, role: 'undo' },
-                { label: ru.menu.redo, role: 'redo' },
+                { label: texts().menu.undo, role: 'undo' },
+                { label: texts().menu.redo, role: 'redo' },
                 { type: 'separator' },
-                { label: ru.menu.cut, role: 'cut' },
-                { label: ru.menu.copy, role: 'copy' },
-                { label: ru.menu.paste, role: 'paste' },
-                { label: ru.menu.selectAll, role: 'selectAll' }
+                { label: texts().menu.cut, role: 'cut' },
+                { label: texts().menu.copy, role: 'copy' },
+                { label: texts().menu.paste, role: 'paste' },
+                { label: texts().menu.selectAll, role: 'selectAll' }
             ]
         },
         {
-            label: ru.menu.view,
+            label: texts().menu.view,
             submenu: [
                 // the keys are handled for each window (several keys, the keypad, the mouse wheel): the menu only
                 // shows them
                 {
-                    label: ru.menu.zoomIn,
+                    label: texts().menu.zoomIn,
                     accelerator: acceleratorOf('zoomIn'),
                     registerAccelerator: false,
                     click: () => zoom('in')
                 },
                 {
-                    label: ru.menu.zoomOut,
+                    label: texts().menu.zoomOut,
                     accelerator: acceleratorOf('zoomOut'),
                     registerAccelerator: false,
                     click: () => zoom('out')
                 },
                 {
-                    label: ru.menu.zoomReset,
+                    label: texts().menu.zoomReset,
                     accelerator: acceleratorOf('zoomReset'),
                     registerAccelerator: false,
                     click: () => zoom('reset')
                 },
                 { type: 'separator' },
                 {
-                    label: ru.menu.jumpToDate,
+                    label: texts().menu.jumpToDate,
                     accelerator: acceleratorOf('jumpToDate'),
                     click: () => controller.sendMenuCommand('jump-to-date')
                 },
                 {
-                    label: ru.menu.find,
+                    label: texts().menu.find,
                     accelerator: acceleratorOf('find'),
                     click: () => controller.sendMenuCommand('find')
                 },
                 {
-                    label: ru.menu.findAll,
+                    label: texts().menu.findAll,
                     accelerator: acceleratorOf('findAll'),
                     click: () => controller.sendMenuCommand('find-all')
                 },
                 {
-                    label: ru.menu.branchMap,
+                    label: texts().menu.branchMap,
                     accelerator: acceleratorOf('branchMap'),
                     click: () => controller.sendMenuCommand('branch-map')
                 }
             ]
         },
         {
-            label: ru.menu.help,
+            label: texts().menu.help,
             submenu: [
                 {
-                    label: ru.menu.shortcuts,
+                    label: texts().menu.shortcuts,
                     accelerator: acceleratorOf('shortcuts'),
                     click: () => controller.sendMenuCommand('shortcuts')
                 },
-                { label: ru.menu.checkUpdates, click: () => void updates.checkManually() },
-                { label: ru.menu.saveReport, click: () => saveReport() },
+                { label: texts().menu.checkUpdates, click: () => void updates.checkManually() },
+                { label: texts().menu.saveReport, click: () => saveReport() },
                 { type: 'separator' },
                 {
-                    label: ru.menu.about,
+                    label: texts().menu.about,
                     click: () =>
                         void dialog.showMessageBox({
                             type: 'info',
-                            title: ru.app.name,
-                            message: ru.app.name,
-                            detail: ru.app.version(app.getVersion()),
+                            title: texts().app.name,
+                            message: texts().app.name,
+                            detail: texts().app.version(app.getVersion()),
                             buttons: ['OK'],
                             noLink: true
                         })

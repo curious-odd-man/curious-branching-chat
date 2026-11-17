@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import {
     APP_BACKUP_DIR,
     BackupService,
@@ -69,7 +69,7 @@ export async function startLibrary(deps: LibraryStartupDeps): Promise<Library | 
         problem = new Error(check.problems.slice(0, 5).join('; '))
     } catch (err) {
         if (err instanceof LibraryError && err.code === 'NEWER_LIBRARY') {
-            await deps.ask(ru.errors['NEWER_LIBRARY']!, '', [ru.library.quit])
+            await deps.ask(texts().errors['NEWER_LIBRARY']!, '', [texts().library.quit])
             return null
         }
         problem = err
@@ -81,20 +81,20 @@ export async function startLibrary(deps: LibraryStartupDeps): Promise<Library | 
     if (folder) roots.push(join(folder, FOLDER_BACKUP_DIR))
     const backup = await newestBackup(roots)
     const buttons = backup
-        ? [ru.library.restoreLast, ru.library.startEmpty, ru.library.quit]
-        : [ru.library.startEmpty, ru.library.quit]
+        ? [texts().library.restoreLast, texts().library.startEmpty, texts().library.quit]
+        : [texts().library.startEmpty, texts().library.quit]
     const choice = await deps.ask(
-        ru.library.damaged,
+        texts().library.damaged,
         backup
-            ? ru.library.damagedWithBackup(deps.formatDate(backup.createdAt))
-            : ru.library.damagedNoBackup,
+            ? texts().library.damagedWithBackup(deps.formatDate(backup.createdAt))
+            : texts().library.damagedNoBackup,
         buttons
     )
     const action = buttons[choice]
-    if (action !== ru.library.restoreLast && action !== ru.library.startEmpty) return null
+    if (action !== texts().library.restoreLast && action !== texts().library.startEmpty) return null
     const kept = await replaceDamagedLibrary(
         deps.appDir,
-        action === ru.library.restoreLast ? backup!.path : null
+        action === texts().library.restoreLast ? backup!.path : null
     )
     deps.log.info(`the damaged library was kept as ${kept}`)
     try {
@@ -104,6 +104,6 @@ export async function startLibrary(deps: LibraryStartupDeps): Promise<Library | 
     } catch (err) {
         deps.log.error('the library cannot be opened after the replacement', err)
     }
-    await deps.ask(ru.library.openFailed, '', [ru.library.quit])
+    await deps.ask(texts().library.openFailed, '', [texts().library.quit])
     return null
 }

@@ -1,4 +1,4 @@
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { SearchHit } from '@shared/types/ipc'
 import { formatTimestamp } from '../../i18n/format'
 
@@ -18,10 +18,10 @@ export function SearchHitView({ hit }: { hit: SearchHit }): React.JSX.Element {
     if (at < hit.snippet.length) parts.push(hit.snippet.slice(at))
     const where =
         hit.kind === 'branch'
-            ? ru.search.branchTitle
+            ? texts().search.branchTitle
             : hit.threadLabel
-              ? ru.search.branch(hit.threadLabel)
-              : ru.search.main
+              ? texts().search.branch(hit.threadLabel)
+              : texts().search.main
     return (
         <span className="search-hit">
             <span className="search-meta">

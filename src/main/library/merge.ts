@@ -1,3 +1,4 @@
+import { mergeReactions } from '@shared/domain'
 import {
     isLaterStamp,
     normalizeOrder,
@@ -49,12 +50,25 @@ export function mergeDiscussion(base: DocumentContents, incoming: DocumentConten
         if (!other) return t
         incomingThreads.delete(t.threadId)
         let next = t
+        // release 2.4: reactions of a message that both have (last change of a person wins), and its files
+        const otherById = new Map(other.messages.map((m) => [m.messageId, m]))
+        let touchedMessages = false
+        const kept = t.messages.map((m) => {
+            const o = otherById.get(m.messageId)
+            if (!o) return m
+            let out = o.reactions ? mergeReactions(m, o) : m
+            if (out.attachments === undefined && o.attachments !== undefined)
+                out = { ...out, attachments: o.attachments }
+            if (out !== m) touchedMessages = true
+            return out
+        })
+        if (touchedMessages) next = { ...next, messages: kept }
         const known = new Set(t.messages.map((m) => m.messageId))
         const fresh = other.messages.filter((m) => !known.has(m.messageId))
         if (fresh.length > 0) {
             next = {
                 ...next,
-                messages: [...t.messages, ...fresh.map((m) => ({ ...m, threadId: t.threadId }))]
+                messages: [...next.messages, ...fresh.map((m) => ({ ...m, threadId: t.threadId }))]
             }
             addedMessages += fresh.length
         }

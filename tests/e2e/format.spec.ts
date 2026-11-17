@@ -51,7 +51,7 @@ async function send(win: Page, text: string): Promise<void> {
     await win.getByTestId('send').click()
 }
 
-test('a version 1 file is imported as version 2 with clocks; the file stays unchanged (FR-151, FR-152, FR-203)', async () => {
+test('a version 1 file is imported as the current version with clocks; the file stays unchanged (FR-151, FR-152, FR-203)', async () => {
     const dir = await tempDir()
     dirs.push(dir)
     const file = join(dir, 'старый.branchchat')
@@ -83,7 +83,7 @@ test('a version 1 file is imported as version 2 with clocks; the file stays unch
 
     await send(win, 'Третье, уже в новом формате.')
     await expect.poll(async () => (await rawFile(file)).threads[0]!.messages.length).toBe(3)
-    expect((await rawFile(file)).version).toBe(2)
+    expect((await rawFile(file)).version).toBe(3)
     expect((await fs.readFile(file)).equals(before)).toBe(true)
 
     const { threads } = await rawFile(file)

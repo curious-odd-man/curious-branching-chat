@@ -1,9 +1,9 @@
 # BranchChat — Product Requirements
 
-**Status:** MVP requirements plus synchronized discussions and releases 2.1 to 2.3 (revision 16)  
+**Status:** MVP requirements plus synchronized discussions and releases 2.1 to 2.5 (revision 18)  
 **Technology:** Electron + TypeScript (see ADR-001)  
 **Target platform:** Windows 10 and Windows 11  
-**UI language:** Russian  
+**UI language:** Russian (default) and English (release 2.5)  
 **Storage:** A local library in `%APPDATA%\BranchChat` (release 2.2, ADR-003)  
 **Discussion exchange format:** One portable file per discussion (import and export)  
 **Application distribution:** One downloadable Windows `.exe` (per-user installer, no administrator rights)  
@@ -709,6 +709,59 @@ These requirements come from `requirements-next.md` (sections 2.2, 2.3, 2.6, 2.8
   with unread messages.
 - Change: FR-008 no longer applies to drafts (FR-254); the shortcut list has a group "Поиск".
 
+### 5.16. Release 2.4: reactions and file attachments
+
+These requirements come from `requirements-next.md` (sections 2.4 and 2.7); the numbers stay the same. The export
+schema is version 3 (FR-010); version 2 apps refuse version 3 files (FR-016). The sync protocol stays version 1 and has
+four new event types (`sync-protocol.md`, sections 7.11 to 7.14).
+
+- **FR-231.** A person can add a reaction to any message: one of 👍 👎 ❤️ 😂 😮 😢 ✅. A second click on the same
+  reaction removes it. A person can give several different reactions to one message. The picker (☺+) shows on
+  mouse-over and with the keyboard (Tab, Enter, arrows, Escape).
+- **FR-232.** Under the message, each reaction shows the emoji and the count; a mouse-over shows who reacted.
+- **FR-233.** Reactions are stored in the discussion and exported. In a synchronized discussion, they travel with
+  `reaction.set`; the last change of a person wins for each emoji (higher clock; with the same clock, the removal).
+- **FR-234.** A reaction does not make a message unread, does not raise a notification, and does not change the time
+  of the discussion.
+- **FR-261.** A person can attach files to a message: with 📎 (several at once), drag and drop, or paste. Pictures that
+  are dropped or pasted keep their behavior (in the text). A message can have files and no text; at most 50 files.
+- **FR-262.** A message shows each attachment with the file name, the size, and an icon. "Сохранить как…" saves a
+  copy. "Открыть" copies the file to a new folder in the temporary folder and opens it with Windows.
+- **FR-263.** A saved or opened copy gets the Windows "downloaded from the internet" mark (Mark of the Web).
+- **FR-264.** BranchChat never opens or runs an attachment by itself.
+- **FR-265.** "Наибольший размер вложения" (1 to 1 000 MB, default 100 MB). A larger file is refused with a message
+  that names the file and the limit. In a synchronized discussion, the receiver's file size limit (FR-166) also
+  applies.
+- **FR-266.** Attachments are stored by content hash; the same file attached twice is stored once.
+- **FR-267.** Before "Открыть", BranchChat warns for `.exe`, `.bat`, `.cmd`, `.ps1`, `.js`, `.vbs`, `.msi`, `.lnk`,
+  `.docm`, `.xlsm`; the warning names the type and the author. No type is blocked. The list is part of the app.
+- **FR-268.** In a synchronized discussion, each member tells the others its file size limit (`member.limits.set`,
+  kept in the local sync state). A member that has not told it counts with 30 MB, so the default is not sent. Before a
+  file is sent, BranchChat names the members whose limit is smaller ("Борис не получит этот файл: предел 30 МБ"); the
+  person can still send.
+- **FR-268a.** A member whose limit is smaller than a file sees "Файл слишком большой для ваших настроек (N МБ)", where
+  N is the size of the file, with "Изменить предел" (Settings). After the person raises the limit, the file is read at
+  the next scan, for 30 days (D-34).
+- **FR-269.** An older version keeps the new events waiting and shows "Обновите приложение"; it loses nothing. It sees
+  the message of a file without the file.
+- **FR-214 (change).** The search also finds the names of attachments.
+
+### 5.17. Release 2.5: English user interface
+
+These requirements come from `requirements-next.md` (section 2.10); the numbers stay the same.
+
+- **FR-291.** All texts of the interface exist in Russian and English: menus, dialogs, errors, notifications, the tray
+  menu, and the installer. Dates, times, and numbers follow the language (English: day, month, year; 24-hour time).
+  The installer takes its language from the Windows language, without a question.
+- **FR-292.** Settings have "Язык / Language". The default is Russian, whatever the Windows language is.
+- **FR-293.** A change of the language applies after a restart of the app; Settings offer "Перезапустить сейчас"
+  (in the language that runs).
+- **FR-294.** Documents do not change: the documents in `docs/` stay in English, and the user guide stays in Russian.
+- **FR-295.** Text in discussions is never translated. A name that the app makes (an empty file name becomes "файл"
+  or "file") uses the language of the person who makes it.
+- **NFR-205.** Interface texts are in `src/shared/i18n/ru.ts` and `en.ts`, never in code; code reads them with
+  `texts()`. A type check and a unit test check that both files have the same keys and functions.
+
 ## 6. Non-functional requirements
 
 - **NFR-001.** The application must work offline for all discussion operations.
@@ -779,8 +832,11 @@ This is a conceptual model, not a final implementation schema.
 - `createdAt` — timestamp (UTC), for display.
 - `content` — structured rich-text content in a versioned format (not HTML).
 - `assetReferences` — references to embedded assets.
+- `reactions` — reactions: emoji, person, on/off, clock (schema version 3, FR-233).
+- `attachments` — files: name, size, type, SHA-256; the bytes are ZIP entries `attachments/<sha256>` (schema version
+  3, FR-261).
 
-Sent messages are immutable.
+Sent messages are immutable; only their reactions change.
 
 ### Thread / Branch
 
@@ -960,6 +1016,15 @@ every message shows who has read it.
 
 The application is distributed as a single installer `.exe` that needs no administrator rights and no separate runtime.
 Windows file association allows users to open discussion files by double-clicking them in Explorer.
+
+## Changes in revision 18
+
+- Section 5.17: release 2.5 (FR-291 to FR-295, NFR-205): the English user interface.
+
+## Changes in revision 17
+
+- Section 5.16: release 2.4 (FR-231 to FR-234, FR-261 to FR-269); FR-214 finds attachment names; the data model of a
+  message has reactions and attachments (schema version 3).
 
 ## Changes in revision 16
 

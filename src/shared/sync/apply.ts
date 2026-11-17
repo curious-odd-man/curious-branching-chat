@@ -9,6 +9,7 @@ import type {
     Thread
 } from '../validation/schemas'
 import { collectImageAssetIds } from '../validation/richText'
+import { withReaction } from '../domain/reactions'
 import { isLaterStamp, maxClock, normalizeOrder } from '../validation/order'
 import type { RosterMember, SyncInfo } from '../validation/roster'
 import type { EventPayload, EventType } from './schemas'
@@ -39,8 +40,12 @@ export type DocumentEventType =
     | 'delivery.added'
     | 'member.added'
     | 'profile.updated'
+    | 'reaction.set'
+    | 'message.attachments'
 
 export const DOCUMENT_EVENT_TYPES: readonly DocumentEventType[] = [
+    'reaction.set',
+    'message.attachments',
     'message.sent',
     'branch.created',
     'branch.status.set',
@@ -197,6 +202,72 @@ function applyMessage(contents: DocumentContents, e: VerifiedEvent<'message.sent
         contents,
         touched(next, m.createdAt),
         newAssets.map((a) => a.assetId)
+    )
+}
+
+function findMessageIn(
+    d: DiscussionData,
+    messageId: string
+): { thread: Thread; message: Message } | undefined {
+    for (const thread of d.threads) {
+        const message = thread.messages.find((m) => m.messageId === messageId)
+        if (message) return { thread, message }
+    }
+    return undefined
+}
+
+function replaceMessage(d: DiscussionData, threadId: string, message: Message): DiscussionData {
+    return {
+        ...d,
+        threads: d.threads.map((t) =>
+            t.threadId === threadId
+                ? {
+                      ...t,
+                      messages: t.messages.map((m) =>
+                          m.messageId === message.messageId ? message : m
+                      )
+                  }
+                : t
+        )
+    }
+}
+
+/** FR-233: the last change of a person wins for each emoji; no unread state and no `updatedAt` change (FR-234). */
+function applyReaction(contents: DocumentContents, e: VerifiedEvent<'reaction.set'>): ApplyResult {
+    const d = contents.discussion
+    const found = findMessageIn(d, e.payload.messageId)
+    if (!found) return { status: 'pending', waitingFor: `message ${e.payload.messageId}` }
+    const next = withReaction(found.message, {
+        emoji: e.payload.emoji,
+        by: e.senderId,
+        on: e.payload.on,
+        clock: e.clock
+    })
+    if (next === found.message) return { status: 'duplicate' }
+    const withPerson = withParticipant(d, participantFor(contents, e.senderId, e.senderId))
+    return done(contents, replaceMessage(withPerson, found.thread.threadId, next))
+}
+
+/** FR-261: the list of files of a message; only its author can send it, and only once. The bytes come apart. */
+function applyAttachments(
+    contents: DocumentContents,
+    e: VerifiedEvent<'message.attachments'>
+): ApplyResult {
+    const d = contents.discussion
+    const found = findMessageIn(d, e.payload.messageId)
+    if (!found) return { status: 'pending', waitingFor: `message ${e.payload.messageId}` }
+    if (found.message.authorId !== e.senderId)
+        return { status: 'rejected', reason: 'attachments of a message of another member' }
+    if (found.message.attachments !== undefined) return { status: 'duplicate' }
+    const attachments = e.payload.attachments.map(({ name, size, type, sha256 }) => ({
+        name,
+        size,
+        type,
+        sha256
+    }))
+    return done(
+        contents,
+        replaceMessage(d, found.thread.threadId, { ...found.message, attachments })
     )
 }
 
@@ -484,6 +555,10 @@ function applyEventRaw(contents: DocumentContents, event: VerifiedEvent): ApplyR
             return applyMemberAdded(contents, event as VerifiedEvent<'member.added'>)
         case 'profile.updated':
             return applyProfile(contents, event as VerifiedEvent<'profile.updated'>)
+        case 'reaction.set':
+            return applyReaction(contents, event as VerifiedEvent<'reaction.set'>)
+        case 'message.attachments':
+            return applyAttachments(contents, event as VerifiedEvent<'message.attachments'>)
         default:
             return { status: 'rejected', reason: `${event.type} does not change the discussion` }
     }

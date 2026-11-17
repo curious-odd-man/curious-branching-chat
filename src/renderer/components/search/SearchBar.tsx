@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { searchWords } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { withKeys } from '@shared/shortcuts'
 import type { SearchHit } from '@shared/types/ipc'
 import { SearchHitView } from './SearchHitView'
@@ -51,9 +51,9 @@ export function SearchBar({ onShow, onClose }: Props): React.JSX.Element {
                     autoFocus
                     type="search"
                     data-testid="search-input"
-                    placeholder={ru.search.placeholder}
-                    aria-label={ru.search.placeholder}
-                    title={ru.search.hint}
+                    placeholder={texts().search.placeholder}
+                    aria-label={texts().search.placeholder}
+                    title={texts().search.hint}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -73,14 +73,14 @@ export function SearchBar({ onShow, onClose }: Props): React.JSX.Element {
                     {hits === null
                         ? ''
                         : hits.length === 0
-                          ? ru.search.nothing
-                          : ru.search.count(current + 1, hits.length)}
+                          ? texts().search.nothing
+                          : texts().search.count(current + 1, hits.length)}
                 </span>
                 <button
                     type="button"
                     data-testid="search-previous"
-                    title={withKeys(ru.search.previous, 'findPrevious')}
-                    aria-label={ru.search.previous}
+                    title={withKeys(texts().search.previous, 'findPrevious')}
+                    aria-label={texts().search.previous}
                     disabled={!hits?.length}
                     onClick={() => go(current - 1)}
                 >
@@ -89,8 +89,8 @@ export function SearchBar({ onShow, onClose }: Props): React.JSX.Element {
                 <button
                     type="button"
                     data-testid="search-next"
-                    title={withKeys(ru.search.next, 'findNext')}
-                    aria-label={ru.search.next}
+                    title={withKeys(texts().search.next, 'findNext')}
+                    aria-label={texts().search.next}
                     disabled={!hits?.length}
                     onClick={() => go(current + 1)}
                 >
@@ -99,7 +99,7 @@ export function SearchBar({ onShow, onClose }: Props): React.JSX.Element {
                 <button
                     type="button"
                     data-testid="search-close"
-                    aria-label={ru.search.close}
+                    aria-label={texts().search.close}
                     onClick={onClose}
                 >
                     ×

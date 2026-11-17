@@ -1,4 +1,5 @@
-import type { DiscussionData, Participant, ReadState } from '../validation/schemas'
+import type { Attachment, DiscussionData, Participant, ReadState } from '../validation/schemas'
+import type { Language } from '../i18n'
 import type { LoadingMessage } from '../sync/loading'
 
 /** IPC channel names shared by main and preload. */
@@ -60,6 +61,19 @@ export const IPC = {
     branchCreate: 'branch:create',
     branchSetStatus: 'branch:set-status',
     branchSetTitle: 'branch:set-title',
+    reactionToggle: 'reaction:toggle',
+    attachmentPick: 'attachment:pick',
+    attachmentAddPaths: 'attachment:add-paths',
+    attachmentAddBytes: 'attachment:add-bytes',
+    attachmentSave: 'attachment:save',
+    attachmentOpen: 'attachment:open',
+    attachmentReceivers: 'attachment:receivers',
+    settingsSetAttachmentLimit: 'settings:set-attachment-limit',
+    settingsSetLanguage: 'settings:set-language',
+    /** Synchronous: the language that this process runs with (the preload script reads it once). */
+    languageGet: 'language:get',
+    appRelaunch: 'app:relaunch',
+
     /** main -> renderer */
     documentChanged: 'document:changed',
     /** main -> renderer: only the save status changed (a save finished); sent instead of the whole discussion. */
@@ -122,6 +136,29 @@ export interface SettingsView {
     sidebar: SidebarSettings
     /** FR-207: the folder for backups that the person chose, or null. */
     backupFolder: string | null
+    /** FR-265: the largest file that can be attached, in MB (default 100). */
+    attachmentLimitMb: number
+    /** FR-292: the language of the interface (the one that runs now may differ until a restart, FR-293). */
+    language: Language
+}
+
+/** FR-261: the result of adding files to a draft; refused files are named with the reason. */
+export interface AttachResult {
+    added: Attachment[]
+    refused: Array<{ name: string; reason: 'too-large' | 'unreadable' | 'too-many' }>
+    limitMb: number
+}
+
+/** FR-251: a kept draft of a branch: editor JSON and attached files. */
+export interface DraftView {
+    content: unknown
+    attachments: Attachment[]
+}
+
+/** FR-268: members that will not get a file because their limit is smaller. */
+export interface SmallLimit {
+    displayName: string
+    maxFileMb: number
 }
 
 export interface SidebarSettings {
@@ -295,6 +332,8 @@ export interface DocumentView {
     localParticipantId: string
     /** Assets listed in the discussion whose data is missing from the file (placeholders, FR-075). */
     missingAssetIds: string[]
+    /** Release 2.4: attachments (hashes) whose bytes are not here: loading, too large (FR-268a), or missing. */
+    missingAttachments: string[]
     /** Set when the last write to the file failed (FR-008). */
     saveError: string | null
     /** True while a write is pending or running. */

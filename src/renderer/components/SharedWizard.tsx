@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from './Modal'
-import { describeError, ru } from '@shared/i18n/ru'
+import { describeError, texts } from '@shared/i18n'
 import type {
     CandidateView,
     IdentityView,
@@ -29,13 +29,6 @@ interface Props {
 
 const POLL_MS = 2000
 
-const stepName: Record<string, string> = {
-    root: 'папка не найдена',
-    write: 'запись',
-    read: 'чтение',
-    delete: 'удаление'
-}
-
 /**
  * Wizards of synchronized discussions (design 12.3 to 12.5, FR-158, FR-162): create, convert the open discussion, or
  * join by invitation. The person checks every fingerprint; private keys never leave this computer.
@@ -50,7 +43,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
     const [pasted, setPasted] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [busy, setBusy] = useState(false)
-    const [newTitle, setNewTitle] = useState<string>(ru.shared.defaultFileName)
+    const [newTitle, setNewTitle] = useState<string>(texts().shared.defaultFileName)
     const [roster, setRoster] = useState<RosterView | null>(null)
     const [invitation, setInvitation] = useState<InvitationView | null>(null)
     const hasName = Boolean(settings?.displayName)
@@ -250,14 +243,14 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
 
     const title =
         mode === 'new'
-            ? ru.shared.newTitle
+            ? texts().shared.newTitle
             : mode === 'convert'
-              ? ru.shared.convertTitle
+              ? texts().shared.convertTitle
               : mode === 'invite'
-                ? ru.shared.inviteTitle
+                ? texts().shared.inviteTitle
                 : mode === 'reinvite'
-                  ? `${ru.shared.reinviteTitle}: ${target?.displayName ?? ''}`
-                  : ru.shared.joinTitle
+                  ? `${texts().shared.reinviteTitle}: ${target?.displayName ?? ''}`
+                  : texts().shared.joinTitle
     // a re-invitation offers new keys only: not other members, and not the key the member has now
     const shown = candidates.filter((c) =>
         mode === 'reinvite'
@@ -270,7 +263,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
         return (
             <Modal labelledBy="wizard-title" onEscape={onClose}>
                 <div className="dialog settings wizard" data-testid="shared-roster">
-                    <h2 id="wizard-title">{ru.shared.rosterTitle}</h2>
+                    <h2 id="wizard-title">{texts().shared.rosterTitle}</h2>
                     <RosterList roster={roster} />
                     <div className="buttons">
                         <button
@@ -279,7 +272,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                             data-testid="wizard-close"
                             onClick={onClose}
                         >
-                            {ru.shared.close}
+                            {texts().shared.close}
                         </button>
                     </div>
                 </div>
@@ -292,14 +285,14 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                 <h2 id="wizard-title">{title}</h2>
                 <p className="hint">
                     {mode === 'invite'
-                        ? ru.shared.inviteIntro
+                        ? texts().shared.inviteIntro
                         : mode === 'reinvite'
-                          ? ru.shared.reinviteIntro(target?.displayName ?? '')
-                          : ru.shared.intro}
+                          ? texts().shared.reinviteIntro(target?.displayName ?? '')
+                          : texts().shared.intro}
                 </p>
                 {mode === 'reinvite' && target && (
                     <p className="fingerprint-row">
-                        <span>{ru.shared.reinviteCurrent}: </span>
+                        <span>{texts().shared.reinviteCurrent}: </span>
                         <code className="fingerprint" data-testid="reinvite-old-fingerprint">
                             {target.fingerprint}
                         </code>
@@ -307,18 +300,18 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                 )}
                 {!fromDiscussion && settings && !settings.startWithWindowsSettled && (
                     <p className="hint" data-testid="wizard-autostart">
-                        {ru.shared.autoStartNote}
+                        {texts().shared.autoStartNote}
                     </p>
                 )}
 
                 <section>
-                    <h3>{ru.shared.keyStep}</h3>
+                    <h3>{texts().shared.keyStep}</h3>
                     {identity?.state === 'unavailable' && (
-                        <p className="error-text">{ru.shared.keysUnavailable}</p>
+                        <p className="error-text">{texts().shared.keysUnavailable}</p>
                     )}
                     {identity?.state === 'ready' && (
                         <p className="fingerprint-row">
-                            <span>{ru.identity.fingerprintLabel}: </span>
+                            <span>{texts().identity.fingerprintLabel}: </span>
                             <code className="fingerprint" data-testid="wizard-own-fingerprint">
                                 {identity.fingerprint}
                             </code>
@@ -326,16 +319,16 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                     )}
                     {!hasName && (
                         <p className="error-text" data-testid="wizard-name-first">
-                            {ru.shared.nameFirst}
+                            {texts().shared.nameFirst}
                         </p>
                     )}
-                    <p className="hint">{ru.shared.keyHint}</p>
+                    <p className="hint">{texts().shared.keyHint}</p>
                 </section>
 
                 {mode === 'new' && (
                     <section>
                         <label>
-                            {ru.shared.titleLabel}
+                            {texts().shared.titleLabel}
                             <input
                                 data-testid="wizard-title"
                                 maxLength={500}
@@ -346,8 +339,8 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                     </section>
                 )}
                 <section hidden={fromDiscussion}>
-                    <h3>{ru.shared.folderStep}</h3>
-                    <p className="hint">{ru.shared.folderHint}</p>
+                    <h3>{texts().shared.folderStep}</h3>
+                    <p className="hint">{texts().shared.folderHint}</p>
                     <div className="buttons">
                         {folder && (
                             <code className="path" data-testid="wizard-folder" title={folder.path}>
@@ -360,7 +353,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                             disabled={!ready}
                             onClick={chooseFolder}
                         >
-                            {ru.shared.chooseFolder}
+                            {texts().shared.chooseFolder}
                         </button>
                     </div>
                     {folder && (
@@ -370,9 +363,10 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                             data-ok={folder.test.ok ? 'true' : 'false'}
                         >
                             {folder.test.ok
-                                ? ru.shared.folderOk
-                                : ru.shared.folderFailed(
-                                      stepName[folder.test.step] ?? folder.test.step
+                                ? texts().shared.folderOk
+                                : texts().shared.folderFailed(
+                                      texts().shared.folderSteps[folder.test.step] ??
+                                          folder.test.step
                                   )}
                         </p>
                     )}
@@ -380,9 +374,11 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
 
                 {mode !== 'join' && root && (
                     <section data-testid="wizard-members">
-                        <h3>{ru.shared.membersStep}</h3>
-                        <p className="hint">{ru.shared.membersHint}</p>
-                        {shown.length === 0 && <p className="hint">{ru.shared.noCandidates}</p>}
+                        <h3>{texts().shared.membersStep}</h3>
+                        <p className="hint">{texts().shared.membersHint}</p>
+                        {shown.length === 0 && (
+                            <p className="hint">{texts().shared.noCandidates}</p>
+                        )}
                         <ul className="candidates">
                             {shown.map((c) => (
                                 <li
@@ -404,8 +400,8 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                                             />
                                             <span>
                                                 {discarded.has(c.participantId)
-                                                    ? ru.shared.discarded
-                                                    : ru.shared.accept}
+                                                    ? texts().shared.discarded
+                                                    : texts().shared.accept}
                                             </span>
                                         </label>
                                     </span>
@@ -414,14 +410,14 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                         </ul>
                         <div className="buttons">
                             <button type="button" data-testid="wizard-refresh" onClick={refresh}>
-                                {ru.shared.refresh}
+                                {texts().shared.refresh}
                             </button>
                             <button type="button" data-testid="wizard-key-file" onClick={fromFile}>
-                                {ru.shared.fromFile}
+                                {texts().shared.fromFile}
                             </button>
                         </div>
                         <label>
-                            {ru.shared.pasteLabel}
+                            {texts().shared.pasteLabel}
                             <textarea
                                 data-testid="wizard-paste"
                                 rows={2}
@@ -436,7 +432,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                                 disabled={pasted.trim().length === 0}
                                 onClick={addPasted}
                             >
-                                {ru.shared.addPasted}
+                                {texts().shared.addPasted}
                             </button>
                         </div>
                     </section>
@@ -448,33 +444,36 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                         data-state={invitation?.state ?? 'waiting'}
                     >
                         {(!invitation || invitation.state === 'waiting') && (
-                            <p className="hint">{ru.shared.joinWaiting}</p>
+                            <p className="hint">{texts().shared.joinWaiting}</p>
                         )}
                         {invitation?.state === 'incomplete' && (
                             <p className="hint">
-                                {ru.shared.joinIncomplete(invitation.received, invitation.total)}
+                                {texts().shared.joinIncomplete(
+                                    invitation.received,
+                                    invitation.total
+                                )}
                                 <progress max={invitation.total} value={invitation.received} />
                             </p>
                         )}
                         {invitation?.state === 'already' && (
-                            <p className="hint">{ru.shared.joinAlready}</p>
+                            <p className="hint">{texts().shared.joinAlready}</p>
                         )}
                         {invitation?.state === 'ready' && (
                             <>
                                 <h3 data-testid="invitation-from">
-                                    {ru.shared.joinReady(invitation.inviterName)}
+                                    {texts().shared.joinReady(invitation.inviterName)}
                                 </h3>
                                 <p>«{invitation.title}»</p>
                                 <p className="fingerprint-row">
-                                    <span>{ru.identity.fingerprintLabel}: </span>
+                                    <span>{texts().identity.fingerprintLabel}: </span>
                                     <code className="fingerprint" data-testid="inviter-fingerprint">
                                         {invitation.inviterFingerprint}
                                     </code>
                                 </p>
-                                <p className="hint">{ru.shared.joinCheck}</p>
+                                <p className="hint">{texts().shared.joinCheck}</p>
                                 {invitation.rejoin && (
                                     <p className="hint" data-testid="invitation-rejoin">
-                                        {ru.shared.rejoinNote}
+                                        {texts().shared.rejoinNote}
                                     </p>
                                 )}
                             </>
@@ -489,7 +488,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                 )}
                 <div className="buttons">
                     <button type="button" data-testid="wizard-cancel" onClick={onClose}>
-                        {ru.shared.cancel}
+                        {texts().shared.cancel}
                     </button>
                     {mode === 'reinvite' ? (
                         <button
@@ -504,7 +503,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                             }
                             onClick={reinvite}
                         >
-                            {ru.shared.reinviteSend}
+                            {texts().shared.reinviteSend}
                         </button>
                     ) : mode === 'invite' ? (
                         <button
@@ -519,7 +518,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                             }
                             onClick={invite}
                         >
-                            {ru.shared.inviteSend}
+                            {texts().shared.inviteSend}
                         </button>
                     ) : mode === 'join' ? (
                         <button
@@ -529,7 +528,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                             disabled={busy || invitation?.state !== 'ready'}
                             onClick={join}
                         >
-                            {ru.shared.joinAccept}
+                            {texts().shared.joinAccept}
                         </button>
                     ) : (
                         <button
@@ -545,7 +544,7 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
                             }
                             onClick={create}
                         >
-                            {mode === 'convert' ? ru.shared.convert : ru.shared.create}
+                            {mode === 'convert' ? texts().shared.convert : texts().shared.create}
                         </button>
                     )}
                 </div>
@@ -554,12 +553,13 @@ export function SharedWizard({ mode, settings, onClose, target }: Props): React.
     )
 }
 
-const stateLabel = {
-    self: ru.shared.stateSelf,
-    invited: ru.shared.stateInvited,
-    joined: ru.shared.stateJoined,
-    member: ru.shared.stateMember
-} as const
+const stateLabel = (state: 'self' | 'invited' | 'joined' | 'member'): string =>
+    ({
+        self: texts().shared.stateSelf,
+        invited: texts().shared.stateInvited,
+        joined: texts().shared.stateJoined,
+        member: texts().shared.stateMember
+    })[state]
 
 export function RosterList({
     roster,
@@ -580,9 +580,11 @@ export function RosterList({
                 >
                     <span className="candidate-name">{m.displayName}</span>
                     <code className="fingerprint">{m.fingerprint}</code>
-                    <span className="roster-state">{stateLabel[m.state]}</span>
+                    <span className="roster-state">{stateLabel(m.state)}</span>
                     <span className="roster-added" data-testid="roster-added-by">
-                        {m.addedByName ? ru.shared.addedBy(m.addedByName) : ru.shared.creator}
+                        {m.addedByName
+                            ? texts().shared.addedBy(m.addedByName)
+                            : texts().shared.creator}
                     </span>
                     {onReinvite && m.state !== 'self' && (
                         <button
@@ -597,7 +599,7 @@ export function RosterList({
                                 })
                             }
                         >
-                            {ru.shared.reinviteTitle}…
+                            {texts().shared.reinviteTitle}…
                         </button>
                     )}
                 </li>
@@ -629,11 +631,11 @@ export function RosterDialog({
     return (
         <Modal labelledBy="roster-title" onEscape={onClose}>
             <div className="dialog settings wizard" data-testid="roster-dialog">
-                <h2 id="roster-title">{ru.shared.rosterTitle}</h2>
+                <h2 id="roster-title">{texts().shared.rosterTitle}</h2>
                 {roster && <RosterList roster={roster} onReinvite={onReinvite} />}
                 <div className="buttons">
                     <button type="button" data-testid="roster-invite" onClick={onInvite}>
-                        {ru.shared.inviteTitle}…
+                        {texts().shared.inviteTitle}…
                     </button>
                     {/* focus inside the dialog, so Escape and Tab work at once */}
                     <button
@@ -643,7 +645,7 @@ export function RosterDialog({
                         autoFocus
                         onClick={onClose}
                     >
-                        {ru.shared.close}
+                        {texts().shared.close}
                     </button>
                 </div>
             </div>

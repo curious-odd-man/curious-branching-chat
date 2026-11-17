@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { normalizeLinkInput } from '@shared/validation'
 import { Modal } from '../Modal'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 interface Props {
     initialLabel: string
@@ -40,9 +40,9 @@ export function LinkDialog({
     return (
         <Modal labelledBy="link-title" restoreFocus={false}>
             <div className="dialog">
-                <h2 id="link-title">{ru.linkDialog.title}</h2>
+                <h2 id="link-title">{texts().linkDialog.title}</h2>
                 <label>
-                    {ru.linkDialog.label}
+                    {texts().linkDialog.label}
                     <input
                         data-testid="link-label"
                         value={label}
@@ -51,7 +51,7 @@ export function LinkDialog({
                     />
                 </label>
                 <label>
-                    {ru.linkDialog.url}
+                    {texts().linkDialog.url}
                     <input
                         data-testid="link-url"
                         autoFocus
@@ -65,17 +65,17 @@ export function LinkDialog({
                 </label>
                 {invalid && (
                     <p className="field-error" role="alert" data-testid="link-error">
-                        {ru.linkDialog.invalidUrl}
+                        {texts().linkDialog.invalidUrl}
                     </p>
                 )}
                 <div className="buttons">
                     {onRemove && (
                         <button type="button" data-testid="link-remove" onClick={onRemove}>
-                            {ru.linkDialog.remove}
+                            {texts().linkDialog.remove}
                         </button>
                     )}
                     <button type="button" onClick={onCancel}>
-                        {ru.linkDialog.cancel}
+                        {texts().linkDialog.cancel}
                     </button>
                     <button
                         type="button"
@@ -83,7 +83,7 @@ export function LinkDialog({
                         data-testid="link-apply"
                         onClick={submit}
                     >
-                        {ru.linkDialog.apply}
+                        {texts().linkDialog.apply}
                     </button>
                 </div>
             </div>

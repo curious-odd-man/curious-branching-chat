@@ -1,5 +1,5 @@
 import { Modal } from './Modal'
-import { describeError, ru } from '@shared/i18n/ru'
+import { describeError, texts } from '@shared/i18n'
 import type { UpdateView } from '@shared/types/ipc'
 import { formatBytes, formatDate } from '../i18n/format'
 
@@ -22,13 +22,17 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
         <Modal labelledBy="update-title" onEscape={close}>
             <div className="dialog update" data-testid="update-dialog" data-phase={phase}>
                 <h2 id="update-title">
-                    {info ? ru.update.available(info.version) : ru.update.title}
+                    {info ? texts().update.available(info.version) : texts().update.title}
                 </h2>
 
-                {phase === 'checking' && <p data-testid="update-checking">{ru.update.checking}</p>}
+                {phase === 'checking' && (
+                    <p data-testid="update-checking">{texts().update.checking}</p>
+                )}
 
                 {phase === 'up-to-date' && (
-                    <p data-testid="update-up-to-date">{ru.update.upToDate(view.currentVersion)}</p>
+                    <p data-testid="update-up-to-date">
+                        {texts().update.upToDate(view.currentVersion)}
+                    </p>
                 )}
 
                 {phase === 'error' && (
@@ -39,11 +43,11 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
 
                 {info && (
                     <>
-                        <p>{ru.update.current(view.currentVersion)}</p>
+                        <p>{texts().update.current(view.currentVersion)}</p>
                         <dl className="facts">
                             {info.releaseDate && (
                                 <>
-                                    <dt>{ru.update.releaseDate}</dt>
+                                    <dt>{texts().update.releaseDate}</dt>
                                     <dd data-testid="update-date">
                                         {formatDate(info.releaseDate)}
                                     </dd>
@@ -51,34 +55,34 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
                             )}
                             {info.sizeBytes !== null && (
                                 <>
-                                    <dt>{ru.update.size}</dt>
+                                    <dt>{texts().update.size}</dt>
                                     <dd data-testid="update-size">{formatBytes(info.sizeBytes)}</dd>
                                 </>
                             )}
                         </dl>
-                        <h3>{ru.update.notes}</h3>
+                        <h3>{texts().update.notes}</h3>
                         <pre className="notes" data-testid="update-notes">
-                            {info.notes ?? ru.update.noNotes}
+                            {info.notes ?? texts().update.noNotes}
                         </pre>
                     </>
                 )}
 
                 {phase === 'downloading' && (
                     <div>
-                        <p>{ru.update.downloading}</p>
+                        <p>{texts().update.downloading}</p>
                         <progress
                             max={100}
                             value={view.percent}
                             data-testid="update-progress"
-                            aria-label={ru.update.downloading}
+                            aria-label={texts().update.downloading}
                         />
                     </div>
                 )}
 
                 {phase === 'ready' && (
                     <div data-testid="update-ready">
-                        <p>{ru.update.ready}</p>
-                        <p className="hint">{ru.update.readyHint}</p>
+                        <p>{texts().update.ready}</p>
+                        <p className="hint">{texts().update.readyHint}</p>
                     </div>
                 )}
 
@@ -89,13 +93,13 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
                             data-testid="update-open-page"
                             onClick={() => void api.openReleasePage()}
                         >
-                            {ru.update.openPage}
+                            {texts().update.openPage}
                         </button>
                     )}
                     {phase === 'available' && (
                         <>
                             <button type="button" data-testid="update-later" onClick={close}>
-                                {ru.update.later}
+                                {texts().update.later}
                             </button>
                             <button
                                 type="button"
@@ -104,14 +108,14 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
                                 autoFocus
                                 onClick={() => void api.downloadUpdate()}
                             >
-                                {ru.update.download}
+                                {texts().update.download}
                             </button>
                         </>
                     )}
                     {phase === 'ready' && (
                         <>
                             <button type="button" data-testid="update-later" onClick={close}>
-                                {ru.update.later}
+                                {texts().update.later}
                             </button>
                             <button
                                 type="button"
@@ -120,7 +124,7 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
                                 autoFocus
                                 onClick={() => void api.installUpdate()}
                             >
-                                {ru.update.installNow}
+                                {texts().update.installNow}
                             </button>
                         </>
                     )}
@@ -132,7 +136,7 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
                                     data-testid="update-retry"
                                     onClick={() => void api.downloadUpdate()}
                                 >
-                                    {ru.update.retry}
+                                    {texts().update.retry}
                                 </button>
                             )}
                             {!info && view.errorCode === 'UPDATE_CHECK_FAILED' && (
@@ -141,7 +145,7 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
                                     data-testid="update-retry"
                                     onClick={() => void api.checkForUpdates()}
                                 >
-                                    {ru.update.retry}
+                                    {texts().update.retry}
                                 </button>
                             )}
                         </>
@@ -153,7 +157,7 @@ export function UpdateDialog({ view }: Props): React.JSX.Element {
                             data-testid="update-close"
                             onClick={close}
                         >
-                            {ru.update.close}
+                            {texts().update.close}
                         </button>
                     )}
                 </div>

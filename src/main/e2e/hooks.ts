@@ -98,8 +98,15 @@ export function installE2eHooks(): void {
         __openedLinks: string[]
         __contextMenus: string[][]
         __registry: InMemoryRegistry
+        __openedFiles: string[]
     }
     g.__openedLinks = []
+    g.__openedFiles = []
+    // FR-262: never start another program from tests; record the file that Windows would open
+    ;(shell as unknown as Record<string, unknown>)['openPath'] = async (path: string) => {
+        g.__openedFiles.push(path)
+        return ''
+    }
     g.__contextMenus = []
     // Record popup menus (labels only) instead of showing them.
     ;(Menu.prototype as unknown as { popup: () => void }).popup = function (this: Menu) {

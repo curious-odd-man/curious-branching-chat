@@ -3,8 +3,12 @@ import { richDocSchema } from './richText'
 import type { SyncInfo } from './roster'
 
 export const FORMAT_NAME = 'branchchat'
-/** Version 2 adds logical clocks (FR-151 to FR-153) and the optional roster entry `sync.json` (FR-154). */
-export const CURRENT_SCHEMA_VERSION = 2
+/**
+ * Version 2 adds logical clocks (FR-151 to FR-153) and the optional roster entry `sync.json` (FR-154).
+ * Version 3 adds reactions and file attachments per message, and the ZIP entries `attachments/<sha256>` (FR-233,
+ * FR-261 to FR-266).
+ */
+export const CURRENT_SCHEMA_VERSION = 3
 
 const isoUtc = z
     .string()
@@ -36,6 +40,44 @@ export const participantSchema = z
     .passthrough()
 export type Participant = z.infer<typeof participantSchema>
 
+/** FR-231: the reactions a person can give. The order is the order under a message. */
+export const REACTION_EMOJI = ['👍', '👎', '❤️', '😂', '😮', '😢', '✅'] as const
+export type ReactionEmoji = (typeof REACTION_EMOJI)[number]
+export const reactionEmojiSchema = z.enum(REACTION_EMOJI)
+
+/**
+ * One reaction of one person (FR-231, FR-233). `on: false` is a removed reaction: it stays, so a later merge or event
+ * with an older clock cannot bring it back (last change of the person wins for each emoji, as for statuses).
+ */
+export const reactionSchema = z
+    .object({ emoji: reactionEmojiSchema, by: id, on: z.boolean(), clock: clockSchema })
+    .passthrough()
+export type Reaction = z.infer<typeof reactionSchema>
+
+/** Characters that a file name of an attachment cannot have: control and direction characters, path separators. */
+export const UNSAFE_NAME_CHARS =
+    // eslint-disable-next-line no-control-regex
+    /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069/\\:*?"<>|]/
+export const MAX_ATTACHMENT_NAME = 200
+
+/** A file attached to a message (FR-261, FR-266): the bytes are stored once by their hash. */
+export const attachmentSchema = z
+    .object({
+        name: z
+            .string()
+            .min(1)
+            .max(MAX_ATTACHMENT_NAME)
+            .refine((n) => !UNSAFE_NAME_CHARS.test(n) && n.trim() === n && !n.endsWith('.'), {
+                message: 'unsafe file name'
+            }),
+        size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        type: z.string().max(200),
+        sha256: z.string().regex(/^[0-9a-f]{64}$/)
+    })
+    .passthrough()
+export type Attachment = z.infer<typeof attachmentSchema>
+export const MAX_ATTACHMENTS_PER_MESSAGE = 50
+
 export const messageSchema = z
     .object({
         messageId: id,
@@ -48,7 +90,11 @@ export const messageSchema = z
         authorDisplayName: z.string().min(1),
         createdAt: isoUtc,
         content: richDocSchema,
-        assetReferences: z.array(id)
+        assetReferences: z.array(id),
+        /** Schema version 3: sorted by emoji, then person (FR-233). */
+        reactions: z.array(reactionSchema).optional(),
+        /** Schema version 3 (FR-261). */
+        attachments: z.array(attachmentSchema).max(MAX_ATTACHMENTS_PER_MESSAGE).optional()
     })
     .passthrough()
 export type Message = z.infer<typeof messageSchema>

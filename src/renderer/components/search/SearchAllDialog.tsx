@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { searchWords } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { SearchHit } from '@shared/types/ipc'
 import { Modal } from '../Modal'
 import { SearchHitView } from './SearchHitView'
@@ -43,22 +43,22 @@ export function SearchAllDialog({ onShow, onClose }: Props): React.JSX.Element {
     return (
         <Modal labelledBy="search-all-title">
             <div className="dialog wide" data-testid="search-all">
-                <h2 id="search-all-title">{ru.search.allTitle}</h2>
+                <h2 id="search-all-title">{texts().search.allTitle}</h2>
                 <input
                     autoFocus
                     type="search"
                     data-testid="search-all-input"
-                    placeholder={ru.search.allPlaceholder}
-                    aria-label={ru.search.allPlaceholder}
+                    placeholder={texts().search.allPlaceholder}
+                    aria-label={texts().search.allPlaceholder}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={(e) => {
                         if (e.key === 'Escape') onClose()
                     }}
                 />
-                <p className="hint">{ru.search.hint}</p>
+                <p className="hint">{texts().search.hint}</p>
                 {hits && hits.length === 0 && (
-                    <p data-testid="search-all-nothing">{ru.search.nothing}</p>
+                    <p data-testid="search-all-nothing">{texts().search.nothing}</p>
                 )}
                 <div className="search-groups">
                     {groups.map(([id, g]) => (
@@ -83,7 +83,7 @@ export function SearchAllDialog({ onShow, onClose }: Props): React.JSX.Element {
                 </div>
                 <div className="buttons">
                     <button type="button" data-testid="search-all-close" onClick={onClose}>
-                        {ru.search.close}
+                        {texts().search.close}
                     </button>
                 </div>
             </div>

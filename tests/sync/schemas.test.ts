@@ -95,11 +95,30 @@ const validPayloads: Record<EventType, unknown> = {
             { partId: id(11), index: 0, size: 100, sha256: hash('2') }
         ]
     },
-    'invitation.part': { invitationId: id(9), partId: id(10) }
+    'invitation.part': { invitationId: id(9), partId: id(10) },
+    'reaction.set': { messageId: 'm1', emoji: '👍', on: true },
+    'member.limits.set': { maxFileMb: 30 },
+    'message.attachments': {
+        messageId: 'm1',
+        attachments: [
+            {
+                name: 'отчёт.pdf',
+                size: PART_SIZE + 10,
+                type: 'application/pdf',
+                sha256: hash('b'),
+                parts: [
+                    { partId: id(20), index: 0, size: PART_SIZE, sha256: hash('3') },
+                    { partId: id(21), index: 1, size: 10, sha256: hash('4') }
+                ]
+            }
+        ]
+    },
+    'attachment.part': { messageId: 'm1', partId: id(20) }
 }
 
 function envelope(type: string, payload: unknown, extra: Record<string, unknown> = {}): unknown {
-    const isPart = type === 'message.part' || type === 'invitation.part'
+    const isPart =
+        type === 'message.part' || type === 'invitation.part' || type === 'attachment.part'
     return {
         protocolVersion: 1,
         eventId: id(100),
@@ -132,7 +151,11 @@ describe('sync event schemas (sync-protocol.md 5 and 7)', () => {
                 'message.sent',
                 'profile.updated',
                 'readstate.added',
-                'receipt.delivered'
+                'receipt.delivered',
+                'reaction.set',
+                'member.limits.set',
+                'message.attachments',
+                'attachment.part'
             ].sort()
         )
     })

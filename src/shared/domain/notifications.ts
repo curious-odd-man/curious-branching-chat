@@ -1,5 +1,5 @@
 import type { RichDoc, RichNode } from '../validation/richText'
-import { ru } from '../i18n/ru'
+import { texts } from '../i18n'
 
 /** Longest notification text, in characters, before "…" (D-38). */
 export const NOTIFICATION_TEXT_MAX = 100
@@ -23,7 +23,7 @@ export function notificationExcerpt(doc: RichDoc | undefined, max = NOTIFICATION
                 parts.push(' ')
                 return
             case 'image':
-                parts.push(` ${ru.notifications.image} `)
+                parts.push(` ${texts().notifications.image} `)
                 return
             case 'bulletList':
             case 'orderedList':
@@ -77,7 +77,7 @@ export function planNotifications(
         return [
             {
                 title: discussionName,
-                body: ru.notifications.summary(messages.length),
+                body: texts().notifications.summary(messages.length),
                 messageId: first.messageId,
                 threadId: first.threadId
             }
@@ -86,8 +86,8 @@ export function planNotifications(
     return messages.map((m) => {
         const text = showText ? notificationExcerpt(m.content) : ''
         return {
-            title: ru.notifications.title(m.authorName, discussionName),
-            body: text.length > 0 ? text : ru.notifications.noText,
+            title: texts().notifications.title(m.authorName, discussionName),
+            body: text.length > 0 ? text : texts().notifications.noText,
             messageId: m.messageId,
             threadId: m.threadId
         }

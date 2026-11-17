@@ -1,4 +1,4 @@
-import { ru } from '@shared/i18n/ru'
+import { compareText, texts } from '@shared/i18n'
 import type { SyncHealth } from '../sync/conversationSync'
 
 /** One registered synchronized discussion as the tray menu sees it. */
@@ -19,10 +19,10 @@ export type TrayItem =
  * `open`, `open:<conversationId>`, `check`, `exit`.
  */
 export function trayMenuModel(discussions: readonly TrayDiscussion[]): TrayItem[] {
-    const items: TrayItem[] = [{ kind: 'action', id: 'open', label: ru.tray.open }]
-    items.push({ kind: 'separator' }, { kind: 'info', label: ru.tray.discussions })
-    if (discussions.length === 0) items.push({ kind: 'info', label: ru.tray.noDiscussions })
-    const sorted = [...discussions].sort((a, b) => a.title.localeCompare(b.title, 'ru'))
+    const items: TrayItem[] = [{ kind: 'action', id: 'open', label: texts().tray.open }]
+    items.push({ kind: 'separator' }, { kind: 'info', label: texts().tray.discussions })
+    if (discussions.length === 0) items.push({ kind: 'info', label: texts().tray.noDiscussions })
+    const sorted = [...discussions].sort((a, b) => compareText(a.title, b.title))
     for (const d of sorted)
         items.push({ kind: 'action', id: `open:${d.conversationId}`, label: d.title })
     items.push({ kind: 'separator' })
@@ -31,19 +31,21 @@ export function trayMenuModel(discussions: readonly TrayDiscussion[]): TrayItem[
         const name = d.title
         const h = d.health
         if (!h) continue
-        if (h.folder === 'missing') problems.push(ru.tray.status.missing(name))
-        else if (h.folder === 'no-permission') problems.push(ru.tray.status.denied(name))
+        if (h.folder === 'missing') problems.push(texts().tray.status.missing(name))
+        else if (h.folder === 'no-permission') problems.push(texts().tray.status.denied(name))
         else if (h.keyRequests.some((r) => r.state === 'pending'))
-            problems.push(ru.tray.status.keys(name))
-        else if (h.quarantined > 0 || h.needsUpdate) problems.push(ru.tray.status.problem(name))
+            problems.push(texts().tray.status.keys(name))
+        else if (h.quarantined > 0 || h.needsUpdate)
+            problems.push(texts().tray.status.problem(name))
     }
     if (problems.length === 0) {
-        if (sorted.some((d) => d.health)) items.push({ kind: 'info', label: ru.tray.status.ok })
+        if (sorted.some((d) => d.health))
+            items.push({ kind: 'info', label: texts().tray.status.ok })
     } else for (const p of problems) items.push({ kind: 'info', label: p })
     items.push(
-        { kind: 'action', id: 'check', label: ru.tray.checkFolders },
+        { kind: 'action', id: 'check', label: texts().tray.checkFolders },
         { kind: 'separator' },
-        { kind: 'action', id: 'exit', label: ru.tray.exit }
+        { kind: 'action', id: 'exit', label: texts().tray.exit }
     )
     return items
 }

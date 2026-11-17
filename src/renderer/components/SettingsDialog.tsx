@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Modal } from './Modal'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { TEXT_SIZE_DEFAULT, TEXT_SIZE_MAX, TEXT_SIZE_MIN, TEXT_SIZE_STEP } from '@shared/shortcuts'
 import type { AssociationInfo, BackgroundFlag, IdentityView, SettingsView } from '@shared/types/ipc'
 import { formatTimestamp } from '../i18n/format'
@@ -14,12 +14,13 @@ interface Props {
     onRestore(): void
 }
 
-const stateText = {
-    on: ru.association.stateOn,
-    off: ru.association.stateOff,
-    'other-app': ru.association.stateOther,
-    unsupported: ru.association.stateUnsupported
-} as const
+const stateText = (state: 'on' | 'off' | 'other-app' | 'unsupported'): string =>
+    ({
+        on: texts().association.stateOn,
+        off: texts().association.stateOff,
+        'other-app': texts().association.stateOther,
+        unsupported: texts().association.stateUnsupported
+    })[state]
 
 /**
  * File > Settings…: the person's name (FR-138), the .branchchat file association (FR-089, FR-138), and the
@@ -68,8 +69,8 @@ export function SettingsDialog({
                 setLastBackup(r.data.createdAt)
                 setBackupMessage(
                     r.data.folderError
-                        ? ru.backup.folderFailed(r.data.folderError)
-                        : ru.backup.done(formatTimestamp(r.data.createdAt))
+                        ? texts().backup.folderFailed(r.data.folderError)
+                        : texts().backup.done(formatTimestamp(r.data.createdAt))
                 )
             })
             .finally(() => setBackingUp(false))
@@ -78,7 +79,7 @@ export function SettingsDialog({
     const copyKey = (): void => {
         setKeyMessage(null)
         void api.copyKeyBundle().then((r) => {
-            if (r.ok) setKeyMessage(ru.identity.copied)
+            if (r.ok) setKeyMessage(texts().identity.copied)
             else setError(r.error.message)
         })
     }
@@ -87,7 +88,7 @@ export function SettingsDialog({
         setKeyMessage(null)
         void api.saveKeyBundle().then((r) => {
             if (r.ok) {
-                if (r.data) setKeyMessage(ru.identity.saved)
+                if (r.data) setKeyMessage(texts().identity.saved)
             } else setError(r.error.message)
         })
     }
@@ -144,13 +145,28 @@ export function SettingsDialog({
         })
     }
 
+    // FR-265: "Наибольший размер вложения"
+    const [attachText, setAttachText] = useState(String(settings?.attachmentLimitMb ?? 100))
+    const applyAttach = (): void => {
+        const value = Number(attachText)
+        if (!Number.isInteger(value) || value < 1 || value > 1000) {
+            setAttachText(String(settings?.attachmentLimitMb ?? 100))
+            return
+        }
+        if (value === settings?.attachmentLimitMb) return
+        void api.setAttachmentLimit(value).then((r) => {
+            if (r.ok) onSettingsChanged(r.data)
+            else setError(r.error.message)
+        })
+    }
+
     const saveName = useCallback(() => {
         if (name.trim().length === 0) return
         void api.setDisplayName(name).then((r) => {
             if (r.ok) {
                 onNameSaved(r.data)
                 setName(r.data.displayName ?? '')
-                setNameMessage(ru.settings.nameSaved)
+                setNameMessage(texts().settings.nameSaved)
                 setError(null)
             } else setError(r.error.message)
         })
@@ -190,11 +206,11 @@ export function SettingsDialog({
     return (
         <Modal labelledBy="settings-title" onEscape={onClose}>
             <div className="dialog settings" data-testid="settings-dialog">
-                <h2 id="settings-title">{ru.settings.title}</h2>
+                <h2 id="settings-title">{texts().settings.title}</h2>
 
                 <section>
                     <label>
-                        {ru.settings.nameLabel}
+                        {texts().settings.nameLabel}
                         <input
                             data-testid="settings-name"
                             value={name}
@@ -205,7 +221,7 @@ export function SettingsDialog({
                             onKeyDown={(e) => e.key === 'Enter' && saveName()}
                         />
                     </label>
-                    <p className="hint">{ru.settings.nameHint}</p>
+                    <p className="hint">{texts().settings.nameHint}</p>
                     <div className="buttons">
                         {nameMessage && (
                             <span className="ok" data-testid="settings-name-saved">
@@ -220,39 +236,39 @@ export function SettingsDialog({
                             }
                             onClick={saveName}
                         >
-                            {ru.settings.saveName}
+                            {texts().settings.saveName}
                         </button>
                     </div>
                 </section>
 
                 <section data-testid="settings-identity">
-                    <h3>{ru.identity.heading}</h3>
-                    {identity === null && <p className="hint">{ru.identity.loading}</p>}
+                    <h3>{texts().identity.heading}</h3>
+                    {identity === null && <p className="hint">{texts().identity.loading}</p>}
                     {identity?.state === 'unavailable' && (
                         <p className="error-text" data-testid="identity-unavailable">
-                            {ru.identity.unavailable}
+                            {texts().identity.unavailable}
                         </p>
                     )}
                     {identity?.state === 'ready' && (
                         <>
-                            <p className="hint">{ru.identity.explanation}</p>
+                            <p className="hint">{texts().identity.explanation}</p>
                             <p className="fingerprint-row">
-                                <span>{ru.identity.fingerprintLabel}: </span>
+                                <span>{texts().identity.fingerprintLabel}: </span>
                                 <code className="fingerprint" data-testid="identity-fingerprint">
                                     {identity.fingerprint}
                                 </code>
                             </p>
-                            <p className="hint">{ru.identity.fingerprintHint}</p>
+                            <p className="hint">{texts().identity.fingerprintHint}</p>
                             {identity.replaced && (
                                 <p className="hint" data-testid="identity-replaced">
                                     {identity.replaced === 'unreadable'
-                                        ? ru.identity.replacedUnreadable
-                                        : ru.identity.replacedOther}
+                                        ? texts().identity.replacedUnreadable
+                                        : texts().identity.replacedOther}
                                 </p>
                             )}
                             {!hasName && (
                                 <p className="hint" data-testid="identity-name-first">
-                                    {ru.identity.nameFirst}
+                                    {texts().identity.nameFirst}
                                 </p>
                             )}
                             <div className="buttons">
@@ -267,7 +283,7 @@ export function SettingsDialog({
                                     disabled={!hasName}
                                     onClick={copyKey}
                                 >
-                                    {ru.identity.copy}
+                                    {texts().identity.copy}
                                 </button>
                                 <button
                                     type="button"
@@ -275,13 +291,13 @@ export function SettingsDialog({
                                     disabled={!hasName}
                                     onClick={saveKey}
                                 >
-                                    {ru.identity.save}
+                                    {texts().identity.save}
                                 </button>
                             </div>
                         </>
                     )}
                     <label>
-                        {ru.identity.sizeLimitLabel}
+                        {texts().identity.sizeLimitLabel}
                         <input
                             type="number"
                             min={5}
@@ -294,11 +310,30 @@ export function SettingsDialog({
                             onKeyDown={(e) => e.key === 'Enter' && applySize()}
                         />
                     </label>
-                    <p className="hint">{ru.identity.sizeLimitHint}</p>
+                    <p className="hint">{texts().identity.sizeLimitHint}</p>
                 </section>
 
                 <section>
-                    <h3>{ru.association.heading}</h3>
+                    <h3>{texts().attachments.heading}</h3>
+                    <label>
+                        {texts().attachments.limitLabel}
+                        <input
+                            type="number"
+                            min={1}
+                            max={1000}
+                            step={1}
+                            data-testid="settings-attachment-limit"
+                            value={attachText}
+                            onChange={(e) => setAttachText(e.target.value)}
+                            onBlur={applyAttach}
+                            onKeyDown={(e) => e.key === 'Enter' && applyAttach()}
+                        />
+                    </label>
+                    <p className="hint">{texts().attachments.limitHint}</p>
+                </section>
+
+                <section>
+                    <h3>{texts().association.heading}</h3>
                     <label className="check">
                         <input
                             type="checkbox"
@@ -307,38 +342,88 @@ export function SettingsDialog({
                             disabled={!canToggle || requested !== null}
                             onChange={(e) => toggle(e.target.checked)}
                         />
-                        <span>{ru.association.checkbox}</span>
+                        <span>{texts().association.checkbox}</span>
                     </label>
-                    <p className="hint">{ru.association.explanation}</p>
+                    <p className="hint">{texts().association.explanation}</p>
                     {state && (
                         <p
                             className="hint"
                             data-testid="settings-association-state"
                             data-state={state}
                         >
-                            {stateText[state]}
+                            {stateText(state)}
                         </p>
                     )}
                 </section>
 
                 <section data-testid="settings-background">
-                    <h3>{ru.settings.backgroundHeading}</h3>
-                    {flag('notifyNewMessages', ru.settings.notifyNew, ru.settings.notifyNewHint)}
-                    {flag('notifyShowText', ru.settings.notifyText, ru.settings.notifyTextHint)}
+                    <h3>{texts().settings.backgroundHeading}</h3>
+                    {flag(
+                        'notifyNewMessages',
+                        texts().settings.notifyNew,
+                        texts().settings.notifyNewHint
+                    )}
+                    {flag(
+                        'notifyShowText',
+                        texts().settings.notifyText,
+                        texts().settings.notifyTextHint
+                    )}
                     {flag(
                         'startWithWindows',
-                        ru.settings.startWithWindows,
-                        ru.settings.startWithWindowsHint
+                        texts().settings.startWithWindows,
+                        texts().settings.startWithWindowsHint
+                    )}
+                </section>
+
+                <section data-testid="settings-language">
+                    <h3>{texts().settings.languageHeading}</h3>
+                    <div
+                        className="radio-row"
+                        role="radiogroup"
+                        aria-label={texts().settings.languageHeading}
+                    >
+                        {(['ru', 'en'] as const).map((lang) => (
+                            <label className="check" key={lang}>
+                                <input
+                                    type="radio"
+                                    name="language"
+                                    data-testid={`settings-language-${lang}`}
+                                    checked={(settings?.language ?? 'ru') === lang}
+                                    onChange={() =>
+                                        void api.setLanguage(lang).then((r) => {
+                                            if (r.ok) onSettingsChanged(r.data)
+                                            else setError(r.error.message)
+                                        })
+                                    }
+                                />
+                                <span lang={lang}>
+                                    {lang === 'ru'
+                                        ? texts().settings.languageRu
+                                        : texts().settings.languageEn}
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+                    <p className="hint">{texts().settings.languageHint}</p>
+                    {settings && settings.language !== api.language && (
+                        <button
+                            type="button"
+                            className="primary"
+                            data-testid="settings-restart"
+                            onClick={() => void api.relaunch()}
+                        >
+                            {texts().settings.restartNow}
+                        </button>
                     )}
                 </section>
 
                 <section data-testid="settings-text-size">
-                    <h3>{ru.settings.textSizeHeading}</h3>
+                    <h3>{texts().settings.textSizeHeading}</h3>
                     <div className="text-size">
                         <button
                             type="button"
                             data-testid="text-size-smaller"
-                            aria-label={ru.menu.zoomOut}
+                            aria-label={texts().menu.zoomOut}
                             disabled={!settings || settings.textSize <= TEXT_SIZE_MIN}
                             onClick={() =>
                                 setTextSize((settings?.textSize ?? 100) - TEXT_SIZE_STEP)
@@ -350,7 +435,7 @@ export function SettingsDialog({
                         <button
                             type="button"
                             data-testid="text-size-larger"
-                            aria-label={ru.menu.zoomIn}
+                            aria-label={texts().menu.zoomIn}
                             disabled={!settings || settings.textSize >= TEXT_SIZE_MAX}
                             onClick={() =>
                                 setTextSize((settings?.textSize ?? 100) + TEXT_SIZE_STEP)
@@ -364,14 +449,14 @@ export function SettingsDialog({
                             disabled={!settings || settings.textSize === TEXT_SIZE_DEFAULT}
                             onClick={() => setTextSize(TEXT_SIZE_DEFAULT)}
                         >
-                            {ru.settings.textSizeReset}
+                            {texts().settings.textSizeReset}
                         </button>
                     </div>
-                    <p className="hint">{ru.settings.textSizeHint}</p>
+                    <p className="hint">{texts().settings.textSizeHint}</p>
                 </section>
 
                 <section>
-                    <h3>{ru.settings.startupHeading}</h3>
+                    <h3>{texts().settings.startupHeading}</h3>
                     <label className="check">
                         <input
                             type="checkbox"
@@ -389,11 +474,11 @@ export function SettingsDialog({
                                 })
                             }}
                         />
-                        <span>{ru.settings.openLastFile}</span>
+                        <span>{texts().settings.openLastFile}</span>
                     </label>
-                    <p className="hint">{ru.settings.openLastFileHint}</p>
+                    <p className="hint">{texts().settings.openLastFileHint}</p>
                     <label>
-                        {ru.settings.recentLimitLabel}
+                        {texts().settings.recentLimitLabel}
                         <input
                             type="number"
                             min={0}
@@ -405,22 +490,24 @@ export function SettingsDialog({
                             onKeyDown={(e) => e.key === 'Enter' && applyLimit()}
                         />
                     </label>
-                    <p className="hint">{ru.settings.recentLimitHint}</p>
+                    <p className="hint">{texts().settings.recentLimitHint}</p>
                 </section>
 
                 <section data-testid="settings-backup">
-                    <h3>{ru.backup.heading}</h3>
-                    <p className="hint">{ru.backup.explanation}</p>
+                    <h3>{texts().backup.heading}</h3>
+                    <p className="hint">{texts().backup.explanation}</p>
                     <p className="hint" data-testid="backup-not-encrypted">
-                        {ru.backup.notEncrypted}
+                        {texts().backup.notEncrypted}
                     </p>
                     <p data-testid="backup-last">
-                        {lastBackup ? ru.backup.last(formatTimestamp(lastBackup)) : ru.backup.never}
+                        {lastBackup
+                            ? texts().backup.last(formatTimestamp(lastBackup))
+                            : texts().backup.never}
                     </p>
                     <p>
-                        {ru.backup.folder}{' '}
+                        {texts().backup.folder}{' '}
                         <code className="path" data-testid="backup-folder">
-                            {settings?.backupFolder ?? ru.backup.noFolder}
+                            {settings?.backupFolder ?? texts().backup.noFolder}
                         </code>
                     </p>
                     <div className="buttons">
@@ -434,7 +521,7 @@ export function SettingsDialog({
                                 })
                             }
                         >
-                            {ru.backup.pickFolder}
+                            {texts().backup.pickFolder}
                         </button>
                         {settings?.backupFolder && (
                             <button
@@ -447,7 +534,7 @@ export function SettingsDialog({
                                     })
                                 }
                             >
-                                {ru.backup.clearFolder}
+                                {texts().backup.clearFolder}
                             </button>
                         )}
                     </div>
@@ -458,10 +545,10 @@ export function SettingsDialog({
                             disabled={backingUp}
                             onClick={backupNow}
                         >
-                            {backingUp ? ru.backup.running : ru.backup.now}
+                            {backingUp ? texts().backup.running : texts().backup.now}
                         </button>
                         <button type="button" data-testid="backup-restore" onClick={onRestore}>
-                            {ru.backup.restore}
+                            {texts().backup.restore}
                         </button>
                     </div>
                     {backupMessage && (
@@ -472,7 +559,7 @@ export function SettingsDialog({
                 </section>
 
                 <section>
-                    <h3>{ru.updateSettings.heading}</h3>
+                    <h3>{texts().updateSettings.heading}</h3>
                     <label className="check">
                         <input
                             type="checkbox"
@@ -485,9 +572,9 @@ export function SettingsDialog({
                                 })
                             }
                         />
-                        <span>{ru.updateSettings.autoCheck}</span>
+                        <span>{texts().updateSettings.autoCheck}</span>
                     </label>
-                    <p className="hint">{ru.updateSettings.hint}</p>
+                    <p className="hint">{texts().updateSettings.hint}</p>
                     <div className="buttons">
                         <button
                             type="button"
@@ -497,7 +584,7 @@ export function SettingsDialog({
                                 onClose()
                             }}
                         >
-                            {ru.updateSettings.checkNow}
+                            {texts().updateSettings.checkNow}
                         </button>
                     </div>
                 </section>
@@ -515,7 +602,7 @@ export function SettingsDialog({
                         autoFocus
                         onClick={onClose}
                     >
-                        {ru.settings.close}
+                        {texts().settings.close}
                     </button>
                 </div>
             </div>

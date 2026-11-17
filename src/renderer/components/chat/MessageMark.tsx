@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MessageMark as Mark, MessageMarkState } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 interface Props {
     mark: Mark
@@ -17,7 +17,7 @@ const GLYPH: Record<MessageMarkState, string> = {
 }
 
 const names = (people: string[]): string =>
-    people.length > 0 ? people.join(', ') : ru.readStatus.nobody
+    people.length > 0 ? people.join(', ') : texts().readStatus.nobody
 
 /**
  * One mark for every message (D-41, FR-122, FR-169). A clock: not written yet (own messages); one grey check:
@@ -45,14 +45,14 @@ export function MessageMark({ mark, synced }: Props): React.JSX.Element {
     }, [open])
 
     const { state, members } = mark
-    const label = ru.delivery[state]
+    const label = texts().delivery[state]
     const readers = members.filter((m) => m.state === 'read').map((m) => m.participant.displayName)
     const notReaders = members
         .filter((m) => m.state !== 'read')
         .map((m) => m.participant.displayName)
     const title = synced
-        ? `${label}. ${ru.delivery.hint[state]}`
-        : `${label}. ${ru.readStatus.readBy}: ${names(readers)}. ${ru.readStatus.notReadBy}: ${names(notReaders)}.`
+        ? `${label}. ${texts().delivery.hint[state]}`
+        : `${label}. ${texts().readStatus.readBy}: ${names(readers)}. ${texts().readStatus.notReadBy}: ${names(notReaders)}.`
 
     return (
         <span className="read-indicator-wrap" ref={root}>
@@ -62,7 +62,7 @@ export function MessageMark({ mark, synced }: Props): React.JSX.Element {
                 data-testid="message-mark"
                 data-state={state}
                 title={title}
-                aria-label={`${ru.delivery.ariaLabel}: ${label}`}
+                aria-label={`${texts().delivery.ariaLabel}: ${label}`}
                 aria-expanded={open}
                 onClick={() => setOpen(!open)}
             >
@@ -79,14 +79,14 @@ export function MessageMark({ mark, synced }: Props): React.JSX.Element {
                                 data-state={m.state}
                             >
                                 <strong>{m.participant.displayName}</strong>
-                                <span>{ru.delivery.member[m.state]}</span>
+                                <span>{texts().delivery.member[m.state]}</span>
                             </span>
                         ))
                     ) : (
                         <>
-                            <strong>{ru.readStatus.readBy}</strong>
+                            <strong>{texts().readStatus.readBy}</strong>
                             <span data-testid="read-by">{names(readers)}</span>
-                            <strong>{ru.readStatus.notReadBy}</strong>
+                            <strong>{texts().readStatus.notReadBy}</strong>
                             <span data-testid="not-read-by">{names(notReaders)}</span>
                         </>
                     )}

@@ -85,8 +85,46 @@ export function eventsFromChange(
                 createdAt: m.createdAt,
                 payload: draft
             })
+            // FR-261: the files right after the message; the sync service adds the parts
+            if (m.attachments && m.attachments.length > 0)
+                events.push({
+                    type: 'message.attachments',
+                    clock: m.clock,
+                    createdAt: m.createdAt,
+                    payload: {
+                        messageId: m.messageId,
+                        attachments: m.attachments.map((a) => ({
+                            name: a.name,
+                            size: a.size,
+                            type: a.type,
+                            sha256: a.sha256,
+                            parts: []
+                        }))
+                    }
+                })
         }
     }
+
+    // FR-233: own reaction changes (a new message has no reactions yet)
+    const oldById = new Map<string, Message>()
+    for (const t of before.discussion.threads)
+        for (const m of t.messages) oldById.set(m.messageId, m)
+    for (const t of after.discussion.threads)
+        for (const m of t.messages) {
+            const prev = oldById.get(m.messageId)
+            if (!m.reactions || m.reactions === prev?.reactions) continue
+            for (const r of m.reactions) {
+                if (r.by !== localId) continue
+                const was = prev?.reactions?.find((x) => x.emoji === r.emoji && x.by === r.by)
+                if (was && was.clock === r.clock && was.on === r.on) continue
+                events.push({
+                    type: 'reaction.set',
+                    clock: r.clock,
+                    createdAt: now,
+                    payload: { messageId: m.messageId, emoji: r.emoji, on: r.on }
+                })
+            }
+        }
 
     for (const t of after.discussion.threads) {
         const prev = old.get(t.threadId)

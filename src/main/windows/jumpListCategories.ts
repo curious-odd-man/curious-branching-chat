@@ -1,6 +1,6 @@
 import type { JumpListCategory } from 'electron'
 import type { DiscussionListItem } from '@shared/types/ipc'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { DISCUSSION_ARG } from './launchArgs'
 
 /** The taskbar jump list and the File menu show at most this many entries (Windows limits the jump list anyway). */
@@ -21,5 +21,7 @@ export function jumpListCategories(
         iconPath: execPath,
         iconIndex: 0
     }))
-    return items.length === 0 ? [] : [{ type: 'custom', name: ru.recent.jumpListCategory, items }]
+    return items.length === 0
+        ? []
+        : [{ type: 'custom', name: texts().recent.jumpListCategory, items }]
 }

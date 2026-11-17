@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 interface Props {
     url: string
@@ -22,7 +22,7 @@ export function ImageViewer({ url, alt, onClose }: Props): React.JSX.Element {
             className="overlay viewer"
             role="dialog"
             aria-modal="true"
-            aria-label={ru.images.viewerTitle}
+            aria-label={texts().images.viewerTitle}
             data-testid="image-viewer"
             onClick={onClose}
         >
@@ -30,7 +30,7 @@ export function ImageViewer({ url, alt, onClose }: Props): React.JSX.Element {
                 type="button"
                 className="viewer-close"
                 data-testid="viewer-close"
-                aria-label={ru.images.close}
+                aria-label={texts().images.close}
                 onClick={onClose}
             >
                 ✕

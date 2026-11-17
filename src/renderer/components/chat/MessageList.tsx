@@ -4,11 +4,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { isUnreadIn, messageMarkOf, type MarkSync } from '@shared/domain'
 import type { Message, Participant, Thread } from '@shared/types'
 import type { LoadingMessage } from '@shared/sync'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { formatTimestamp } from '../../i18n/format'
 import { BranchBadge } from '../branches/BranchBadge'
 import { RichTextView, type Highlight, type ImageContext } from '../rich/RichTextView'
 import { MessageMark } from './MessageMark'
+import { AttachmentList, ReactionBar, type MessageExtrasContext } from './MessageExtras'
 import { readMessageSelection, type MessageSelection } from './selection'
 
 export type ListRow =
@@ -50,6 +51,8 @@ interface Props {
     restorePosition?: boolean
     /** FR-213: the search words to highlight in the shown messages. */
     highlightWords?: readonly string[]
+    /** Release 2.4: reactions and files under the messages. */
+    extras?: MessageExtrasContext
 }
 
 const NO_WORDS: readonly string[] = []
@@ -119,7 +122,8 @@ export function MessageList({
     sync = null,
     positionKey,
     restorePosition = false,
-    highlightWords = NO_WORDS
+    highlightWords = NO_WORDS,
+    extras
 }: Props): React.JSX.Element {
     const scroller = useRef<HTMLDivElement>(null)
     const atBottom = useRef(true)
@@ -267,7 +271,7 @@ export function MessageList({
 
     return (
         <div className="messages" data-testid="messages" ref={scroller} onScroll={onScroll}>
-            {rows.length === 0 && <p className="empty">{ru.discussion.empty}</p>}
+            {rows.length === 0 && <p className="empty">{texts().discussion.empty}</p>}
             <div className="rows" style={{ height: virtualizer.getTotalSize() }}>
                 {virtualizer.getVirtualItems().map((item) => {
                     const row = rows[item.index]
@@ -316,7 +320,7 @@ export function MessageList({
                                     // not data-message-id: a loading message offers no "Reply to this" (D-37)
                                     data-loading-id={l.messageId}
                                     aria-busy="true"
-                                    title={ru.loadingMessage.hint}
+                                    title={texts().loadingMessage.hint}
                                 >
                                     <header>
                                         <strong>{l.authorDisplayName}</strong>
@@ -331,7 +335,7 @@ export function MessageList({
                                             value={l.bytesReceived}
                                         />
                                         <span data-testid="loading-text">
-                                            {ru.loadingMessage.progress(
+                                            {texts().loadingMessage.progress(
                                                 l.partsReceived,
                                                 l.partsTotal,
                                                 mb(l.bytesReceived),
@@ -349,7 +353,7 @@ export function MessageList({
                                     ) : (
                                         <div
                                             className="loading-text-placeholder"
-                                            aria-label={ru.loadingMessage.noText}
+                                            aria-label={texts().loadingMessage.noText}
                                         />
                                     )}
                                 </article>
@@ -385,7 +389,7 @@ export function MessageList({
                                     </time>
                                     {unread && (
                                         <span className="unread-label" data-testid="unread-label">
-                                            {ru.unread.label}
+                                            {texts().unread.label}
                                         </span>
                                     )}
                                     <span className="header-tools">
@@ -396,7 +400,7 @@ export function MessageList({
                                                 data-testid="mark-read"
                                                 onClick={() => onMarkRead(m.messageId)}
                                             >
-                                                {ru.unread.markRead}
+                                                {texts().unread.markRead}
                                             </button>
                                         )}
                                         {mark && <MessageMark mark={mark} synced={sync !== null} />}
@@ -412,6 +416,8 @@ export function MessageList({
                                     highlight={row.highlight}
                                     images={imageContext}
                                 />
+                                {extras && <AttachmentList message={m} ctx={extras} />}
+                                {extras && <ReactionBar message={m} ctx={extras} />}
                             </article>
                         </div>
                     )
@@ -422,13 +428,13 @@ export function MessageList({
                     type="button"
                     className="reply-button primary"
                     data-testid="reply-to-this"
-                    title={ru.branches.replyHint}
+                    title={texts().branches.replyHint}
                     style={buttonStyle}
                     // keep the selection while the button is pressed
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={reply}
                 >
-                    {ru.branches.replyToThis}
+                    {texts().branches.replyToThis}
                 </button>
             )}
         </div>

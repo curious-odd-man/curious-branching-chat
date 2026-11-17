@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Modal } from './Modal'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 interface Props {
     onSubmit(name: string): void
@@ -14,10 +14,10 @@ export function NamePrompt({ onSubmit, onCancel }: Props): React.JSX.Element {
     return (
         <Modal labelledBy="name-title">
             <div className="dialog">
-                <h2 id="name-title">{ru.nameDialog.title}</h2>
-                <p>{ru.nameDialog.explanation}</p>
+                <h2 id="name-title">{texts().nameDialog.title}</h2>
+                <p>{texts().nameDialog.explanation}</p>
                 <label>
-                    {ru.nameDialog.label}
+                    {texts().nameDialog.label}
                     <input
                         data-testid="name-input"
                         autoFocus
@@ -31,7 +31,7 @@ export function NamePrompt({ onSubmit, onCancel }: Props): React.JSX.Element {
                 </label>
                 <div className="buttons">
                     <button type="button" onClick={onCancel}>
-                        {ru.nameDialog.cancel}
+                        {texts().nameDialog.cancel}
                     </button>
                     <button
                         type="button"
@@ -40,7 +40,7 @@ export function NamePrompt({ onSubmit, onCancel }: Props): React.JSX.Element {
                         disabled={!valid}
                         onClick={() => onSubmit(name)}
                     >
-                        {ru.nameDialog.confirm}
+                        {texts().nameDialog.confirm}
                     </button>
                 </div>
             </div>

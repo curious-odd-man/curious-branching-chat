@@ -1,7 +1,7 @@
 import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { ZodError, type ZodType } from 'zod'
 import { DomainError } from '@shared/domain'
-import { describeError, ru } from '@shared/i18n/ru'
+import { describeError, locale, texts } from '@shared/i18n'
 import { IPC, type IpcResult } from '@shared/types/ipc'
 import {
     appendMessageSchema,
@@ -38,8 +38,16 @@ import {
     setNameSchema,
     stageImageSchema,
     setStatusSchema,
-    setTitleSchema
+    setTitleSchema,
+    reactionToggleSchema,
+    attachmentPathsSchema,
+    attachmentBytesSchema,
+    attachmentRefSchema,
+    attachmentReceiversSchema,
+    setAttachmentLimitSchema,
+    setLanguageSchema
 } from '@shared/validation'
+import { findAttachment, type AttachmentService } from '../application/attachments'
 import type { AppController, WindowEntry } from '../application/appController'
 import { AppError } from '../application/errors'
 import type { ReadAction } from '../application/documentSession'
@@ -98,6 +106,9 @@ export function registerIpcHandlers(
         backups?: BackupService
         /** Restarts the application (after a restore was scheduled). */
         relaunch?: () => void
+        /** FR-293: restarts the application the normal way (windows close, drafts are saved). */
+        restart?: () => void
+        attachments?: AttachmentService
     }
 ): void {
     function handle<P, R>(
@@ -166,7 +177,7 @@ export function registerIpcHandlers(
         }
         const id = await onboarding().create({
             root: p.root,
-            title: p.title ?? ru.shared.defaultFileName,
+            title: p.title ?? texts().shared.defaultFileName,
             keys: p.keys
         })
         await shared?.background?.discussionAdded()
@@ -269,9 +280,15 @@ export function registerIpcHandlers(
         return null
     })
     handle(IPC.focusTake, noPayloadSchema, (entry) => controller.takeFocusRequest(entry))
-    handle(IPC.settingsSetFileSizeLimit, setFileSizeLimitSchema, (_e, p) =>
-        settings.setFileSizeLimit(p.mb)
-    )
+    handle(IPC.settingsSetFileSizeLimit, setFileSizeLimitSchema, async (_e, p) => {
+        const before = settings.get().fileSizeLimitMb
+        const updated = await settings.setFileSizeLimit(p.mb)
+        // FR-268, FR-268a: the other members learn the new limit, and files that waited are read
+        if (sync && before !== p.mb) void sync.limitChanged()
+        // a file that is too large shows the new state in the windows
+        controller.broadcast(IPC.settingsChanged, updated)
+        return updated
+    })
     handle(IPC.settingsSetOpenLast, setOpenLastSchema, (_e, p) =>
         settings.setOpenLastFileOnStartup(p.enabled)
     )
@@ -290,15 +307,15 @@ export function registerIpcHandlers(
         return { createdAt: r.backups[0]!.createdAt, folderError: r.folderError }
     })
     handle(IPC.backupPickFolder, noPayloadSchema, async (entry) => {
-        const folder = await shared?.ui.pickFolder(entry?.win, ru.backup.folderTitle)
+        const folder = await shared?.ui.pickFolder(entry?.win, texts().backup.folderTitle)
         if (!folder) return null
         // FR-209: once, a warning that a cloud folder stores the messages readable for the provider
         if (await settings.takeBackupFolderWarning()) {
             const ok = await shared!.ui.confirm(entry?.win, {
-                title: ru.backup.cloudWarningTitle,
-                message: ru.backup.cloudWarning,
-                yes: ru.backup.cloudContinue,
-                no: ru.backup.cloudCancel
+                title: texts().backup.cloudWarningTitle,
+                message: texts().backup.cloudWarning,
+                yes: texts().backup.cloudContinue,
+                no: texts().backup.cloudCancel
             })
             if (!ok) return null
         }
@@ -309,15 +326,15 @@ export function registerIpcHandlers(
         const chosen = (await backups().list()).find((b) => b.path === p.path)
         if (!chosen) throw new AppError('INVALID_REQUEST', 'unknown backup')
         const ok = await shared!.ui.confirm(entry?.win, {
-            title: ru.backup.restoreTitle,
-            message: ru.backup.restoreQuestion,
-            detail: ru.backup.restoreDetail(
-                new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long', timeStyle: 'short' }).format(
+            title: texts().backup.restoreTitle,
+            message: texts().backup.restoreQuestion,
+            detail: texts().backup.restoreDetail(
+                new Intl.DateTimeFormat(locale(), { dateStyle: 'long', timeStyle: 'short' }).format(
                     new Date(chosen.createdAt)
                 )
             ),
-            yes: ru.backup.restoreConfirm,
-            no: ru.backup.restoreCancel
+            yes: texts().backup.restoreConfirm,
+            no: texts().backup.restoreCancel
         })
         if (!ok) return false
         await backups().scheduleRestore(chosen.path)
@@ -412,7 +429,7 @@ export function registerIpcHandlers(
 
     handle(IPC.documentAppendMessage, appendMessageSchema, (entry, p) => {
         const { session, me } = withReadNotice(entry, { type: 'send', threadId: p.threadId })
-        session.appendMessage(me, p.threadId, p.content)
+        session.appendMessage(me, p.threadId, p.content, p.attachments ?? [])
         // the sent text is no draft any more (FR-251)
         void library.saveDraft(session.documentId, p.threadId, null).catch(() => undefined)
     })
@@ -458,7 +475,69 @@ export function registerIpcHandlers(
     handle(IPC.imagePick, noPayloadSchema, (entry) => controller.pickImage(entry))
     handle(IPC.linkOpen, openLinkSchema, (_entry, p) => openExternalLink(p.url))
     handle(IPC.draftSave, draftSaveSchema, async (entry, p) => {
-        await controller.saveDraft(entry, p.threadId, p.content ?? null)
+        await controller.saveDraft(entry, p.threadId, p.content ?? null, p.attachments ?? [])
+        return null
+    })
+
+    // ---- release 2.4: reactions and attachments ---------------------------------------------------------------
+    handle(IPC.reactionToggle, reactionToggleSchema, (entry, p) => {
+        // FR-234: no read mark, so no read notice
+        requireSession(entry).toggleReaction(requireName(), p.messageId, p.emoji)
+        return null
+    })
+    const attachments = shared?.attachments
+    const requireAttachments = (): AttachmentService => {
+        if (!attachments) throw new AppError('INVALID_REQUEST', 'attachments are not available')
+        return attachments
+    }
+    handle(IPC.attachmentPick, noPayloadSchema, (entry) => {
+        requireSession(entry)
+        return requireAttachments().pick(entry?.win)
+    })
+    handle(IPC.attachmentAddPaths, attachmentPathsSchema, (entry, p) => {
+        requireSession(entry)
+        return requireAttachments().addPaths(p.paths)
+    })
+    handle(IPC.attachmentAddBytes, attachmentBytesSchema, (entry, p) => {
+        requireSession(entry)
+        return requireAttachments().addBytes(
+            p.name,
+            p.type,
+            Buffer.from(p.data.buffer, p.data.byteOffset, p.data.byteLength)
+        )
+    })
+    handle(IPC.attachmentSave, attachmentRefSchema, (entry, p) => {
+        const session = requireSession(entry)
+        const { attachment } = findAttachment(
+            session.current.discussion.threads,
+            p.messageId,
+            p.index
+        )
+        return requireAttachments().saveAs(entry?.win, attachment)
+    })
+    handle(IPC.attachmentOpen, attachmentRefSchema, (entry, p) => {
+        const session = requireSession(entry)
+        const found = findAttachment(session.current.discussion.threads, p.messageId, p.index)
+        return requireAttachments().open(entry?.win, found.attachment, found.message)
+    })
+    handle(IPC.attachmentReceivers, attachmentReceiversSchema, async (entry, p) => {
+        const session = requireSession(entry)
+        if (!sync || !session.synced) return []
+        return sync.receiversBelow(session.documentId, p.size)
+    })
+    handle(IPC.settingsSetAttachmentLimit, setAttachmentLimitSchema, async (_e, p) => {
+        const updated = await settings.setAttachmentLimit(p.mb)
+        controller.broadcast(IPC.settingsChanged, updated)
+        return updated
+    })
+    // FR-292, FR-293: the language applies after a restart
+    handle(IPC.settingsSetLanguage, setLanguageSchema, async (_e, p) => {
+        const updated = await settings.setLanguage(p.language)
+        controller.broadcast(IPC.settingsChanged, updated)
+        return updated
+    })
+    handle(IPC.appRelaunch, noPayloadSchema, () => {
+        setTimeout(() => shared?.restart?.(), 100)
         return null
     })
     handle(IPC.draftsGet, noPayloadSchema, (entry) => controller.drafts(entry))

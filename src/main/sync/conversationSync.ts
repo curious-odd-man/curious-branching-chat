@@ -18,7 +18,9 @@ import {
     type LoadingMessage,
     type LocalEvent,
     type MessageSentPayload,
-    type VerifiedEvent
+    type MessageAttachmentsPayload,
+    type VerifiedEvent,
+    FILE_SIZE_LIMIT_MB
 } from '@shared/sync'
 import {
     compareMessages,
@@ -48,6 +50,12 @@ export interface DocumentPort {
     ): Promise<void>
     /** Bytes of an image of the discussion (for sending it as parts). */
     imageBytes(assetId: string): Promise<Uint8Array | null>
+    /** Release 2.4: bytes of an attachment (by hash), for sending it as parts. */
+    blobBytes?(sha256: string): Promise<Uint8Array | null>
+    /** Release 2.4: true if the bytes of an attachment are here. */
+    hasBlob?(sha256: string): Promise<boolean>
+    /** Release 2.4: stores the checked bytes of an attachment of another member. */
+    storeBlob?(sha256: string, data: Uint8Array, type: string): Promise<void>
 }
 
 export interface OwnKeys {
@@ -75,6 +83,8 @@ export interface ConversationSyncDeps {
      * the discussion (D-33, D-38). Not called for the history of an invitation.
      */
     onNewMessages?: (messages: Message[], contents: DocumentContents) => void
+    /** Release 2.4: bytes of attachments of others arrived (the window shows them). */
+    onAttachments?: () => void
     log?: (message: string) => void
 }
 
@@ -134,6 +144,8 @@ const EXTENSION: Record<OutboxKind, string> = {
 }
 
 const DOCUMENT_TYPES = new Set<EventType>([
+    'reaction.set',
+    'message.attachments',
     'message.sent',
     'branch.created',
     'branch.status.set',
@@ -183,8 +195,72 @@ export class ConversationSync {
             await this.flushUnlocked()
             await this.deliverUnlocked()
             await this.maintainUnlocked()
+            await this.announceLimitsUnlocked()
             await this.state.save()
         })
+    }
+
+    /** FR-268: tells the other members the own file size limit (after a change of the setting). */
+    announceLimits(): Promise<void> {
+        return this.serial(async () => {
+            await this.announceLimitsUnlocked()
+            await this.state.save()
+        })
+    }
+
+    private ownLimitMb(): number {
+        const mb = Math.round(this.deps.maxFileBytes() / (1024 * 1024))
+        return Math.min(FILE_SIZE_LIMIT_MB.max, Math.max(FILE_SIZE_LIMIT_MB.min, mb))
+    }
+
+    /**
+     * FR-268: each other member learns the own limit with `member.limits.set`: after a change, after joining, and for
+     * a new member. A member that has not got a value counts with the default (30 MB), so the default is not sent:
+     * a discussion where nobody changed the setting gets no new event type (older versions ask for an update).
+     */
+    private async announceLimitsUnlocked(): Promise<void> {
+        const s = this.state.data
+        const contents = await this.deps.document.read()
+        const mb = this.ownLimitMb()
+        const targets = (contents.sync?.members ?? [])
+            .map((m) => m.participantId)
+            .filter(
+                (id) =>
+                    id !== this.deps.ownId &&
+                    (s.limitsSent[id] ?? FILE_SIZE_LIMIT_MB.default) !== mb
+            )
+        if (targets.length === 0) return
+        await this.enqueue(
+            {
+                type: 'member.limits.set',
+                payload: { maxFileMb: mb },
+                clock: documentClock(contents),
+                createdAt: this.deps.now()
+            } as unknown as LocalEvent,
+            targets
+        )
+        for (const id of targets) s.limitsSent[id] = mb
+        await this.state.save()
+        await this.flushUnlocked()
+    }
+
+    /**
+     * FR-268: the other members whose file size limit is smaller than `bytes` (an attachment), with the limit; a
+     * member without a known value counts with the default (30 MB).
+     */
+    async receiversBelow(
+        bytes: number
+    ): Promise<Array<{ participantId: string; maxFileMb: number }>> {
+        const contents = await this.deps.document.read()
+        const out: Array<{ participantId: string; maxFileMb: number }> = []
+        for (const m of contents.sync?.members ?? []) {
+            if (m.participantId === this.deps.ownId) continue
+            const mb =
+                this.state.data.peerLimits[m.participantId]?.maxFileMb ?? FILE_SIZE_LIMIT_MB.default
+            if (mb * 1024 * 1024 < bytes)
+                out.push({ participantId: m.participantId, maxFileMb: mb })
+        }
+        return out
     }
 
     /**
@@ -285,11 +361,39 @@ export class ConversationSync {
                 })
             }
         }
+        // FR-261: the files of a message travel as `attachment.part` events (as images do as `message.part`)
+        const attachmentParts: Array<{ partId: string; sha256: string; file: string }> = []
+        if ((e.type as EventType) === 'message.attachments') {
+            const draft = e.payload as unknown as MessageAttachmentsPayload
+            const attachments: MessageAttachmentsPayload['attachments'] = []
+            for (const a of draft.attachments) {
+                const data =
+                    a.size === 0 ? new Uint8Array() : await this.deps.document.blobBytes?.(a.sha256)
+                if (!data || data.length !== a.size)
+                    throw new Error(`attachment ${a.sha256} is not available`)
+                const entries: MessageAttachmentsPayload['attachments'][number]['parts'] = []
+                for (const r of a.size === 0 ? [] : partRanges(a.size)) {
+                    const bytes = data.subarray(r.start, r.end)
+                    const partId = this.deps.newId()
+                    const sha256 = sha256Hex(bytes)
+                    entries.push({ partId, index: r.index, size: bytes.length, sha256 })
+                    attachmentParts.push({
+                        partId,
+                        sha256,
+                        file: await this.state.storeOutPart(partId, bytes)
+                    })
+                }
+                attachments.push({ ...a, parts: entries })
+            }
+            payload = { messageId: draft.messageId, attachments }
+        }
         const seq = this.state.nextSenderSeq()
         const messageId =
             e.type === 'message.sent'
                 ? (e.payload as MessageSentPayload).message.messageId
-                : undefined
+                : (e.type as EventType) === 'message.attachments'
+                  ? (e.payload as unknown as MessageAttachmentsPayload).messageId
+                  : undefined
         for (const r of recipients)
             this.state.data.outbox.push({
                 id: eventId,
@@ -324,6 +428,33 @@ export class ConversationSync {
                     ),
                     payloadFile: p.file,
                     ...(messageId ? { messageId } : {}),
+                    writtenAt: null,
+                    deliveredAt: null,
+                    lastWriteAt: null
+                })
+        }
+        // attachment parts do not count for the delivery mark of the message: a member with a smaller limit gets
+        // the message but not the file (FR-268a)
+        for (const p of attachmentParts) {
+            const partSeq = this.state.nextSenderSeq()
+            const partEventId = this.deps.newId()
+            for (const r of recipients)
+                this.state.data.outbox.push({
+                    id: p.partId,
+                    kind: 'part',
+                    recipientId: r,
+                    fileName: `${p.partId}.${EXTENSION.part}`,
+                    envelope: this.envelope(
+                        'attachment.part',
+                        r,
+                        partEventId,
+                        partSeq,
+                        e.clock,
+                        e.createdAt,
+                        { messageId, partId: p.partId },
+                        p.sha256
+                    ),
+                    payloadFile: p.file,
                     writtenAt: null,
                     deliveredAt: null,
                     lastWriteAt: null
@@ -387,6 +518,7 @@ export class ConversationSync {
                 return { contents: next, images: [] }
             })
             await this.flushUnlocked()
+            await this.announceLimitsUnlocked()
             await this.state.save()
             this.deps.onChange?.()
             return after
@@ -784,7 +916,15 @@ export class ConversationSync {
         const toDelete: SharedEntry[] = []
         const nowMs = Date.parse(this.deps.now())
 
-        for (const entry of entries) {
+        const limit = this.deps.maxFileBytes()
+        for (const name of Object.keys(s.deferred)) if (!present.has(name)) delete s.deferred[name]
+        // headers before parts, so a part finds its attachment in the same scan
+        const ordered = [...entries].sort(
+            (a, b) => Number(a.extension === 'bcpart') - Number(b.extension === 'bcpart')
+        )
+        for (const entry of ordered) {
+            const deferred = s.deferred[entry.name]
+            if (deferred !== undefined && deferred > limit) continue // FR-268a: until the limit is raised
             if (s.keptFiles.includes(entry.name) || s.held[entry.name]) continue
             if (s.quarantine.some((q) => q.name === entry.name)) continue
             if (entry.extension === 'bcinv' || entry.extension === 'bckey') continue // the join wizard reads these
@@ -797,6 +937,7 @@ export class ConversationSync {
         // events that waited for a dependency may apply now
         report.applied += await this.drainPending(confirm, toDelete)
         await this.completeLoading(confirm, toDelete, report)
+        await this.completeAttachments()
 
         await this.deliverUnlocked()
         report.receipts += await this.sendReceipts(confirm)
@@ -807,6 +948,7 @@ export class ConversationSync {
         }
         s.lastScanAt = this.deps.now()
         report.held = Object.keys(s.held).length
+        await this.announceLimitsUnlocked() // a new member (member.added) gets the own limit
         await this.state.save()
         this.deps.onChange?.()
         await this.reportArrived()
@@ -950,12 +1092,9 @@ export class ConversationSync {
             return this.quarantine(entry, 'sequence number used twice', report)
         seqs[String(env.senderSeq)] = env.eventId
 
-        const receiptId =
-            env.type === 'message.part' ? (env.payload as { partId: string }).partId : env.eventId
-        const key =
-            env.type === 'message.part'
-                ? `part:${env.senderId}:${receiptId}`
-                : `${env.senderId}:${env.eventId}`
+        const isPart = env.type === 'message.part' || env.type === 'attachment.part'
+        const receiptId = isPart ? (env.payload as { partId: string }).partId : env.eventId
+        const key = isPart ? `part:${env.senderId}:${receiptId}` : `${env.senderId}:${env.eventId}`
         if (this.state.isProcessed(key)) {
             this.addConfirm(confirm, env.senderId, receiptId)
             toDelete.push(entry)
@@ -968,6 +1107,44 @@ export class ConversationSync {
             this.addConfirm(confirm, env.senderId, receiptId)
             toDelete.push(entry)
             this.deps.onChange?.()
+            return
+        }
+
+        if (env.type === 'member.limits.set') {
+            const p = env.payload as { maxFileMb: number }
+            const cur = this.state.data.peerLimits[env.senderId]
+            if (!cur || env.senderSeq > cur.seq)
+                this.state.data.peerLimits[env.senderId] = {
+                    maxFileMb: p.maxFileMb,
+                    seq: env.senderSeq
+                }
+            this.state.markProcessed(key)
+            this.addConfirm(confirm, env.senderId, receiptId)
+            toDelete.push(entry)
+            return
+        }
+
+        if (env.type === 'attachment.part') {
+            const load = this.state.data.attachmentLoads.find(
+                (l) => l.senderId === env.senderId && l.parts.some((x) => x.partId === receiptId)
+            )
+            if (!load) {
+                // the list of files has not arrived yet: the part waits in the inbox (no receipt)
+                return
+            }
+            const part = load.parts.find((x) => x.partId === receiptId)!
+            if (part.sha256 !== env.payloadSha256 || part.size !== opened.payload.length)
+                return this.quarantine(entry, 'part does not match its attachment', report)
+            if (!load.done && load.size > this.deps.maxFileBytes()) {
+                // FR-268a: larger than this member's limit; read when the limit is raised (until the sender gives up)
+                this.state.data.deferred[entry.name] = load.size
+                return
+            }
+            delete this.state.data.deferred[entry.name]
+            if (!load.done) await this.state.storeInPart(env.senderId, receiptId, opened.payload)
+            this.state.markProcessed(key)
+            this.addConfirm(confirm, env.senderId, receiptId)
+            toDelete.push(entry)
             return
         }
 
@@ -992,6 +1169,8 @@ export class ConversationSync {
         } as VerifiedEvent
         this.state.data.held[entry.name] = { key, senderId: env.senderId, receiptId }
 
+        if (event.type === 'message.attachments') await this.noteAttachments(event)
+
         if (
             event.type === 'message.sent' &&
             (event.payload as MessageSentPayload).parts.length > 0
@@ -1007,6 +1186,68 @@ export class ConversationSync {
             return // completeLoading applies it when all parts are present
         }
         this.state.data.pending.push(event)
+    }
+
+    /** Release 2.4: the files of a message of another member start loading (their parts may come in any order). */
+    private async noteAttachments(event: VerifiedEvent): Promise<void> {
+        const p = event.payload as MessageAttachmentsPayload
+        const loads = this.state.data.attachmentLoads
+        for (const a of p.attachments) {
+            if (
+                loads.some(
+                    (l) =>
+                        l.senderId === event.senderId &&
+                        l.messageId === p.messageId &&
+                        l.sha256 === a.sha256
+                )
+            )
+                continue
+            const have = (await this.deps.document.hasBlob?.(a.sha256)) ?? false
+            loads.push({
+                senderId: event.senderId,
+                messageId: p.messageId,
+                sha256: a.sha256,
+                size: a.size,
+                type: a.type,
+                parts: a.parts.map((x) => ({ ...x })),
+                done: have,
+                at: this.deps.now()
+            })
+        }
+    }
+
+    /** Attachments whose parts are all here: joined, checked against size and hash, and stored (FR-266). */
+    private async completeAttachments(): Promise<void> {
+        const s = this.state.data
+        let stored = false
+        for (const load of s.attachmentLoads) {
+            if (load.done) continue
+            if (!load.parts.every((p) => this.state.hasInPart(load.senderId, p.partId))) continue
+            const chunks: Uint8Array[] = []
+            for (const p of [...load.parts].sort((a, b) => a.index - b.index)) {
+                const data = await this.state.readInPart(load.senderId, p.partId)
+                if (data) chunks.push(data)
+            }
+            const data = Buffer.concat(chunks)
+            load.done = true
+            if (data.length === load.size && sha256Hex(data) === load.sha256) {
+                await this.deps.document.storeBlob?.(load.sha256, data, load.type)
+                stored = true
+            } else
+                this.deps.log?.(
+                    `attachment ${load.sha256} of ${load.messageId}: bytes do not match`
+                )
+            await this.state.dropInParts(
+                load.senderId,
+                load.parts.map((p) => p.partId)
+            )
+        }
+        // a finished load is kept for 31 days, so late copies of its parts are confirmed (D-34: 30 days)
+        const nowMs = Date.parse(this.deps.now())
+        s.attachmentLoads = s.attachmentLoads.filter(
+            (l) => !l.done || nowMs - Date.parse(l.at) < UNCONFIRMED_MAX_AGE_MS + 24 * 60 * 60_000
+        )
+        if (stored) this.deps.onAttachments?.()
     }
 
     /** D-32: another member re-invited a person with new keys; this member decides (status line). */

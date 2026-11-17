@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { branchLabel } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { Thread } from '@shared/types'
 
 interface Props {
@@ -33,8 +33,8 @@ export function BranchBadge({ branches, onOpen }: Props): React.JSX.Element | nu
                 data-testid="branch-badge"
                 title={
                     only
-                        ? ru.branches.openBranch(branchLabel(only))
-                        : ru.branches.branchCount(branches.length)
+                        ? texts().branches.openBranch(branchLabel(only))
+                        : texts().branches.branchCount(branches.length)
                 }
                 onClick={() => (only ? onOpen(only.threadId) : setOpen(!open))}
             >

@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { createReadStream, createWriteStream, promises as fs } from 'node:fs'
+import { Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { join } from 'node:path'
 
 const HASH = /^[0-9a-f]{64}$/
@@ -47,6 +49,49 @@ export class BlobStore {
             if (await this.has(sha256)) return
             throw err
         }
+    }
+
+    /**
+     * Stores a file of any size (an attachment, FR-261) without holding it in memory: copied to a temporary name while
+     * the hash is computed, then renamed. `maxBytes` stops the copy of a file that grew past the limit.
+     */
+    async putFile(
+        source: string,
+        maxBytes = Number.MAX_SAFE_INTEGER
+    ): Promise<{ sha256: string; size: number }> {
+        await fs.mkdir(this.dir, { recursive: true })
+        const tmp = join(this.dir, `${randomUUID()}.tmp`)
+        const hash = createHash('sha256')
+        let size = 0
+        const count = new Transform({
+            transform(chunk: Buffer, _enc, done) {
+                size += chunk.length
+                if (size > maxBytes)
+                    return done(Object.assign(new Error('too large'), { code: 'TOO_LARGE' }))
+                hash.update(chunk)
+                done(null, chunk)
+            }
+        })
+        try {
+            await pipeline(createReadStream(source), count, createWriteStream(tmp))
+            const sha256 = hash.digest('hex')
+            const target = this.pathOf(sha256)
+            if (await this.has(sha256)) await fs.rm(tmp, { force: true })
+            else {
+                await fs.mkdir(join(this.dir, sha256.slice(0, 2)), { recursive: true })
+                await renameWithRetry(tmp, target)
+            }
+            return { sha256, size }
+        } catch (err) {
+            await fs.rm(tmp, { force: true }).catch(() => undefined)
+            throw err
+        }
+    }
+
+    /** The size of a stored file, or null. */
+    async sizeOf(sha256: string): Promise<number | null> {
+        const stat = await fs.stat(this.pathOf(sha256)).catch(() => null)
+        return stat ? stat.size : null
     }
 
     /** The bytes, checked against the hash; null if the file is missing or damaged (show a placeholder). */

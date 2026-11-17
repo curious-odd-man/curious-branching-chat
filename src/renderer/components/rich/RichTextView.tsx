@@ -7,7 +7,7 @@ import {
     type RichMark,
     type RichNode
 } from '@shared/validation'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 /** What the message view needs to show embedded images (FR-068, FR-069, FR-075). */
 export interface ImageContext {
@@ -189,7 +189,7 @@ function wrapMarks(
                 out = (
                     <a
                         href={href}
-                        title={ru.message.linkTitle(href)}
+                        title={texts().message.linkTitle(href)}
                         rel="noopener noreferrer"
                         onClick={(event) => {
                             event.preventDefault()
@@ -227,10 +227,10 @@ function ChatImage({
             <span
                 className="image-placeholder image-loading"
                 role="img"
-                aria-label={ru.images.loading}
+                aria-label={texts().images.loading}
                 data-testid="image-loading"
             >
-                🖼 {ru.images.loadingProgress(loading.received, loading.total)}
+                🖼 {texts().images.loadingProgress(loading.received, loading.total)}
                 <progress max={loading.total} value={loading.received} />
             </span>
         )
@@ -239,18 +239,18 @@ function ChatImage({
             <span
                 className="image-placeholder"
                 role="img"
-                aria-label={ru.images.unavailable}
-                title={ru.images.unavailableHint}
+                aria-label={texts().images.unavailable}
+                title={texts().images.unavailableHint}
                 data-testid="image-placeholder"
             >
-                🖼 {ru.images.unavailable}
+                🖼 {texts().images.unavailable}
             </span>
         )
     return (
         <button
             type="button"
             className="image-button"
-            aria-label={ru.images.view}
+            aria-label={texts().images.view}
             data-testid="image-button"
             onClick={() => images.onOpen(assetId, alt)}
         >

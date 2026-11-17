@@ -46,6 +46,13 @@ export function checkDiscussionIntegrity(d: DiscussionData): string[] {
                 if (!m.assetReferences.includes(assetId))
                     problems.push(`message ${m.messageId}: image ${assetId} not in assetReferences`)
             }
+            const reacted = new Set<string>()
+            for (const r of m.reactions ?? []) {
+                const key = `${r.emoji} ${r.by}`
+                if (reacted.has(key))
+                    problems.push(`message ${m.messageId}: reaction ${r.emoji} of ${r.by} twice`)
+                reacted.add(key)
+            }
             for (const ref of m.assetReferences) {
                 if (!assetIds.has(ref))
                     problems.push(`message ${m.messageId}: unknown asset ${ref}`)

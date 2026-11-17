@@ -1,4 +1,4 @@
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { DiscussionListItem } from '@shared/types/ipc'
 import { formatTimestamp } from '../i18n/format'
 
@@ -20,8 +20,8 @@ export function Launcher({
 }: Props): React.JSX.Element {
     return (
         <main className="launcher">
-            <h1>{ru.app.name}</h1>
-            <p>{ru.app.tagline}</p>
+            <h1>{texts().app.name}</h1>
+            <p>{texts().app.tagline}</p>
             <div className="buttons">
                 <button
                     type="button"
@@ -29,13 +29,13 @@ export function Launcher({
                     data-testid="launcher-new"
                     onClick={onNew}
                 >
-                    {ru.launcher.newDiscussion}
+                    {texts().launcher.newDiscussion}
                 </button>
                 <button type="button" data-testid="launcher-open" onClick={onImport}>
-                    {ru.launcher.openDiscussion}
+                    {texts().launcher.openDiscussion}
                 </button>
             </div>
-            <p className="hint">{ru.launcher.dropHint}</p>
+            <p className="hint">{texts().launcher.dropHint}</p>
             {discussions.length > 0 && (
                 <section
                     className="recent"
@@ -43,7 +43,7 @@ export function Launcher({
                     aria-labelledby="recent-heading"
                 >
                     <div className="recent-head">
-                        <h2 id="recent-heading">{ru.launcher.recentHeading}</h2>
+                        <h2 id="recent-heading">{texts().launcher.recentHeading}</h2>
                     </div>
                     <ul>
                         {discussions.map((d) => (
@@ -59,17 +59,17 @@ export function Launcher({
                                         {d.synced && (
                                             <span className="recent-shared">
                                                 {' '}
-                                                · {ru.launcher.shared}
+                                                · {texts().launcher.shared}
                                             </span>
                                         )}
                                     </span>
                                     <span className="recent-dir">
                                         {d.lastMessageAt
-                                            ? ru.launcher.lastMessage(
+                                            ? texts().launcher.lastMessage(
                                                   formatTimestamp(d.lastMessageAt),
                                                   d.messageCount
                                               )
-                                            : ru.launcher.noMessages}
+                                            : texts().launcher.noMessages}
                                     </span>
                                 </button>
                             </li>
@@ -77,7 +77,7 @@ export function Launcher({
                     </ul>
                 </section>
             )}
-            {version && <small>{ru.app.version(version)}</small>}
+            {version && <small>{texts().app.version(version)}</small>}
         </main>
     )
 }

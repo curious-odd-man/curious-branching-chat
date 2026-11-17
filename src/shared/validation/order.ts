@@ -38,7 +38,11 @@ export function maxClock(d: DiscussionData): number {
         if (t.clock > max) max = t.clock
         if (t.statusSet && t.statusSet.clock > max) max = t.statusSet.clock
         if (t.titleSet && t.titleSet.clock > max) max = t.titleSet.clock
-        for (const m of t.messages) if (m.clock > max) max = m.clock
+        for (const m of t.messages) {
+            if (m.clock > max) max = m.clock
+            // a reaction is a change with its own clock (FR-233)
+            for (const r of m.reactions ?? []) if (r.clock > max) max = r.clock
+        }
     }
     return max
 }

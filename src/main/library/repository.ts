@@ -1,7 +1,7 @@
-import { normalizeSearchText } from '@shared/domain'
+import { messageSearchText, normalizeSearchText } from '@shared/domain'
 import {
-    richTextToPlain,
     type AssetInfo,
+    type Attachment,
     type DiscussionData,
     type DocumentContents,
     type Message,
@@ -236,24 +236,38 @@ export class LibraryRepository {
 
     // ---- drafts (FR-251 to FR-254): local only, never in an export ------------------------------------------------
 
-    drafts(
-        id: string
-    ): Array<{ threadId: string; content: string; images: string[]; updatedAt: string }> {
+    drafts(id: string): Array<{
+        threadId: string
+        content: string
+        images: string[]
+        attachments: Attachment[]
+        updatedAt: string
+    }> {
         return this.db
             .prepare(
-                'SELECT thread_id, content, images, updated_at FROM draft WHERE discussion_id = ?'
+                'SELECT thread_id, content, images, attachments, updated_at FROM draft WHERE discussion_id = ?'
             )
             .all(id)
             .map((r) => ({
                 threadId: String(r.thread_id),
                 content: String(r.content),
                 images: JSON.parse(String(r.images)) as string[],
+                attachments: JSON.parse(String(r.attachments)) as Attachment[],
                 updatedAt: String(r.updated_at)
             }))
     }
 
-    /** Stores or (with `content` null) removes the draft of a branch. */
-    setDraft(id: string, threadId: string, content: string | null, images: string[] = []): void {
+    /**
+     * Stores or (with `content` null) removes the draft of a branch. `images` are the hashes of the draft's images,
+     * `attachments` its files (release 2.4).
+     */
+    setDraft(
+        id: string,
+        threadId: string,
+        content: string | null,
+        images: string[] = [],
+        attachments: Attachment[] = []
+    ): void {
         if (content === null)
             this.db
                 .prepare('DELETE FROM draft WHERE discussion_id = ? AND thread_id = ?')
@@ -261,11 +275,20 @@ export class LibraryRepository {
         else
             this.db
                 .prepare(
-                    `INSERT INTO draft (discussion_id, thread_id, content, images, updated_at) VALUES (?, ?, ?, ?, ?)
+                    `INSERT INTO draft (discussion_id, thread_id, content, images, attachments, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?)
                      ON CONFLICT (discussion_id, thread_id) DO UPDATE
-                        SET content = excluded.content, images = excluded.images, updated_at = excluded.updated_at`
+                        SET content = excluded.content, images = excluded.images,
+                            attachments = excluded.attachments, updated_at = excluded.updated_at`
                 )
-                .run(id, threadId, content, JSON.stringify(images), new Date().toISOString())
+                .run(
+                    id,
+                    threadId,
+                    content,
+                    JSON.stringify(images),
+                    JSON.stringify(attachments),
+                    new Date().toISOString()
+                )
     }
 
     /** Discussions that have at least one draft (the mark in the list, FR-253). */
@@ -281,8 +304,10 @@ export class LibraryRepository {
     /** Image hashes that drafts use (kept by the cleanup of unused image files). */
     draftBlobs(): Set<string> {
         const out = new Set<string>()
-        for (const r of this.db.prepare('SELECT images FROM draft').all())
+        for (const r of this.db.prepare('SELECT images, attachments FROM draft').all()) {
             for (const h of JSON.parse(String(r.images)) as string[]) out.add(h)
+            for (const a of JSON.parse(String(r.attachments)) as Attachment[]) out.add(a.sha256)
+        }
         return out
     }
 
@@ -326,7 +351,7 @@ export class LibraryRepository {
     async removeUnusedBlobs(minAgeMs: number, now = Date.now()): Promise<number> {
         const used = new Set(
             this.db
-                .prepare('SELECT DISTINCT sha256 FROM asset')
+                .prepare('SELECT sha256 FROM asset UNION SELECT sha256 FROM attachment')
                 .all()
                 .map((r) => String(r.sha256))
         )
@@ -349,6 +374,39 @@ export class LibraryRepository {
 
     private registerBlobs(assets: BlobRef[]): void {
         for (const a of assets) this.registerBlob(a)
+    }
+
+    /** True if the bytes of this hash are in the library (a row exists; rows come after their file). */
+    hasBlob(sha256: string): boolean {
+        return this.db.prepare('SELECT 1 FROM blob WHERE sha256 = ?').get(sha256) !== undefined
+    }
+
+    /** The recorded size of stored bytes, or null. */
+    blobSize(sha256: string): number | null {
+        const row = this.db.prepare('SELECT size FROM blob WHERE sha256 = ?').get(sha256)
+        return row ? Number(row.size) : null
+    }
+
+    /** Stores checked bytes (an attachment) and records them. */
+    async storeBlob(sha256: string, data: Uint8Array, mediaType: string): Promise<void> {
+        await this.blobs.put(sha256, data)
+        this.registerBlob({ sha256, mediaType, size: data.length })
+    }
+
+    /** Stores a file from disk (an attachment, FR-261) and records it; refuses a file above `maxBytes`. */
+    async storeBlobFile(
+        path: string,
+        mediaType: string,
+        maxBytes?: number
+    ): Promise<{ sha256: string; size: number }> {
+        const r = await this.blobs.putFile(path, maxBytes)
+        this.registerBlob({ sha256: r.sha256, mediaType, size: r.size })
+        return r
+    }
+
+    /** The file of a stored blob (to copy an attachment out without reading it into memory). */
+    blobPath(sha256: string): string {
+        return this.blobs.pathOf(sha256)
     }
 
     /** Records an image whose file is in the blob folder (the row comes after the file). */
@@ -549,7 +607,9 @@ export class LibraryRepository {
             this.db.prepare('DELETE FROM search_index WHERE rowid = ?').run(Number(row.rowid))
             this.db
                 .prepare('INSERT INTO search_index (rowid, text) VALUES (?, ?)')
-                .run(Number(row.rowid), normalizeSearchText(richTextToPlain(m.content)))
+                .run(Number(row.rowid), normalizeSearchText(messageSearchText(m)))
+            const oldAttachments = old?.message.attachments
+            if (oldAttachments !== m.attachments) this.writeAttachments(id, m)
         })
 
         if (changed && before.length > 0)
@@ -566,7 +626,24 @@ export class LibraryRepository {
                 .get(id, m.messageId)
             if (row)
                 this.db.prepare('DELETE FROM search_index WHERE rowid = ?').run(Number(row.rowid))
+            if (m.attachments)
+                this.db
+                    .prepare('DELETE FROM attachment WHERE discussion_id = ? AND message_id = ?')
+                    .run(id, m.messageId)
         }
+    }
+
+    private writeAttachments(id: string, m: Message): void {
+        this.db
+            .prepare('DELETE FROM attachment WHERE discussion_id = ? AND message_id = ?')
+            .run(id, m.messageId)
+        ;(m.attachments ?? []).forEach((a, i) =>
+            this.db
+                .prepare(
+                    'INSERT INTO attachment (discussion_id, message_id, ord, sha256) VALUES (?, ?, ?, ?)'
+                )
+                .run(id, m.messageId, i, a.sha256)
+        )
     }
 
     private writeMarks(

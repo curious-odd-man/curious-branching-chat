@@ -26,6 +26,10 @@ export type AppErrorCode =
     | 'TITLE_REQUIRED'
     | 'DISCUSSION_OPEN'
     | 'SYNCED_IMPORT'
+    | 'ATTACHMENT_NOT_FOUND'
+    | 'ATTACHMENT_MISSING'
+    | 'ATTACHMENT_SAVE_FAILED'
+    | 'ATTACHMENT_OPEN_FAILED'
 
 export class AppError extends Error {
     readonly code: AppErrorCode

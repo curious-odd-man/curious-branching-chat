@@ -1,6 +1,7 @@
 # BranchChat Sync Protocol, version 1
 
-**Status:** Contract for releases 1.2 to 1.5. Release 1.1 contains the schemas only.  
+**Status:** Contract for releases 1.2 to 2.4. Release 1.1 contains the schemas only. Release 2.4 adds four event
+types (Sections 7.11 to 7.14); the protocol version stays 1 (Section 10).  
 **Source:** `docs/01-future/google-drive-desktop-encrypted-chat-design.md` (revision 6), decisions D-01 to D-38.  
 **Code:** `src/shared/sync/` (schemas, canonical serialization, framing). Cryptography: `src/main/crypto/`.
 
@@ -341,7 +342,8 @@ Invitation header (`.bcinv`):
 }
 ```
 
-- The snapshot is a complete `.branchchat` file (schema version 2, with `sync.json` and all images). Its bytes are
+- The snapshot is a complete `.branchchat` file (schema version 2, from release 2.4 version 3, with `sync.json`, all
+  images, and all attachments that the inviter has). Its bytes are
   split into `invitation.part` events (payload `{ "invitationId": "…", "partId": "…" }`), each at most 4 MiB.
 - `replacesKeysOf` is present for a re-invitation after key loss (D-15). The roster in the snapshot has the old ID with
   the new keys. The header and parts go to the inbox of the ID in the person's new key bundle, with that ID as
@@ -358,6 +360,59 @@ Invitation header (`.bcinv`):
 - After the import, the invitee confirms the invitation with `receipt.delivered` (`ids`: invitation ID and part IDs).
   The inviter shows the member as "joined".
 
+### 7.11 `reaction.set` (release 2.4)
+
+Payload: `{ "messageId": "…", "emoji": "👍", "on": true }`. `emoji` is one of 👍 👎 ❤️ 😂 😮 😢 ✅ (FR-231).
+
+- The person is the envelope `senderId`; the change has the envelope `clock`.
+- For each (message, person, emoji), the change with the higher clock wins. With the same clock, `on: false` wins, so
+  every arrival order gives the same result. A removed reaction keeps its entry with `on: false` in the discussion.
+- The event waits until its message is there (Section 9.3). It does not change the read state and does not raise a
+  notification (FR-234).
+
+### 7.12 `member.limits.set` (release 2.4)
+
+Payload: `{ "maxFileMb": 30 }` (5 to 1 000): the sender's file size limit (Section 9.5, FR-268).
+
+- The value with the highest `senderSeq` of a member wins. It is kept in the local sync state, not in the file.
+- A member that has not sent a value counts with the default, 30 MB. So a member sends the event only when its limit
+  is not the default, or when it was sent before and changed: after a change, after joining, and to a new member.
+- Before a member sends an attachment, the app compares its size with these limits and warns (FR-268).
+
+### 7.13 `message.attachments` (release 2.4)
+
+```json
+{
+  "messageId": "…",
+  "attachments": [
+    { "name": "план.pdf", "size": 4194404, "type": "application/pdf", "sha256": "…",
+      "parts": [ { "partId": "…", "index": 0, "size": 4194304, "sha256": "…" } ] }
+  ]
+}
+```
+
+- Sent right after the `message.sent` of the same message, only by its author, and only once (a second one is a
+  duplicate; one from another member is refused).
+- `name`: 1 to 200 characters, no control or direction characters, no `\ / : * ? " < > |`, no space at the start or
+  end, no dot at the end. `type` is the media type that the sender's system gave (can be empty).
+- Each attachment has parts with index 0, 1, … whose sizes add up to `size`; an empty file has no parts. Joined
+  payloads give the file; its SHA-256 must equal `sha256`.
+- The event waits until its message is there. The list of files is applied at once; the bytes come with
+  `attachment.part`.
+
+### 7.14 `attachment.part` (release 2.4)
+
+Payload: `{ "messageId": "…", "partId": "…" }`. Binary payload: at most 4 MiB. The `partId`, `size`, and `sha256` must
+match an entry in the signed `message.attachments` of the same sender.
+
+- A version 1.5 member checks every `message.part` against the images of `message.sent`. So attachment parts have
+  their own type; a version 1.5 member keeps them waiting (Section 10) and gets all other events.
+- A part whose attachment is larger than the receiver's file size limit is not read and gets no receipt. It stays in
+  the inbox and is read when the receiver raises the limit, until the sender deletes it after 30 days (FR-268a).
+- A part before its `message.attachments` stays in the inbox until the header is there (no receipt).
+- Attachment parts do not count for the delivery state of the message (FR-169): a member with a smaller limit has the
+  message, but not the file.
+
 ---
 
 ## 8. Clocks and order
@@ -368,6 +423,7 @@ Invitation header (`.bcinv`):
   index after the sort.
 - Threads are sorted by (`clock`, `createdBy`, `threadId`). The main thread has clock 0.
 - Branch status and title: last writer wins by (`clock`, participant ID).
+- Reactions have their own clocks (Section 7.11); they count for the conversation clock.
 
 ---
 
@@ -427,3 +483,6 @@ it.
   "Обновите приложение". No receipt is sent for it.
 - The join wizard refuses an invitation whose `minProtocolVersion` is higher than the app supports.
 - All event types of Section 7 are defined in version 1, also the types that later releases send first.
+- Release 2.4 adds `reaction.set`, `member.limits.set`, `message.attachments`, and `attachment.part`. A member with an
+  older release keeps them waiting and shows "Обновите приложение"; it loses nothing, and it gets all other events.
+  After the update it reads them at the next scan.

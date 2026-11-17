@@ -1,10 +1,11 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { basename, join } from 'node:path'
-import type { DocumentContents } from '@shared/validation'
+import type { Attachment, DocumentContents } from '@shared/validation'
 import type { DiscussionListItem } from '@shared/types/ipc'
 import { describeDiscussions } from '../application/recentView'
 import { readDocument, readImageAsset, writeDocument } from '../document'
+import { readEntryBuffer } from '../document/zip'
 import { BlobStore } from './blobs'
 import { Database } from './db'
 import { DiscussionStore } from './discussionStore'
@@ -164,6 +165,21 @@ export class LibraryService {
             await this.lib.blobs.put(info.sha256, data)
             this.lib.repo.registerBlob(info)
         }
+        // FR-261 (schema version 3): attachments are ZIP entries `attachments/<sha256>`, checked like images
+        for (const a of attachmentsOf(loaded.contents)) {
+            if (await this.lib.blobs.has(a.sha256)) {
+                this.lib.repo.registerBlob({ sha256: a.sha256, mediaType: a.type, size: a.size })
+                continue
+            }
+            const data = await readEntryBuffer(path, attachmentEntry(a.sha256)).catch(() => null)
+            if (!data || data.length !== a.size) continue
+            try {
+                await this.lib.blobs.put(a.sha256, data)
+            } catch {
+                continue // the bytes do not match the hash: the attachment shows as missing
+            }
+            this.lib.repo.registerBlob({ sha256: a.sha256, mediaType: a.type, size: a.size })
+        }
         const incoming = options.keepSync ? loaded.contents : withoutSync(loaded.contents)
         const id = incoming.manifest.documentId
         if (!this.lib.repo.has(id)) {
@@ -213,6 +229,12 @@ export class LibraryService {
         for (const a of data.discussion.assets)
             if (await this.lib.blobs.has(a.sha256))
                 assetFiles.push({ path: a.path, file: this.lib.blobs.pathOf(a.sha256) })
+        for (const a of attachmentsOf(data))
+            if (await this.lib.blobs.has(a.sha256))
+                assetFiles.push({
+                    path: attachmentEntry(a.sha256),
+                    file: this.lib.blobs.pathOf(a.sha256)
+                })
         await writeDocument(target, data, { discardExisting: true, assetFiles })
     }
 
@@ -237,10 +259,13 @@ export class LibraryService {
         id: string,
         threadId: string,
         content: string | null,
-        images: BlobRef[] = []
+        images: BlobRef[] = [],
+        attachments: Attachment[] = []
     ): Promise<void> {
         // in order: a late save of older text must not come after the removal of the draft
-        const next = this.draftChain.then(() => this.writeDraft(id, threadId, content, images))
+        const next = this.draftChain.then(() =>
+            this.writeDraft(id, threadId, content, images, attachments)
+        )
         this.draftChain = next.catch(() => undefined)
         return next
     }
@@ -251,7 +276,8 @@ export class LibraryService {
         id: string,
         threadId: string,
         content: string | null,
-        images: BlobRef[]
+        images: BlobRef[],
+        attachments: Attachment[]
     ): Promise<void> {
         const had = this.lib.repo.discussionsWithDrafts().has(id)
         if (content !== null)
@@ -263,7 +289,8 @@ export class LibraryService {
             id,
             threadId,
             content,
-            images.map((i) => i.sha256)
+            images.map((i) => i.sha256),
+            attachments.filter((a) => this.lib.repo.hasBlob(a.sha256))
         )
         if (had !== this.lib.repo.discussionsWithDrafts().has(id)) this.changed()
     }
@@ -274,6 +301,7 @@ export class LibraryService {
             threadId: string
             content: unknown
             images: Array<{ sha256: string; data: Buffer | null }>
+            attachments: Attachment[]
         }>
     > {
         const out = []
@@ -287,14 +315,50 @@ export class LibraryService {
             } catch {
                 continue
             }
-            out.push({ threadId: d.threadId, content, images })
+            out.push({ threadId: d.threadId, content, images, attachments: d.attachments })
         }
         return out
+    }
+
+    // ---- attachments (release 2.4) ---------------------------------------------------------------------------
+
+    /** FR-261: stores a file to attach (streamed); refuses a file above `maxBytes` (code TOO_LARGE). */
+    storeBlobFile(
+        path: string,
+        mediaType: string,
+        maxBytes?: number
+    ): Promise<{ sha256: string; size: number }> {
+        return this.lib.repo.storeBlobFile(path, mediaType, maxBytes)
+    }
+
+    async storeBlobBytes(data: Uint8Array, mediaType: string): Promise<string> {
+        const sha256 = createHash('sha256').update(data).digest('hex')
+        await this.lib.repo.storeBlob(sha256, data, mediaType)
+        return sha256
+    }
+
+    /** The file of stored bytes, or null when they are not in the library. */
+    blobFile(sha256: string): string | null {
+        return this.lib.repo.hasBlob(sha256) ? this.lib.repo.blobPath(sha256) : null
     }
 
     close(): void {
         this.lib.close()
     }
+}
+
+/** The ZIP entry of an attachment's bytes (schema version 3). */
+export function attachmentEntry(sha256: string): string {
+    return `attachments/${sha256}`
+}
+
+/** Each attachment of the discussion once (by hash, FR-266). */
+export function attachmentsOf(contents: DocumentContents): Attachment[] {
+    const out = new Map<string, Attachment>()
+    for (const t of contents.discussion.threads)
+        for (const m of t.messages)
+            for (const a of m.attachments ?? []) if (!out.has(a.sha256)) out.set(a.sha256, a)
+    return [...out.values()]
 }
 
 export function withoutSync(contents: DocumentContents): DocumentContents {

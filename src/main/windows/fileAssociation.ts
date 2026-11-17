@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { AssociationState } from '@shared/types/ipc'
 import { DISCUSSION_EXTENSION } from '@shared/types/constants'
 
@@ -67,7 +67,7 @@ export class FileAssociation {
     async enable(): Promise<void> {
         const state = await this.state()
         if (state === 'other-app') throw new AssociationBlockedError()
-        await this.registry.set(PROG_ID_KEY, undefined, ru.fileType.name)
+        await this.registry.set(PROG_ID_KEY, undefined, texts().fileType.name)
         await this.registry.set(`${PROG_ID_KEY}\\DefaultIcon`, undefined, `${this.iconPath},0`)
         await this.registry.set(
             `${PROG_ID_KEY}\\shell\\open\\command`,

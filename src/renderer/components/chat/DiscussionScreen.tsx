@@ -13,10 +13,16 @@ import {
     resolveQuoteRange,
     unreadSummary
 } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { assetUrl } from '@shared/types/assets'
 import type { DocumentView } from '@shared/types/ipc'
-import { richTextToPlain, type RichDoc } from '@shared/validation'
+import {
+    richTextToPlain,
+    type Attachment,
+    type ReactionEmoji,
+    type RichDoc
+} from '@shared/validation'
+import type { MessageExtrasContext } from './MessageExtras'
 import { BranchHeader } from '../branches/BranchHeader'
 import { BranchPanel } from '../branches/BranchPanel'
 import { BranchMap } from '../branches/BranchMap'
@@ -36,7 +42,15 @@ interface Props {
     /** Open this message when the thread is shown (used by "go to source message"). */
     focusMessageId?: string
     onSelectThread(threadId: string, focusMessageId?: string): void
-    onSend(content: RichDoc, clear: () => void): void
+    onSend(content: RichDoc, attachments: Attachment[], clear: () => void): void
+    /** FR-231: adds or removes a reaction of the person. */
+    onToggleReaction(messageId: string, emoji: ReactionEmoji): void
+    /** FR-262: "Открыть" and "Сохранить как…" of a file. */
+    onAttachment(action: 'open' | 'save', messageId: string, index: number): void
+    /** FR-268a: the own file size limit of the shared folder, in MB. */
+    receiveLimitMb: number
+    /** FR-268a: "Изменить предел" opens Settings. */
+    onOpenSettings(): void
     onMarkMessageRead(messageId: string): void
     onMarkThreadRead(threadId: string): void
     onMarkAllRead(): void
@@ -65,6 +79,10 @@ export function DiscussionScreen({
     focusMessageId,
     onSelectThread,
     onSend,
+    onToggleReaction,
+    onAttachment,
+    receiveLimitMb,
+    onOpenSettings,
     onMarkMessageRead,
     onMarkThreadRead,
     onMarkAllRead,
@@ -102,7 +120,38 @@ export function DiscussionScreen({
         }),
         [view.sessionId, view.missingAssetIds]
     )
-    const status = view.saveError ? null : view.saving ? ru.discussion.saving : ru.discussion.saved
+    const status = view.saveError
+        ? null
+        : view.saving
+          ? texts().discussion.saving
+          : texts().discussion.saved
+    // release 2.4: reactions (names of the people) and files (which ones are here)
+    const extras = useMemo<MessageExtrasContext>(() => {
+        const names = new Map<string, string>()
+        for (const p of discussion.participants) names.set(p.participantId, p.displayName)
+        for (const p of view.knownParticipants) names.set(p.participantId, p.displayName)
+        return {
+            localId: view.localParticipantId,
+            names,
+            onToggleReaction,
+            missing: new Set(view.missingAttachments),
+            synced: view.synced,
+            receiveLimitMb,
+            onSave: (messageId, index) => onAttachment('save', messageId, index),
+            onOpen: (messageId, index) => onAttachment('open', messageId, index),
+            onChangeLimit: onOpenSettings
+        }
+    }, [
+        discussion.participants,
+        view.knownParticipants,
+        view.localParticipantId,
+        view.missingAttachments,
+        view.synced,
+        receiveLimitMb,
+        onToggleReaction,
+        onAttachment,
+        onOpenSettings
+    ])
 
     const context = useMemo(() => resolveContext(discussion, threadId), [discussion, threadId])
     const branchesByMessage = useMemo(() => branchesBySourceMessage(discussion), [discussion])
@@ -132,7 +181,11 @@ export function DiscussionScreen({
     const rows = useMemo<ListRow[]>(() => {
         const out: ListRow[] = []
         if (isBranch && context.inherited.length > 0) {
-            out.push({ kind: 'divider', id: 'context-start', label: ru.branches.contextCaption })
+            out.push({
+                kind: 'divider',
+                id: 'context-start',
+                label: texts().branches.contextCaption
+            })
             for (const message of context.inherited) {
                 const isSource = message.messageId === thread.sourceMessageId
                 const highlight = isSource
@@ -140,7 +193,7 @@ export function DiscussionScreen({
                     : null
                 out.push({ kind: 'message', message, inherited: true, highlight })
             }
-            out.push({ kind: 'divider', id: 'context-end', label: ru.branches.contextDivider })
+            out.push({ kind: 'divider', id: 'context-end', label: texts().branches.contextDivider })
         }
         // loading messages of this thread take their place in the clock order (FR-152, D-37)
         const loading = view.loading
@@ -223,8 +276,8 @@ export function DiscussionScreen({
                     type="button"
                     className="roster-button"
                     data-testid="open-search"
-                    title={withKeys(ru.search.open, 'find')}
-                    aria-label={ru.search.open}
+                    title={withKeys(texts().search.open, 'find')}
+                    aria-label={texts().search.open}
                     onClick={() => setShowSearch(true)}
                 >
                     🔍
@@ -233,8 +286,8 @@ export function DiscussionScreen({
                     type="button"
                     className="roster-button"
                     data-testid="open-branch-map"
-                    title={withKeys(ru.branchMap.button, 'branchMap')}
-                    aria-label={ru.branchMap.button}
+                    title={withKeys(texts().branchMap.button, 'branchMap')}
+                    aria-label={texts().branchMap.button}
                     onClick={() => setShowMap(true)}
                 >
                     🌳
@@ -243,8 +296,8 @@ export function DiscussionScreen({
                     type="button"
                     className="roster-button"
                     data-testid="jump-to-date"
-                    title={withKeys(ru.days.jumpTitle, 'jumpToDate')}
-                    aria-label={ru.days.jumpTitle}
+                    title={withKeys(texts().days.jumpTitle, 'jumpToDate')}
+                    aria-label={texts().days.jumpTitle}
                     onClick={() => setShowJump(true)}
                 >
                     📅
@@ -254,7 +307,7 @@ export function DiscussionScreen({
                         type="button"
                         className="roster-button"
                         data-testid="roster-button"
-                        title={ru.shared.rosterTitle}
+                        title={texts().shared.rosterTitle}
                         onClick={() => setShowRoster(true)}
                     >
                         👥 {view.knownParticipants.length}
@@ -267,10 +320,10 @@ export function DiscussionScreen({
                         data-testid="sync-check"
                         title={
                             view.syncStatus?.lastScanAt
-                                ? ru.syncStatus.lastScan(
+                                ? texts().syncStatus.lastScan(
                                       formatTimestamp(view.syncStatus.lastScanAt)
                                   )
-                                : ru.syncStatus.check
+                                : texts().syncStatus.check
                         }
                         disabled={checking}
                         onClick={() => {
@@ -278,7 +331,7 @@ export function DiscussionScreen({
                             void window.branchchat.checkSyncNow().finally(() => setChecking(false))
                         }}
                     >
-                        {checking ? ru.syncStatus.checking : `⟳ ${ru.syncStatus.check}`}
+                        {checking ? texts().syncStatus.checking : `⟳ ${texts().syncStatus.check}`}
                     </button>
                 )}
                 {showJump && (
@@ -313,9 +366,9 @@ export function DiscussionScreen({
                 )}
                 {unread.total > 0 && (
                     <span className="unread-total">
-                        <span data-testid="unread-total">{ru.unread.total(unread.total)}</span>
+                        <span data-testid="unread-total">{texts().unread.total(unread.total)}</span>
                         <button type="button" data-testid="mark-all-read" onClick={onMarkAllRead}>
-                            {ru.unread.markAll}
+                            {texts().unread.markAll}
                         </button>
                     </span>
                 )}
@@ -336,9 +389,9 @@ export function DiscussionScreen({
 
             {view.saveError && (
                 <div className="banner error" role="alert" data-testid="save-error">
-                    <span>{ru.discussion.saveFailed(view.saveError)}</span>
+                    <span>{texts().discussion.saveFailed(view.saveError)}</span>
                     <button type="button" data-testid="retry-save" onClick={onRetrySave}>
-                        {ru.discussion.retry}
+                        {texts().discussion.retry}
                     </button>
                 </div>
             )}
@@ -348,7 +401,7 @@ export function DiscussionScreen({
                     <div className="banner notice" role="status" data-testid="notice" key={notice}>
                         <span>{notice}</span>
                         <button type="button" onClick={() => setDismissed([...dismissed, notice])}>
-                            {ru.discussion.dismiss}
+                            {texts().discussion.dismiss}
                         </button>
                     </div>
                 ))}
@@ -375,15 +428,15 @@ export function DiscussionScreen({
                     {threadUnread > 0 && (
                         <div className="thread-toolbar" data-testid="thread-toolbar">
                             <span data-testid="thread-unread">
-                                {ru.unread.inThread(threadUnread)}
+                                {texts().unread.inThread(threadUnread)}
                             </span>
                             <button
                                 type="button"
                                 data-testid="mark-thread-read"
-                                title={ru.unread.markThread}
+                                title={texts().unread.markThread}
                                 onClick={() => onMarkThreadRead(threadId)}
                             >
-                                {ru.unread.markThread}
+                                {texts().unread.markThread}
                             </button>
                         </div>
                     )}
@@ -402,6 +455,7 @@ export function DiscussionScreen({
                         onReply={onReply}
                         onOpenBranch={(id) => onSelectThread(id)}
                         sync={markSync}
+                        extras={extras}
                         positionKey={`${view.documentId}:${threadId}`}
                         restorePosition={firstList.current === threadId}
                         {...(highlightWords ? { highlightWords } : {})}
@@ -410,11 +464,12 @@ export function DiscussionScreen({
                     <Composer
                         sessionId={view.sessionId}
                         threadId={threadId}
+                        synced={view.synced}
                         blocked={
                             closed
                                 ? {
-                                      message: ru.branches.closedNotice,
-                                      actionLabel: ru.branches.reopen,
+                                      message: texts().branches.closedNotice,
+                                      actionLabel: texts().branches.reopen,
                                       onAction: () => onSetStatus(threadId, 'open')
                                   }
                                 : undefined
@@ -464,12 +519,12 @@ function SyncStatusLine({
     const [busy, setBusy] = useState(false)
     if (!status) return null
     const lines: string[] = []
-    if (status.folder === 'missing') lines.push(ru.syncStatus.missing(status.folderPath))
-    if (status.folder === 'no-permission') lines.push(ru.syncStatus.noPermission)
-    if (status.needsUpdate) lines.push(ru.syncStatus.needsUpdate)
-    if (status.quarantined > 0) lines.push(ru.syncStatus.quarantined(status.quarantined))
+    if (status.folder === 'missing') lines.push(texts().syncStatus.missing(status.folderPath))
+    if (status.folder === 'no-permission') lines.push(texts().syncStatus.noPermission)
+    if (status.needsUpdate) lines.push(texts().syncStatus.needsUpdate)
+    if (status.quarantined > 0) lines.push(texts().syncStatus.quarantined(status.quarantined))
     if (status.notAccepted.length > 0)
-        lines.push(ru.syncStatus.notAccepted(status.notAccepted.join(', ')))
+        lines.push(texts().syncStatus.notAccepted(status.notAccepted.join(', ')))
     if (lines.length === 0 && status.keyRequests.length === 0) return null
     // D-32: the decision about new keys of a member; no Windows notification for it (D-35)
     const decide = (participantId: string, accept: boolean): void => {
@@ -496,11 +551,11 @@ function SyncStatusLine({
                 >
                     <p>
                         {r.state === 'pending'
-                            ? ru.syncStatus.keysChanged(r.displayName)
-                            : ru.syncStatus.keysRejected(r.displayName)}
+                            ? texts().syncStatus.keysChanged(r.displayName)
+                            : texts().syncStatus.keysRejected(r.displayName)}
                     </p>
                     <p className="fingerprint-row">
-                        <span>{ru.identity.fingerprintLabel}: </span>
+                        <span>{texts().identity.fingerprintLabel}: </span>
                         <code className="fingerprint" data-testid="key-request-fingerprint">
                             {r.fingerprint}
                         </code>
@@ -513,7 +568,7 @@ function SyncStatusLine({
                                 disabled={busy}
                                 onClick={() => decide(r.participantId, false)}
                             >
-                                {ru.syncStatus.keysReject}
+                                {texts().syncStatus.keysReject}
                             </button>
                         )}
                         <button
@@ -524,8 +579,8 @@ function SyncStatusLine({
                             onClick={() => decide(r.participantId, true)}
                         >
                             {r.state === 'pending'
-                                ? ru.syncStatus.keysAccept
-                                : ru.syncStatus.keysAcceptLater}
+                                ? texts().syncStatus.keysAccept
+                                : texts().syncStatus.keysAcceptLater}
                         </button>
                     </div>
                 </div>

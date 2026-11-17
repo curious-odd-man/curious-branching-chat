@@ -2,7 +2,7 @@ import type { Database } from './db'
 
 /**
  * The library schema (ADR-003 section 6). Migrations go forward only; each one runs in one transaction and raises
- * `meta.schema_version` by one. Release 2.4 adds reactions and attachments as migration 2.
+ * `meta.schema_version` by one. Release 2.3 is migration 2, release 2.4 (attachments) migration 3.
  *
  * Data that the domain model keeps as JSON with unknown extra fields (zod `passthrough`) is stored as JSON, so a
  * discussion comes back exactly as it went in: the columns next to the JSON are for queries (list, order, search).
@@ -101,6 +101,26 @@ const MIGRATIONS: ReadonlyArray<(db: Database) => void> = [
                 updated_at    TEXT NOT NULL,
                 PRIMARY KEY (discussion_id, thread_id)
             ) STRICT, WITHOUT ROWID;
+        `),
+    // release 2.4: file attachments (FR-261, FR-266) and the export schema version 3. Reactions stay in the message
+    // JSON (they change with the message row); the attachment rows keep the files in the cleanup of unused files.
+    (db) =>
+        db.exec(`
+            CREATE TABLE attachment (
+                discussion_id TEXT NOT NULL REFERENCES discussion (id) ON DELETE CASCADE,
+                message_id    TEXT NOT NULL,
+                ord           INTEGER NOT NULL,
+                sha256        TEXT NOT NULL,
+                PRIMARY KEY (discussion_id, message_id, ord)
+            ) STRICT, WITHOUT ROWID;
+            CREATE INDEX attachment_by_hash ON attachment (sha256);
+            INSERT INTO attachment (discussion_id, message_id, ord, sha256)
+                SELECT m.discussion_id, m.message_id, CAST(a.key AS INTEGER), json_extract(a.value, '$.sha256')
+                  FROM message m, json_each(m.data, '$.attachments') a
+                 WHERE json_extract(a.value, '$.sha256') IS NOT NULL;
+            ALTER TABLE draft ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]';
+            UPDATE discussion SET schema_version = 3, manifest = json_set(manifest, '$.schemaVersion', 3)
+             WHERE schema_version < 3;
         `)
 ]
 

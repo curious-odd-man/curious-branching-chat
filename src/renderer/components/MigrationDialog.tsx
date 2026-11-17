@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { describeError, ru } from '@shared/i18n/ru'
+import { describeError, texts } from '@shared/i18n'
 import type { MigrationCandidate, MigrationResult } from '@shared/types/ipc'
 import { Modal } from './Modal'
 
@@ -40,10 +40,10 @@ export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Eleme
     return (
         <Modal labelledBy="migration-title">
             <div className="dialog wide" data-testid="migration-dialog">
-                <h2 id="migration-title">{ru.migration.title}</h2>
+                <h2 id="migration-title">{texts().migration.title}</h2>
                 {results === null ? (
                     <>
-                        <p>{ru.migration.text}</p>
+                        <p>{texts().migration.text}</p>
                         <ul className="migration-list">
                             {candidates.map((c) => (
                                 <li
@@ -63,20 +63,20 @@ export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Eleme
                                             {c.synced && (
                                                 <span className="recent-shared">
                                                     {' '}
-                                                    · {ru.launcher.shared}
+                                                    · {texts().launcher.shared}
                                                 </span>
                                             )}
                                         </span>
                                         <span className="recent-dir">
                                             {c.exists
                                                 ? c.path
-                                                : `${c.path} — ${ru.migration.missing}`}
+                                                : `${c.path} — ${texts().migration.missing}`}
                                         </span>
                                     </label>
                                 </li>
                             ))}
                         </ul>
-                        <p className="hint">{ru.migration.backupHint}</p>
+                        <p className="hint">{texts().migration.backupHint}</p>
                         {error && <p className="error-text">{error}</p>}
                         <div className="buttons">
                             <button
@@ -85,7 +85,7 @@ export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Eleme
                                 disabled={busy}
                                 onClick={skip}
                             >
-                                {ru.migration.skip}
+                                {texts().migration.skip}
                             </button>
                             <button
                                 type="button"
@@ -94,7 +94,7 @@ export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Eleme
                                 disabled={busy || chosen.size === 0}
                                 onClick={run}
                             >
-                                {busy ? ru.migration.running : ru.migration.run}
+                                {busy ? texts().migration.running : texts().migration.run}
                             </button>
                         </div>
                     </>
@@ -110,15 +110,15 @@ export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Eleme
                                     <span className="recent-name">{r.name}</span>
                                     <span className="recent-dir">
                                         {r.status === 'failed'
-                                            ? `${ru.migration.failed}: ${describeError(r.errorCode)}`
+                                            ? `${texts().migration.failed}: ${describeError(r.errorCode)}`
                                             : r.status === 'merged'
-                                              ? ru.migration.merged
-                                              : ru.migration.imported}
+                                              ? texts().migration.merged
+                                              : texts().migration.imported}
                                     </span>
                                 </li>
                             ))}
                         </ul>
-                        <p className="hint">{ru.migration.originalsKept}</p>
+                        <p className="hint">{texts().migration.originalsKept}</p>
                         <div className="buttons">
                             <button
                                 type="button"
@@ -127,7 +127,7 @@ export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Eleme
                                 autoFocus
                                 onClick={onClose}
                             >
-                                {ru.migration.done}
+                                {texts().migration.done}
                             </button>
                         </div>
                     </>

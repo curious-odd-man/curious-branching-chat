@@ -1,7 +1,8 @@
 ﻿; BranchChat installer additions (included by electron-builder through nsis.include).
 ;
 ; electron-builder's own `fileAssociations` is NOT used: it registers the file type silently. This script instead
-;  - shows a "Файлы обсуждений" page with a checkbox, ticked by default (FR-134),
+;  - shows a "Файлы обсуждений" page with a checkbox, ticked by default (FR-134), in Russian or English: the
+;    installer language comes from the Windows language (electron-builder `installerLanguages`, FR-291),
 ;  - registers .branchchat for the current user only (HKCU, no administrator rights) if it is ticked and no other
 ;    program holds the type (FR-090),
 ;  - never shows the page and never touches the association on silent installs and updates (FR-135),
@@ -16,7 +17,14 @@
 
 !define BC_EXT ".branchchat"
 !define BC_PROGID "BranchChat.Discussion"
-!define BC_TYPE_NAME "Обсуждение BranchChat"
+; FR-291: the texts of the custom page in the installer language ($LANGUAGE 1049 = Russian, any other = English)
+!macro bcText VAR RU EN
+  ${If} $LANGUAGE == 1049
+    StrCpy ${VAR} "${RU}"
+  ${Else}
+    StrCpy ${VAR} "${EN}"
+  ${EndIf}
+!macroend
 
 !macro bcNotifyShell
   ; SHCNE_ASSOCCHANGED, so Explorer picks up the new icon and association without a restart
@@ -54,24 +62,30 @@
       StrCpy $bcAssocBlocked "1"
     ${EndIf}
 
-    !insertmacro MUI_HEADER_TEXT "Файлы обсуждений" "Как открывать файлы .branchchat"
+    !insertmacro bcText $R1 "Файлы обсуждений" "Discussion files"
+    !insertmacro bcText $R2 "Как открывать файлы .branchchat" "How to open .branchchat files"
+    !insertmacro MUI_HEADER_TEXT $R1 $R2
     nsDialogs::Create 1018
     Pop $0
     ${If} $0 == error
       Abort
     ${EndIf}
 
-    ${NSD_CreateLabel} 0 0 100% 36u "Файл обсуждения BranchChat — это файл с расширением .branchchat. Если включить эту возможность, двойной щелчок по такому файлу в проводнике будет открывать его в BranchChat. Это относится только к вашей учётной записи Windows, права администратора не нужны."
+    !insertmacro bcText $R1 "Файл обсуждения BranchChat — это файл с расширением .branchchat. Если включить эту возможность, двойной щелчок по такому файлу в проводнике будет открывать его в BranchChat. Это относится только к вашей учётной записи Windows, права администратора не нужны." "A BranchChat discussion file is a file with the extension .branchchat. If you turn this on, a double-click on such a file in Explorer opens it in BranchChat. This applies only to your Windows account; no administrator rights are necessary."
+    ${NSD_CreateLabel} 0 0 100% 36u $R1
     Pop $0
-    ${NSD_CreateCheckbox} 0 44u 100% 12u "Открывать файлы .branchchat в BranchChat"
+    !insertmacro bcText $R1 "Открывать файлы .branchchat в BranchChat" "Open .branchchat files in BranchChat"
+    ${NSD_CreateCheckbox} 0 44u 100% 12u $R1
     Pop $bcAssocCheckbox
-    ${NSD_CreateLabel} 0 62u 100% 24u "Это можно отменить в любой момент: в программе (Файл > Настройки) или удалением программы."
+    !insertmacro bcText $R1 "Это можно отменить в любой момент: в программе (Файл > Настройки) или удалением программы." "You can undo this at any time: in the app (File > Settings) or by removing the app."
+    ${NSD_CreateLabel} 0 62u 100% 24u $R1
     Pop $0
 
     ${If} $bcAssocBlocked == "1"
       ; Another program holds the type: never take it over (FR-090).
       EnableWindow $bcAssocCheckbox 0
-      ${NSD_CreateLabel} 0 92u 100% 30u "Файлы .branchchat уже связаны с другой программой. BranchChat не будет менять эту настройку Windows."
+      !insertmacro bcText $R1 "Файлы .branchchat уже связаны с другой программой. BranchChat не будет менять эту настройку Windows." ".branchchat files already belong to another program. BranchChat does not change this Windows setting."
+      ${NSD_CreateLabel} 0 92u 100% 30u $R1
       Pop $0
     ${Else}
       ${NSD_Check} $bcAssocCheckbox
@@ -105,7 +119,8 @@
         ${EndIf}
       ${EndIf}
       ${If} $2 == "1"
-        WriteRegStr HKCU "Software\Classes\${BC_PROGID}" "" "${BC_TYPE_NAME}"
+        !insertmacro bcText $R1 "Обсуждение BranchChat" "BranchChat discussion"
+        WriteRegStr HKCU "Software\Classes\${BC_PROGID}" "" $R1
         WriteRegStr HKCU "Software\Classes\${BC_PROGID}\DefaultIcon" "" "$INSTDIR\resources\document.ico,0"
         WriteRegStr HKCU "Software\Classes\${BC_PROGID}\shell\open\command" "" '"$INSTDIR\${APP_EXECUTABLE_FILENAME}" "%1"'
         WriteRegStr HKCU "Software\Classes\${BC_EXT}" "" "${BC_PROGID}"

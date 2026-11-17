@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { formatDayLabel, formatMonth } from '../../i18n/format'
 import { Modal } from '../Modal'
 
@@ -46,17 +46,17 @@ export function JumpToDateDialog({ days, today, onPick, onClose }: Props): React
     return (
         <Modal labelledBy="jump-title" onEscape={onClose}>
             <div className="dialog jump-to-date" data-testid="jump-dialog">
-                <h2 id="jump-title">{ru.days.jumpTitle}</h2>
+                <h2 id="jump-title">{texts().days.jumpTitle}</h2>
                 {days.size === 0 ? (
-                    <p className="hint">{ru.days.noMessages}</p>
+                    <p className="hint">{texts().days.noMessages}</p>
                 ) : (
                     <>
-                        <p className="hint">{ru.days.jumpHint}</p>
+                        <p className="hint">{texts().days.jumpHint}</p>
                         <div className="calendar-head">
                             <button
                                 type="button"
                                 data-testid="jump-previous"
-                                aria-label={ru.days.previousMonth}
+                                aria-label={texts().days.previousMonth}
                                 disabled={!canBack}
                                 onClick={() => move(-1)}
                             >
@@ -66,7 +66,7 @@ export function JumpToDateDialog({ days, today, onPick, onClose }: Props): React
                             <button
                                 type="button"
                                 data-testid="jump-next"
-                                aria-label={ru.days.nextMonth}
+                                aria-label={texts().days.nextMonth}
                                 disabled={!canForward}
                                 onClick={() => move(1)}
                             >
@@ -74,7 +74,7 @@ export function JumpToDateDialog({ days, today, onPick, onClose }: Props): React
                             </button>
                         </div>
                         <div className="calendar" role="grid">
-                            {ru.days.weekdays.map((w) => (
+                            {texts().days.weekdays.map((w) => (
                                 <span key={w} className="weekday" role="columnheader">
                                     {w}
                                 </span>
@@ -104,7 +104,7 @@ export function JumpToDateDialog({ days, today, onPick, onClose }: Props): React
                 <div className="buttons">
                     {/* focus inside the dialog at once, so Escape and Tab work */}
                     <button type="button" autoFocus onClick={onClose}>
-                        {ru.days.close}
+                        {texts().days.close}
                     </button>
                 </div>
             </div>

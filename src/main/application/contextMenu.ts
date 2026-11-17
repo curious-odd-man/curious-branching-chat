@@ -1,5 +1,5 @@
 import type { MenuItemConstructorOptions, WebContents } from 'electron'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 export interface ContextParams {
     isEditable: boolean
@@ -22,25 +22,29 @@ export function buildContextMenu(
         for (const suggestion of params.dictionarySuggestions.slice(0, 6))
             items.push({ label: suggestion, click: () => contents.replaceMisspelling(suggestion) })
         if (params.dictionarySuggestions.length === 0)
-            items.push({ label: ru.contextMenu.noSuggestions, enabled: false })
+            items.push({ label: texts().contextMenu.noSuggestions, enabled: false })
         items.push({
-            label: ru.contextMenu.addToDictionary,
+            label: texts().contextMenu.addToDictionary,
             click: () => contents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
         })
         items.push({ type: 'separator' })
     }
     if (params.isEditable) {
         items.push(
-            { label: ru.menu.cut, role: 'cut', enabled: params.editFlags.canCut },
-            { label: ru.menu.copy, role: 'copy', enabled: params.editFlags.canCopy },
-            { label: ru.menu.paste, role: 'paste', enabled: params.editFlags.canPaste },
+            { label: texts().menu.cut, role: 'cut', enabled: params.editFlags.canCut },
+            { label: texts().menu.copy, role: 'copy', enabled: params.editFlags.canCopy },
+            { label: texts().menu.paste, role: 'paste', enabled: params.editFlags.canPaste },
             { type: 'separator' },
-            { label: ru.menu.selectAll, role: 'selectAll', enabled: params.editFlags.canSelectAll }
+            {
+                label: texts().menu.selectAll,
+                role: 'selectAll',
+                enabled: params.editFlags.canSelectAll
+            }
         )
     } else if (params.selectionText) {
         items.push(
-            { label: ru.menu.copy, role: 'copy' },
-            { label: ru.menu.selectAll, role: 'selectAll' }
+            { label: texts().menu.copy, role: 'copy' },
+            { label: texts().menu.selectAll, role: 'selectAll' }
         )
     }
     return items

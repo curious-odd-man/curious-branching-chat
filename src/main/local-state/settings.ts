@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import type { BackgroundFlag, SettingsView, SidebarSettings } from '@shared/types/ipc'
 import { clampTextSize, TEXT_SIZE_DEFAULT } from '@shared/shortcuts'
-import { FILE_SIZE_LIMIT_MB } from '@shared/sync'
+import { ATTACHMENT_LIMIT_MB, FILE_SIZE_LIMIT_MB } from '@shared/sync'
 import { StateFileWriter } from '../document/atomicWrite'
+import { isLanguage, type Language } from '@shared/i18n'
 
 const settingsSchema = z
     .object({
@@ -41,7 +42,11 @@ const settingsSchema = z
         /** FR-207: the folder for backups that the person chose (null or absent: only the app folder). */
         backupFolder: z.string().min(1).nullable().optional(),
         /** FR-209: the one-time warning about backups in a cloud folder was shown. */
-        backupFolderWarned: z.boolean().optional()
+        backupFolderWarned: z.boolean().optional(),
+        /** FR-265: the largest file that can be attached, in MB. */
+        attachmentLimitMb: z.number().int().optional(),
+        /** FR-292: the language of the interface; absent: Russian. */
+        language: z.string().optional()
     })
     .passthrough()
 type Settings = z.infer<typeof settingsSchema>
@@ -51,6 +56,11 @@ export const DEFAULT_RECENT_FILES_LIMIT = 10
 function clampLimit(mb: number | undefined): number {
     if (mb === undefined || !Number.isInteger(mb)) return FILE_SIZE_LIMIT_MB.default
     return Math.min(FILE_SIZE_LIMIT_MB.max, Math.max(FILE_SIZE_LIMIT_MB.min, mb))
+}
+
+function clampAttachmentLimit(mb: number | undefined): number {
+    if (mb === undefined || !Number.isInteger(mb)) return ATTACHMENT_LIMIT_MB.default
+    return Math.min(ATTACHMENT_LIMIT_MB.max, Math.max(ATTACHMENT_LIMIT_MB.min, mb))
 }
 
 /**
@@ -111,6 +121,8 @@ export class SettingsStore {
             startWithWindowsSettled: this.data.startWithWindowsSettled ?? false,
             textSize: clampTextSize(this.data.textSize ?? TEXT_SIZE_DEFAULT),
             backupFolder: this.data.backupFolder ?? null,
+            attachmentLimitMb: clampAttachmentLimit(this.data.attachmentLimitMb),
+            language: isLanguage(this.data.language) ? this.data.language : 'ru',
             sidebar: {
                 hidden: this.data.sidebar?.hidden ?? false,
                 width: Math.min(480, Math.max(180, Math.round(this.data.sidebar?.width ?? 260))),
@@ -196,6 +208,25 @@ export class SettingsStore {
         if (!Number.isInteger(mb) || mb < FILE_SIZE_LIMIT_MB.min || mb > FILE_SIZE_LIMIT_MB.max)
             throw new Error('invalid file size limit')
         this.data = { ...this.data, fileSizeLimitMb: mb }
+        await this.persist()
+        return this.get()
+    }
+
+    /** FR-292: applies after a restart (FR-293). */
+    async setLanguage(language: Language): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        if (!isLanguage(language)) throw new Error('unknown language')
+        this.data = { ...this.data, language }
+        await this.persist()
+        return this.get()
+    }
+
+    /** FR-265: 1 MB to 1 000 MB; other values are refused. */
+    async setAttachmentLimit(mb: number): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        if (!Number.isInteger(mb) || mb < ATTACHMENT_LIMIT_MB.min || mb > ATTACHMENT_LIMIT_MB.max)
+            throw new Error('invalid attachment limit')
+        this.data = { ...this.data, attachmentLimitMb: mb }
         await this.persist()
         return this.get()
     }

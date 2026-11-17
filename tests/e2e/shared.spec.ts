@@ -591,3 +591,69 @@ test('release 1.5: a person who lost the keys is re-invited; another member reje
     await expect(message(b2.win, 'Принято')).toBeVisible({ timeout: 15_000 })
     await expect(b2.win.getByTestId('sync-status')).toHaveCount(0, { timeout: 15_000 })
 })
+
+test('release 2.4: a reaction and a file travel through the shared folder; a smaller limit warns and waits (FR-233, FR-261, FR-268, FR-268a)', async () => {
+    const { a, b } = await createAndJoin()
+    const work = await dir()
+    const file = join(work, 'смета.xlsx')
+    // more than one part of 4 MiB
+    const data = Buffer.alloc(5 * 1024 * 1024)
+    for (let i = 0; i < data.length; i++) data[i] = (i * 31) & 0xff
+    await fs.writeFile(file, data)
+
+    await a.t.answer({ open: [file] })
+    await a.win.getByTestId('attach').click()
+    await expect(a.win.getByTestId('draft-file')).toBeVisible()
+    await send(a.win, 'Смета во вложении')
+    const atB = message(b.win, 'Смета во вложении')
+    await expect(atB.getByTestId('attachment-open')).toBeVisible({ timeout: 20_000 })
+    const copy = join(work, 'у Бориса.xlsx')
+    await b.t.answer({ save: [copy] })
+    await atB.getByTestId('attachment-save').click()
+    await expect
+        .poll(async () => (await fs.readFile(copy).catch(() => null))?.equals(data))
+        .toBe(true)
+
+    // Boris reacts; Anna sees it with his name
+    await atB.hover()
+    await atB.getByTestId('reaction-add').click()
+    await b.win.getByTestId('reaction-choice').and(b.win.locator('[data-emoji="✅"]')).click()
+    const atA = message(a.win, 'Смета во вложении').getByTestId('reaction')
+    await expect(atA).toHaveAttribute('title', 'Борис', { timeout: 15_000 })
+    // FR-234: the reaction makes nothing unread for Anna
+    await expect(a.win.getByTestId('unread-total')).toHaveCount(0)
+
+    // Boris lowers his limit to 5 MB: Anna learns it and is warned before a larger file
+    expect(await b.win.evaluate(() => window.branchchat.setFileSizeLimit(5))).toMatchObject({
+        ok: true
+    })
+    const big = join(work, 'видео.mp4')
+    await fs.writeFile(big, Buffer.alloc(6 * 1024 * 1024, 7))
+    await expect(async () => {
+        const r = await a.win.evaluate(
+            (size) => window.branchchat.attachmentReceivers(size),
+            6 * 1024 * 1024
+        )
+        expect(r).toEqual({ ok: true, data: [{ displayName: 'Борис', maxFileMb: 5 }] })
+    }).toPass({ timeout: 15_000 })
+    await a.t.answer({ open: [big] })
+    await a.win.getByTestId('attach').click()
+    await expect(a.win.getByTestId('draft-file')).toBeVisible()
+    await send(a.win, 'Большое видео')
+    await expect(a.win.getByTestId('small-limits')).toContainText(
+        'Борис не получит этот файл: предел 5 МБ'
+    )
+    await a.win.getByTestId('send-anyway').click()
+    const video = message(b.win, 'Большое видео')
+    await expect(video.getByTestId('attachment-too-large')).toContainText(
+        'Файл слишком большой для ваших настроек (6 МБ)',
+        {
+            timeout: 20_000
+        }
+    )
+    // he raises the limit: the file arrives at the next scan
+    expect(await b.win.evaluate(() => window.branchchat.setFileSizeLimit(10))).toMatchObject({
+        ok: true
+    })
+    await expect(video.getByTestId('attachment-open')).toBeVisible({ timeout: 20_000 })
+})

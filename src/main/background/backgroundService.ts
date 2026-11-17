@@ -1,5 +1,5 @@
 import { planNotifications, type NewMessage } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { BackgroundFlag, SettingsView } from '@shared/types/ipc'
 import type { SettingsStore } from '../local-state/settings'
 import type { NewMessagesArrival, SyncService } from '../sync/syncService'
@@ -83,8 +83,8 @@ export class BackgroundService {
         await this.refresh()
         if (await this.deps.settings.takeTrayNotice())
             this.deps.notifier.show({
-                title: ru.tray.noticeTitle,
-                body: ru.tray.noticeText,
+                title: texts().tray.noticeTitle,
+                body: texts().tray.noticeText,
                 onClick: () => void this.deps.windows.showAny()
             })
     }

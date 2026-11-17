@@ -1,19 +1,50 @@
 import { z } from 'zod'
 import { richDocSchema } from './richText'
+import { MAX_ATTACHMENTS_PER_MESSAGE, attachmentSchema, reactionEmojiSchema } from './schemas'
 
 /** Payload schemas for IPC channels. The renderer is never trusted. */
 export const setNameSchema = z.object({ displayName: z.string().trim().min(1) }).strict()
 export const openPathSchema = z.object({ path: z.string().min(1) }).strict()
+const attachmentListSchema = z.array(attachmentSchema.strict()).max(MAX_ATTACHMENTS_PER_MESSAGE)
 export const appendMessageSchema = z
-    .object({ threadId: z.string().min(1), content: richDocSchema })
+    .object({
+        threadId: z.string().min(1),
+        content: richDocSchema,
+        attachments: attachmentListSchema.optional()
+    })
     .strict()
+export const reactionToggleSchema = z
+    .object({ messageId: z.string().min(1).max(200), emoji: reactionEmojiSchema })
+    .strict()
+export const attachmentPathsSchema = z
+    .object({ paths: z.array(z.string().min(1).max(4096)).min(1).max(MAX_ATTACHMENTS_PER_MESSAGE) })
+    .strict()
+export const attachmentBytesSchema = z
+    .object({
+        name: z.string().max(1000),
+        type: z.string().max(200),
+        data: z.instanceof(Uint8Array)
+    })
+    .strict()
+/** An attachment of a shown message, by its position (the main process takes name and hash from the discussion). */
+export const attachmentRefSchema = z
+    .object({
+        messageId: z.string().min(1).max(200),
+        index: z.number().int().nonnegative().max(MAX_ATTACHMENTS_PER_MESSAGE)
+    })
+    .strict()
+export const attachmentReceiversSchema = z
+    .object({ size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) })
+    .strict()
+export const setAttachmentLimitSchema = z.object({ mb: z.number().int().min(1).max(1000) }).strict()
 /** FR-251: an editor document (TipTap JSON, checked again before it is sent as a message); null removes the draft. */
 export const draftSaveSchema = z
     .object({
         threadId: z.string().min(1).max(200),
         content: z
             .unknown()
-            .refine((v) => v === null || JSON.stringify(v).length <= 5_000_000, 'draft too large')
+            .refine((v) => v === null || JSON.stringify(v).length <= 5_000_000, 'draft too large'),
+        attachments: attachmentListSchema.optional()
     })
     .strict()
 export const draftsFlushedSchema = z.object({ token: z.string().min(1).max(100) }).strict()
@@ -124,3 +155,4 @@ export const openAtSchema = z
     .strict()
 export const openDiscussionSchema = z.object({ id: z.string().min(1).max(200) }).strict()
 export const newDocumentSchema = z.object({ title: z.string().min(1).max(500) }).strict()
+export const setLanguageSchema = z.object({ language: z.enum(['ru', 'en']) }).strict()

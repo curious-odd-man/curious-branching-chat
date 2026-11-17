@@ -1,4 +1,5 @@
 import type { Message, Participant } from '../validation/schemas'
+import { compareText } from '../i18n'
 
 /** State of one copy of an own message in the outbox (FR-169). */
 export type CopyState = 'pending' | 'written' | 'delivered'
@@ -52,7 +53,7 @@ export function messageMarkOf(
 ): MessageMark | null {
     const others = participants
         .filter((p) => p.participantId !== message.authorId)
-        .sort((a, b) => a.displayName.localeCompare(b.displayName, 'ru'))
+        .sort((a, b) => compareText(a.displayName, b.displayName))
     if (others.length === 0) return null
     const own = sync !== null && message.authorId === sync.localId
     const copies = sync && own ? (sync.copies[message.messageId] ?? {}) : {}

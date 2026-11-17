@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { mainThread } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
-import type { RichDoc } from '@shared/validation'
+import { texts } from '@shared/i18n'
+import type { Attachment, ReactionEmoji, RichDoc } from '@shared/validation'
 import { DISCUSSION_EXTENSION } from '@shared/types/constants'
 import type { IpcResult } from '@shared/types/ipc'
 import { Launcher } from './components/Launcher'
@@ -212,11 +212,27 @@ export function App(): React.JSX.Element {
         [report]
     )
 
-    const send = (content: RichDoc, clear: () => void): void =>
+    const send = (content: RichDoc, attachments: Attachment[], clear: () => void): void =>
         withName(() => {
             if (!activeThreadId) return
-            void perform(() => api.appendMessage(activeThreadId, content), clear)
+            void perform(() => api.appendMessage(activeThreadId, content, attachments), clear)
         })
+    // FR-231: a reaction needs the name of the person (like a message); it changes no read mark (FR-234)
+    const toggleReaction = useCallback(
+        (messageId: string, emoji: ReactionEmoji): void =>
+            withName(() => void api.toggleReaction(messageId, emoji).then(report)),
+        [api, report, withName]
+    )
+    const attachmentAction = useCallback(
+        (action: 'open' | 'save', messageId: string, index: number): void =>
+            void (
+                action === 'open'
+                    ? api.openAttachment(messageId, index)
+                    : api.saveAttachment(messageId, index)
+            ).then(report),
+        [api, report]
+    )
+    const openSettings = useCallback(() => setShowSettings(true), [])
 
     /** "Reply to this": creates the branch (asks for the name first if needed) and opens it. */
     const reply = (selection: { messageId: string; start: number; end: number }): void =>
@@ -280,17 +296,17 @@ export function App(): React.JSX.Element {
                 update.info &&
                 bannerHidden !== update.info.version && (
                     <div className="banner info" role="status" data-testid="update-banner">
-                        <span>{ru.update.banner(update.info.version)}</span>
+                        <span>{texts().update.banner(update.info.version)}</span>
                         <button
                             type="button"
                             data-testid="update-banner-details"
                             onClick={() => void api.showUpdateDialog()}
                         >
-                            {ru.update.bannerDetails}
+                            {texts().update.bannerDetails}
                         </button>
                         <button
                             type="button"
-                            aria-label={ru.update.bannerDismiss}
+                            aria-label={texts().update.bannerDismiss}
                             onClick={() => setBannerHidden(update.info?.version ?? null)}
                         >
                             ×
@@ -330,6 +346,10 @@ export function App(): React.JSX.Element {
                             : {})}
                         onSelectThread={selectThread}
                         onSend={send}
+                        onToggleReaction={toggleReaction}
+                        onAttachment={attachmentAction}
+                        receiveLimitMb={settings?.fileSizeLimitMb ?? 30}
+                        onOpenSettings={openSettings}
                         onMarkMessageRead={markMessageRead}
                         onMarkThreadRead={markThreadRead}
                         onMarkAllRead={markAllRead}

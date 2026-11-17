@@ -1,6 +1,6 @@
 import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electron'
 import { join } from 'node:path'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 export interface CloseProblems {
     unsentDraft: boolean
@@ -33,9 +33,18 @@ export interface Ui {
     confirmClose(parent: BrowserWindow | undefined, problems: CloseProblems): Promise<boolean>
     /** "Экспортировать…": where to save the file (FR-204). */
     pickCopyPath(parent: BrowserWindow | undefined, defaultName: string): Promise<string | null>
+    /** FR-261: files to attach (several at once). */
+    pickAttachmentPaths(parent: BrowserWindow | undefined): Promise<string[]>
+    /** FR-262: "Сохранить как…" of an attachment. */
+    pickAttachmentSavePath(
+        parent: BrowserWindow | undefined,
+        defaultName: string
+    ): Promise<string | null>
 }
 
-const filters = [{ name: ru.dialogs.fileFilter, extensions: ['branchchat'] }]
+const filters = (): Array<{ name: string; extensions: string[] }> => [
+    { name: texts().dialogs.fileFilter, extensions: ['branchchat'] }
+]
 
 async function messageBox(parent: BrowserWindow | undefined, options: MessageBoxOptions) {
     return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options)
@@ -44,10 +53,10 @@ async function messageBox(parent: BrowserWindow | undefined, options: MessageBox
 export const electronUi: Ui = {
     async pickOpenPath(parent) {
         const options = {
-            title: ru.dialogs.openTitle,
+            title: texts().dialogs.openTitle,
             defaultPath: app.getPath('documents'),
             properties: ['openFile' as const],
-            filters
+            filters: filters()
         }
         const result = parent
             ? await dialog.showOpenDialog(parent, options)
@@ -73,7 +82,7 @@ export const electronUi: Ui = {
 
     async pickFolder(parent, title) {
         const options = {
-            title: title ?? ru.shared.folderTitle,
+            title: title ?? texts().shared.folderTitle,
             properties: ['openDirectory' as const, 'createDirectory' as const]
         }
         const result = parent
@@ -86,10 +95,10 @@ export const electronUi: Ui = {
 
     async pickKeyFile(parent) {
         const options = {
-            title: ru.shared.keyFileTitle,
+            title: texts().shared.keyFileTitle,
             defaultPath: app.getPath('downloads'),
             properties: ['openFile' as const],
-            filters: [{ name: ru.identity.fileFilter, extensions: ['bckey'] }]
+            filters: [{ name: texts().identity.fileFilter, extensions: ['bckey'] }]
         }
         const result = parent
             ? await dialog.showOpenDialog(parent, options)
@@ -101,11 +110,14 @@ export const electronUi: Ui = {
 
     async pickImagePath(parent) {
         const options = {
-            title: ru.images.pickTitle,
+            title: texts().images.pickTitle,
             defaultPath: app.getPath('pictures'),
             properties: ['openFile' as const],
             filters: [
-                { name: ru.images.pickFilter, extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }
+                {
+                    name: texts().images.pickFilter,
+                    extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp']
+                }
             ]
         }
         const result = parent
@@ -130,10 +142,10 @@ export const electronUi: Ui = {
     async confirmAssociation(parent) {
         const result = await messageBox(parent, {
             type: 'question',
-            title: ru.association.askTitle,
-            message: ru.association.askTitle,
-            detail: ru.association.askText,
-            buttons: [ru.association.askYes, ru.association.askNo],
+            title: texts().association.askTitle,
+            message: texts().association.askTitle,
+            detail: texts().association.askText,
+            buttons: [texts().association.askYes, texts().association.askNo],
             defaultId: 0,
             cancelId: 1,
             noLink: true
@@ -143,10 +155,33 @@ export const electronUi: Ui = {
 
     async pickCopyPath(parent, defaultName) {
         const options = {
-            title: ru.dialogs.exportTitle,
-            message: ru.dialogs.exportHint,
+            title: texts().dialogs.exportTitle,
+            message: texts().dialogs.exportHint,
             defaultPath: join(app.getPath('documents'), defaultName),
-            filters
+            filters: filters()
+        }
+        const result = parent
+            ? await dialog.showSaveDialog(parent, options)
+            : await dialog.showSaveDialog(options)
+        return result.canceled || !result.filePath ? null : result.filePath
+    },
+
+    async pickAttachmentPaths(parent) {
+        const options = {
+            title: texts().attachments.pickTitle,
+            defaultPath: app.getPath('documents'),
+            properties: ['openFile' as const, 'multiSelections' as const]
+        }
+        const result = parent
+            ? await dialog.showOpenDialog(parent, options)
+            : await dialog.showOpenDialog(options)
+        return result.canceled ? [] : result.filePaths
+    },
+
+    async pickAttachmentSavePath(parent, defaultName) {
+        const options = {
+            title: texts().attachments.saveTitle,
+            defaultPath: join(app.getPath('downloads'), defaultName)
         }
         const result = parent
             ? await dialog.showSaveDialog(parent, options)
@@ -156,14 +191,14 @@ export const electronUi: Ui = {
 
     async confirmClose(parent, problems) {
         const lines: string[] = []
-        if (problems.unsentDraft) lines.push(ru.dialogs.closeUnsentDraft)
-        if (problems.saveFailed) lines.push(ru.dialogs.closeSaveFailed)
+        if (problems.unsentDraft) lines.push(texts().dialogs.closeUnsentDraft)
+        if (problems.saveFailed) lines.push(texts().dialogs.closeSaveFailed)
         const result = await messageBox(parent, {
             type: 'warning',
-            title: ru.dialogs.closeTitle,
-            message: ru.dialogs.closeTitle,
+            title: texts().dialogs.closeTitle,
+            message: texts().dialogs.closeTitle,
             detail: lines.join('\n\n'),
-            buttons: [ru.dialogs.closeConfirm, ru.dialogs.closeCancel],
+            buttons: [texts().dialogs.closeConfirm, texts().dialogs.closeCancel],
             defaultId: 1,
             cancelId: 1,
             noLink: true

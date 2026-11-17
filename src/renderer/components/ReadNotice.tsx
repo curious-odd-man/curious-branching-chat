@@ -1,5 +1,5 @@
 import { Modal } from './Modal'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 interface Props {
     onConfirm(): void
@@ -11,11 +11,11 @@ export function ReadNotice({ onConfirm, onCancel }: Props): React.JSX.Element {
     return (
         <Modal labelledBy="read-notice-title" onEscape={onCancel}>
             <div className="dialog" data-testid="read-notice">
-                <h2 id="read-notice-title">{ru.readNotice.title}</h2>
-                <p>{ru.readNotice.text}</p>
+                <h2 id="read-notice-title">{texts().readNotice.title}</h2>
+                <p>{texts().readNotice.text}</p>
                 <div className="buttons">
                     <button type="button" data-testid="read-notice-cancel" onClick={onCancel}>
-                        {ru.readNotice.cancel}
+                        {texts().readNotice.cancel}
                     </button>
                     <button
                         type="button"
@@ -24,7 +24,7 @@ export function ReadNotice({ onConfirm, onCancel }: Props): React.JSX.Element {
                         autoFocus
                         onClick={onConfirm}
                     >
-                        {ru.readNotice.confirm}
+                        {texts().readNotice.confirm}
                     </button>
                 </div>
             </div>

@@ -52,9 +52,31 @@ const api: BranchChatApi = {
     openAt: (id, threadId, messageId) => invoke(IPC.documentOpenAt, { id, threadId, messageId }),
     exportDiscussion: () => invoke(IPC.documentExport),
     getDocumentState: () => invoke(IPC.documentGetState),
-    appendMessage: (threadId, content) => invoke(IPC.documentAppendMessage, { threadId, content }),
+    appendMessage: (threadId, content, attachments) =>
+        invoke(IPC.documentAppendMessage, {
+            threadId,
+            content,
+            ...(attachments && attachments.length > 0 ? { attachments } : {})
+        }),
+    toggleReaction: (messageId, emoji) => invoke(IPC.reactionToggle, { messageId, emoji }),
+    pickAttachments: () => invoke(IPC.attachmentPick),
+    addAttachmentPaths: (paths) => invoke(IPC.attachmentAddPaths, { paths }),
+    addAttachmentBytes: (name, type, data) => invoke(IPC.attachmentAddBytes, { name, type, data }),
+    saveAttachment: (messageId, index) => invoke(IPC.attachmentSave, { messageId, index }),
+    openAttachment: (messageId, index) => invoke(IPC.attachmentOpen, { messageId, index }),
+    attachmentReceivers: (size) => invoke(IPC.attachmentReceivers, { size }),
+    setAttachmentLimit: (mb) => invoke(IPC.settingsSetAttachmentLimit, { mb }),
+    setLanguage: (language) => invoke(IPC.settingsSetLanguage, { language }),
+    relaunch: () => invoke(IPC.appRelaunch),
+    // read once, synchronously, so the first render already has the right texts (FR-293: no live switch)
+    language: ipcRenderer.sendSync(IPC.languageGet) === 'en' ? 'en' : 'ru',
     retrySave: () => invoke(IPC.documentRetrySave),
-    saveDraft: (threadId, content) => invoke(IPC.draftSave, { threadId, content }),
+    saveDraft: (threadId, content, attachments) =>
+        invoke(IPC.draftSave, {
+            threadId,
+            content,
+            ...(attachments && attachments.length > 0 ? { attachments } : {})
+        }),
     getDrafts: () => invoke(IPC.draftsGet),
     onDraftsFlushRequest: (callback) => subscribe<string>(IPC.draftsFlushRequest, callback),
     draftsFlushed: (token) => invoke(IPC.draftsFlushed, { token }),

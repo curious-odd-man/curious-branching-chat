@@ -71,11 +71,11 @@ async function entryNames(file: string): Promise<string[]> {
     return names
 }
 
-describe('schema version 2 (FR-151 to FR-154)', () => {
+describe('schema version 2 and later (FR-151 to FR-154)', () => {
     it('is the current version, and new documents use it', () => {
-        expect(CURRENT_SCHEMA_VERSION).toBe(2)
+        expect(CURRENT_SCHEMA_VERSION).toBe(3)
         const { contents } = buildSample()
-        expect(contents.manifest.schemaVersion).toBe(2)
+        expect(contents.manifest.schemaVersion).toBe(3)
         expect(mainThread(contents.discussion).clock).toBe(0)
         expect(checkDiscussionIntegrity(contents.discussion)).toEqual([])
     })
@@ -170,7 +170,7 @@ describe('migration 1 -> 2 (FR-151)', () => {
                 ])
             )
             const loaded = await readDocument(file)
-            expect(loaded.contents.manifest.schemaVersion).toBe(2)
+            expect(loaded.contents.manifest.schemaVersion).toBe(3)
             const order = (c: DocumentContents) =>
                 c.discussion.threads.map((t) => [t.threadId, t.messages.map((m) => m.messageId)])
             expect(order(loaded.contents)).toEqual(order(contents))
@@ -180,7 +180,7 @@ describe('migration 1 -> 2 (FR-151)', () => {
 
             await writeDocument(file, loaded.contents)
             const again = await readDocument(file)
-            expect(again.contents.manifest.schemaVersion).toBe(2)
+            expect(again.contents.manifest.schemaVersion).toBe(3)
             expect(order(again.contents)).toEqual(order(contents))
         })
     })

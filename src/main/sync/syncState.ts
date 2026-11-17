@@ -46,6 +46,19 @@ export interface LoadingEntry {
     payload: VerifiedEvent<'message.sent'>['payload']
 }
 
+/** An attachment of another member whose bytes are still coming (release 2.4, FR-261, FR-268a). */
+export interface AttachmentLoad {
+    senderId: string
+    messageId: string
+    sha256: string
+    size: number
+    type: string
+    parts: Array<{ partId: string; index: number; size: number; sha256: string }>
+    /** The bytes are in the library (or were given up after a bad check). */
+    done: boolean
+    at: string
+}
+
 export interface StateData {
     version: 1
     conversationId: string
@@ -84,6 +97,17 @@ export interface StateData {
      * accepted the new keys; the others have not (yet).
      */
     rejoin: { at: string; heardFrom: string[] } | null
+    /** Release 2.4: attachments of others that are loading. */
+    attachmentLoads: AttachmentLoad[]
+    /**
+     * FR-268a: part files of attachments larger than this member's file size limit, with the attachment size; they
+     * stay in the inbox and are read when the limit is raised.
+     */
+    deferred: Record<string, number>
+    /** FR-268: the file size limit of each other member (`member.limits.set`; the higher `senderSeq` wins). */
+    peerLimits: Record<string, { maxFileMb: number; seq: number }>
+    /** FR-268: the own limit last sent to each member (absent: the default, 30 MB). */
+    limitsSent: Record<string, number>
 }
 
 export interface KeyRequest {
@@ -135,7 +159,11 @@ function empty(conversationId: string, ownId: string): StateData {
         ownReceipts: [],
         lastScanAt: null,
         keyRequests: [],
-        rejoin: null
+        rejoin: null,
+        attachmentLoads: [],
+        deferred: {},
+        peerLimits: {},
+        limitsSent: {}
     }
 }
 

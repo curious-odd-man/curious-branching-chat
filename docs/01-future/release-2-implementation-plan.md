@@ -1,7 +1,6 @@
 # BranchChat: implementation plan for release 2
 
-**Status:** Releases 2.1 (phases 1–3), 2.2 (phases 4–7), and 2.3 (phases 8–11) done in code; two questions open for
-release 2.4 (Section 9)  
+**Status:** Releases 2.1 to 2.5 (phases 1–16) done in code; Windows checks open (checklist sections Q to U)  
 **Date:** 2026-11-16  
 **Input:** `requirements-next.md` (ready, draft 4), `adr-003-local-storage.md` (accepted), `requirements.md`
 (revision 13), `sync-protocol.md`  
@@ -34,20 +33,24 @@ Changes to the order in `requirements-next.md`, section 4:
 
 ## 1a. Progress
 
-| Release | Phase                                 | State                                   | Notes                                                         |
-|---------|---------------------------------------|-----------------------------------------|---------------------------------------------------------------|
-| 2.1     | 1 — Log file and diagnostics report   | Done                                    | Tag `phase-2.1-done`                                          |
-| 2.1     | 2 — Text size and keyboard shortcuts  | Done                                    | Tag `phase-2.2-done`                                          |
-| 2.1     | 3 — Day separators and "jump to date" | Done in code; **needs a Windows check** | Tag `phase-2.3-done`; Windows: checklist section Q            |
-| 2.2     | 4 — Library core                      | Done                                    | Tag `phase-2.4-done`; one save at 20,000 messages: about 7 ms |
-| 2.2     | 5 — Sessions, import, export          | Done                                    | Tag `phase-2.5-done`                                          |
-| 2.2     | 6 — Migration of existing files       | Done                                    | Tag `phase-2.6-done`                                          |
-| 2.2     | 7 — Backups and checks                | Done in code; **needs a Windows check** | Tag `phase-2.7-done`; Windows: checklist section R            |
-| 2.3     | 8 — Discussion list in the window     | Done                                    | Tag `phase-2.8-done`                                          |
-| 2.3     | 9 — Drafts kept                       | Done                                    | Tag `phase-2.9-done`                                          |
-| 2.3     | 10 — Search                           | Done                                    | Tag `phase-2.10-done`; 100,000 messages: well under 0.5 s     |
-| 2.3     | 11 — Branch map                       | Done in code; **needs a Windows check** | Tag `phase-2.11-done`; Windows: checklist section S           |
-| 2.4–2.5 | 12–16                                 | Not started                             |                                                               |
+| Release | Phase                                  | State                                   | Notes                                                         |
+|---------|----------------------------------------|-----------------------------------------|---------------------------------------------------------------|
+| 2.1     | 1 — Log file and diagnostics report    | Done                                    | Tag `phase-2.1-done`                                          |
+| 2.1     | 2 — Text size and keyboard shortcuts   | Done                                    | Tag `phase-2.2-done`                                          |
+| 2.1     | 3 — Day separators and "jump to date"  | Done in code; **needs a Windows check** | Tag `phase-2.3-done`; Windows: checklist section Q            |
+| 2.2     | 4 — Library core                       | Done                                    | Tag `phase-2.4-done`; one save at 20,000 messages: about 7 ms |
+| 2.2     | 5 — Sessions, import, export           | Done                                    | Tag `phase-2.5-done`                                          |
+| 2.2     | 6 — Migration of existing files        | Done                                    | Tag `phase-2.6-done`                                          |
+| 2.2     | 7 — Backups and checks                 | Done in code; **needs a Windows check** | Tag `phase-2.7-done`; Windows: checklist section R            |
+| 2.3     | 8 — Discussion list in the window      | Done                                    | Tag `phase-2.8-done`                                          |
+| 2.3     | 9 — Drafts kept                        | Done                                    | Tag `phase-2.9-done`                                          |
+| 2.3     | 10 — Search                            | Done                                    | Tag `phase-2.10-done`; 100,000 messages: well under 0.5 s     |
+| 2.3     | 11 — Branch map                        | Done in code; **needs a Windows check** | Tag `phase-2.11-done`; Windows: checklist section S           |
+| 2.4     | 12 — Schema version 3 and protocol     | Done                                    | Tag `phase-2.12-done`                                         |
+| 2.4     | 13 — Reactions                         | Done                                    | Tag `phase-2.13-done` (one commit with phase 14)              |
+| 2.4     | 14 — File attachments                  | Done in code; **needs a Windows check** | Tag `phase-2.14-done`; Windows: checklist section T           |
+| 2.5     | 15 — Text lookup                       | Done                                    | Tag `phase-2.15-done`                                         |
+| 2.5     | 16 — English texts, setting, installer | Done in code; **needs a Windows check** | Tag `phase-2.16-done`; Windows: checklist section U           |
 
 ### Implementation decisions of release 2.1
 
@@ -119,6 +122,45 @@ Changes to the order in `requirements-next.md`, section 4:
   of the message DOM). The global search opens from the menu, Ctrl+Shift+F, or the 🔍 button above the list.
 - Shortcuts: new group "Поиск" (Ctrl+F, Ctrl+Shift+F, Enter, Shift+Enter); Ctrl+Shift+M opens the branch map.
 - The branch map shows a closed branch on the way to an open one when "только открытые" is on (dimmed).
+
+### Implementation decisions of release 2.4
+
+- Q-01: reactions and attachments together, one export schema change (version 3). Q-02: new event types; the protocol
+  version stays 1 (answers of 2026-11-16).
+- Export schema version 3: `reactions` (emoji, person, on, clock) and `attachments` (name, size, type, sha256) per
+  message; ZIP entries `attachments/<sha256>`. A removed reaction stays as `on: false`, so the last change of a person
+  wins also in a merge. Reaction clocks count for the discussion clock.
+- Library schema version 3: table `attachment` (keeps the files in the cleanup), column `draft.attachments`; the
+  manifests in the library go to schema version 3. Reactions stay in the message JSON (no own table): they change with
+  the message row, and the save writes only that row.
+- `member.limits.set` is sent only when the own limit is not the default (30 MB), or was sent before and changed. A
+  member without a value counts with 30 MB (FR-268), so a discussion where nobody changed the setting gets no new event
+  type, and a 1.5 member does not see "Обновите приложение" because of it.
+- Attachment parts that are larger than the receiver's limit stay in the inbox without a receipt; they are opened once,
+  then skipped until the limit is raised. Attachment parts do not count for the delivery mark of the message.
+- Phases 13 and 14 are one commit: both change the same message view, IPC channels, and texts.
+- Reactions: ☺+ under each message (visible on mouse-over and with Tab focus); the picker works with the arrow keys,
+  Enter, and Escape. A reaction needs the person's name (like a message) but no read notice.
+- Attachments are stored in the library when they are attached (streamed, with the hash), so a draft keeps them
+  (column `draft.attachments`) and sending writes only the message. A pasted file without a path is sent as bytes.
+- "Наибольший размер вложения": 1 to 1 000 MB (FR-265 gives only the default).
+- FR-268a: "(N МБ)" is the size of the file, rounded up.
+- The search (FR-214) indexes the file names after the text of the message.
+- "Открыть": a new folder with a random name in `%TEMP%\BranchChat\open` per open; copies older than 7 days are removed
+  at start. Test builds record the file instead of opening it (`__openedFiles`, in the release leak check).
+
+### Implementation decisions of release 2.5
+
+- `src/shared/i18n/index.ts`: `texts()` returns the texts of the language; `Texts` is the type of `ru.ts` with string
+  types widened, so `en.ts` must have the same keys and function signatures. 48 files changed from `ru.` to
+  `texts().`; the three texts that were read when a module loaded are now read when they are shown.
+- The main process sets the language from the settings before any text is shown. A window asks the main process once,
+  synchronously, in the preload script (`window.branchchat.language`), so the first render has the right texts. No
+  live switch (FR-293). "Перезапустить сейчас" closes the windows the normal way (drafts are saved) and starts again.
+- English formats: `en-GB` (day, month, year; 24-hour time). Sorting of names follows the language.
+- Installer: electron-builder `multiLanguageInstaller` with `ru_RU` and `en_US`, no language question. The texts of
+  the own page in `installer.nsh` are chosen at run time from `$LANGUAGE` (1049 = Russian). The installer was not
+  built in this environment (no NSIS): checklist section U.
 
 ## 2. Rules for all phases
 
@@ -422,10 +464,12 @@ texts do not break the layout.
 
 ## 9. Questions
 
+Q-01 and Q-02 are answered (2026-11-16): together in release 2.4; new event types.
+
 **Q-01.** Reactions and attachments together in release 2.4 (one export schema change), or reactions first in an own
 release (two schema changes: version 3, then version 4)? Recommendation: together.
 
-**Answer:**
+**Answer:** together (2026-11-16).
 
 **Q-02.** Attachments in a synchronized discussion: the list of attachments and their parts go in new event types
 (`message.attachments`, `attachment.part`), because version 1.5 checks `message.sent` and `message.part` strictly. A 1.5
@@ -433,4 +477,4 @@ member then sees the message without its attachments, and "Обновите пр
 version to 2, so that version 1.5 refuses all new events until it is updated. Recommendation: the new event types (a
 1.5 member keeps getting all other messages).
 
-**Answer:**
+**Answer:** the new event types (2026-11-16).

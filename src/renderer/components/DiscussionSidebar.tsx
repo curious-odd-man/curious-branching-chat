@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { normalizeSearchText } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
+import { compareText, texts } from '@shared/i18n'
 import type { DiscussionListItem, SidebarSettings } from '@shared/types/ipc'
 import { formatTimestamp } from '../i18n/format'
 import { withKeys } from '@shared/shortcuts'
@@ -45,7 +45,7 @@ export function DiscussionSidebar({
         const list = q
             ? discussions.filter((d) => normalizeSearchText(d.title).includes(q))
             : [...discussions]
-        if (settings.sort === 'name') list.sort((a, b) => a.title.localeCompare(b.title, 'ru'))
+        if (settings.sort === 'name') list.sort((a, b) => compareText(a.title, b.title))
         else list.sort((a, b) => (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? ''))
         return list
     }, [discussions, filter, settings.sort])
@@ -56,8 +56,8 @@ export function DiscussionSidebar({
                 type="button"
                 className="sidebar-show"
                 data-testid="sidebar-show"
-                title={ru.sidebar.show}
-                aria-label={ru.sidebar.show}
+                title={texts().sidebar.show}
+                aria-label={texts().sidebar.show}
                 onClick={() => (narrow ? setOverlayOpen(true) : onChange({ hidden: false }))}
             >
                 ☰
@@ -83,32 +83,32 @@ export function DiscussionSidebar({
         <nav
             className="sidebar"
             data-testid="sidebar"
-            aria-label={ru.sidebar.title}
+            aria-label={texts().sidebar.title}
             style={{ width: `${width}px` }}
         >
             <div className="sidebar-head">
                 <input
                     type="search"
                     data-testid="sidebar-filter"
-                    placeholder={ru.sidebar.filter}
-                    aria-label={ru.sidebar.filter}
+                    placeholder={texts().sidebar.filter}
+                    aria-label={texts().sidebar.filter}
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                 />
                 <select
                     data-testid="sidebar-sort"
-                    aria-label={ru.sidebar.sort}
+                    aria-label={texts().sidebar.sort}
                     value={settings.sort}
                     onChange={(e) => onChange({ sort: e.target.value as SidebarSettings['sort'] })}
                 >
-                    <option value="activity">{ru.sidebar.byActivity}</option>
-                    <option value="name">{ru.sidebar.byName}</option>
+                    <option value="activity">{texts().sidebar.byActivity}</option>
+                    <option value="name">{texts().sidebar.byName}</option>
                 </select>
                 <button
                     type="button"
                     data-testid="sidebar-search-all"
-                    title={withKeys(ru.search.searchAll, 'findAll')}
-                    aria-label={ru.search.searchAll}
+                    title={withKeys(texts().search.searchAll, 'findAll')}
+                    aria-label={texts().search.searchAll}
                     onClick={onSearchAll}
                 >
                     🔍
@@ -116,8 +116,8 @@ export function DiscussionSidebar({
                 <button
                     type="button"
                     data-testid="sidebar-hide"
-                    title={ru.sidebar.hide}
-                    aria-label={ru.sidebar.hide}
+                    title={texts().sidebar.hide}
+                    aria-label={texts().sidebar.hide}
                     onClick={() => (narrow ? setOverlayOpen(false) : onChange({ hidden: true }))}
                 >
                     ◀
@@ -141,7 +141,7 @@ export function DiscussionSidebar({
                             <span className="sidebar-title">
                                 {d.title}
                                 {d.synced && (
-                                    <span className="sidebar-mark" title={ru.sidebar.shared}>
+                                    <span className="sidebar-mark" title={texts().sidebar.shared}>
                                         {' '}
                                         👥
                                     </span>
@@ -150,7 +150,7 @@ export function DiscussionSidebar({
                                     <span
                                         className="sidebar-mark"
                                         data-testid="sidebar-draft"
-                                        title={ru.sidebar.draft}
+                                        title={texts().sidebar.draft}
                                     >
                                         {' '}
                                         ✎
@@ -160,13 +160,13 @@ export function DiscussionSidebar({
                             <span className="sidebar-time">
                                 {d.lastMessageAt
                                     ? formatTimestamp(d.lastMessageAt)
-                                    : ru.launcher.noMessages}
+                                    : texts().launcher.noMessages}
                             </span>
                             {d.unreadCount > 0 && (
                                 <span
                                     className="panel-unread"
                                     data-testid="sidebar-unread"
-                                    title={ru.unread.panelCount(d.unreadCount)}
+                                    title={texts().unread.panelCount(d.unreadCount)}
                                 >
                                     {d.unreadCount}
                                 </span>
@@ -176,22 +176,22 @@ export function DiscussionSidebar({
                             type="button"
                             className="sidebar-window"
                             data-testid="sidebar-new-window"
-                            title={ru.sidebar.newWindow}
-                            aria-label={`${ru.sidebar.newWindow}: ${d.title}`}
+                            title={texts().sidebar.newWindow}
+                            aria-label={`${texts().sidebar.newWindow}: ${d.title}`}
                             onClick={() => onOpenInNewWindow(d.id)}
                         >
                             ⧉
                         </button>
                     </li>
                 ))}
-                {shown.length === 0 && <li className="panel-empty">{ru.sidebar.nothing}</li>}
+                {shown.length === 0 && <li className="panel-empty">{texts().sidebar.nothing}</li>}
             </ul>
             <div
                 className="sidebar-resize"
                 data-testid="sidebar-resize"
                 role="separator"
                 aria-orientation="vertical"
-                aria-label={ru.sidebar.resize}
+                aria-label={texts().sidebar.resize}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}

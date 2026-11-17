@@ -78,7 +78,7 @@ describe('library for release 2.3', () => {
             first.close()
             // back to schema 1
             const db = new Database(join(dir, 'library.sqlite'))
-            db.exec(`DROP INDEX message_by_author; ALTER TABLE message DROP COLUMN author_id; DROP TABLE draft;
+            db.exec(`DROP TABLE attachment; DROP INDEX message_by_author; ALTER TABLE message DROP COLUMN author_id; DROP TABLE draft;
                      UPDATE meta SET value = '1' WHERE key = 'schema_version'`)
             db.close()
 
@@ -88,6 +88,9 @@ describe('library for release 2.3', () => {
             })
             try {
                 expect(before).toEqual([1])
+                expect(
+                    again.repo.load(s.contents.manifest.documentId).contents.manifest.schemaVersion
+                ).toBe(3)
                 const unread = again.repo
                     .unreadCounts(anna.participantId)
                     .get(s.contents.manifest.documentId)

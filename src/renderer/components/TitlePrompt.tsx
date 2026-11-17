@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Modal } from './Modal'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 
 interface Props {
     onSubmit(title: string): void
@@ -9,14 +9,14 @@ interface Props {
 
 /** "Новое обсуждение": asks for the name of the discussion (FR-202). */
 export function TitlePrompt({ onSubmit, onCancel }: Props): React.JSX.Element {
-    const [title, setTitle] = useState<string>(ru.newDiscussion.defaultTitle)
+    const [title, setTitle] = useState<string>(texts().newDiscussion.defaultTitle)
     const valid = title.trim().length > 0
     return (
         <Modal labelledBy="new-title">
             <div className="dialog">
-                <h2 id="new-title">{ru.newDiscussion.title}</h2>
+                <h2 id="new-title">{texts().newDiscussion.title}</h2>
                 <label>
-                    {ru.newDiscussion.label}
+                    {texts().newDiscussion.label}
                     <input
                         data-testid="new-title-input"
                         autoFocus
@@ -32,7 +32,7 @@ export function TitlePrompt({ onSubmit, onCancel }: Props): React.JSX.Element {
                 </label>
                 <div className="buttons">
                     <button type="button" onClick={onCancel}>
-                        {ru.newDiscussion.cancel}
+                        {texts().newDiscussion.cancel}
                     </button>
                     <button
                         type="button"
@@ -41,7 +41,7 @@ export function TitlePrompt({ onSubmit, onCancel }: Props): React.JSX.Element {
                         disabled={!valid}
                         onClick={() => onSubmit(title.trim())}
                     >
-                        {ru.newDiscussion.confirm}
+                        {texts().newDiscussion.confirm}
                     </button>
                 </div>
             </div>

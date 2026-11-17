@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { branchLabel, mainThread, type UnreadSummary } from '@shared/domain'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { DiscussionData, Thread } from '@shared/types'
 import { Modal } from '../Modal'
 
@@ -90,7 +90,7 @@ export function BranchMap({
     return (
         <Modal labelledBy="branch-map-title">
             <div className="dialog wide" data-testid="branch-map">
-                <h2 id="branch-map-title">{ru.branchMap.title}</h2>
+                <h2 id="branch-map-title">{texts().branchMap.title}</h2>
                 <div className="branch-map-filters">
                     <label>
                         <input
@@ -99,7 +99,7 @@ export function BranchMap({
                             checked={onlyOpen}
                             onChange={(e) => setOnlyOpen(e.target.checked)}
                         />{' '}
-                        {ru.branchMap.onlyOpen}
+                        {texts().branchMap.onlyOpen}
                     </label>
                     <label>
                         <input
@@ -108,13 +108,13 @@ export function BranchMap({
                             checked={onlyUnread}
                             onChange={(e) => setOnlyUnread(e.target.checked)}
                         />{' '}
-                        {ru.branchMap.onlyUnread}
+                        {texts().branchMap.onlyUnread}
                     </label>
                 </div>
                 <ul
                     className="branch-map"
                     role="tree"
-                    aria-label={ru.branchMap.title}
+                    aria-label={texts().branchMap.title}
                     onKeyDown={onKeyDown}
                 >
                     {rows.map((row, i) => {
@@ -148,23 +148,26 @@ export function BranchMap({
                                 onFocus={() => setFocus(i)}
                             >
                                 <span className="branch-map-label">
-                                    {isMain ? ru.branches.mainThread : branchLabel(t)}
+                                    {isMain ? texts().branches.mainThread : branchLabel(t)}
                                 </span>
                                 {!isMain && (
                                     <span className="branch-map-state">
                                         {t.status === 'open'
-                                            ? ru.branchMap.open
-                                            : ru.branchMap.closed}
+                                            ? texts().branchMap.open
+                                            : texts().branchMap.closed}
                                     </span>
                                 )}
-                                <span className="branch-map-count" title={ru.branchMap.messages}>
-                                    {ru.branchMap.count(t.messages.length)}
+                                <span
+                                    className="branch-map-count"
+                                    title={texts().branchMap.messages}
+                                >
+                                    {texts().branchMap.count(t.messages.length)}
                                 </span>
                                 {own > 0 && (
                                     <span
                                         className="panel-unread"
                                         data-testid="branch-map-unread-count"
-                                        title={ru.unread.panelCount(own)}
+                                        title={texts().unread.panelCount(own)}
                                     >
                                         {own}
                                     </span>
@@ -175,7 +178,7 @@ export function BranchMap({
                 </ul>
                 <div className="buttons">
                     <button type="button" data-testid="branch-map-close" onClick={onClose}>
-                        {ru.branchMap.close}
+                        {texts().branchMap.close}
                     </button>
                 </div>
             </div>

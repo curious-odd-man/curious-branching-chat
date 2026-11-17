@@ -127,6 +127,29 @@ export class DiscussionStore {
         return data ? new Uint8Array(data) : null
     }
 
+    // ---- attachments (release 2.4): bytes are in the library, also while the window is open -----------------------
+
+    async hasBlob(sha256: string): Promise<boolean> {
+        return this.repo.hasBlob(sha256)
+    }
+
+    hasBlobNow(sha256: string): boolean {
+        return this.repo.hasBlob(sha256)
+    }
+
+    blobSizeNow(sha256: string): number | null {
+        return this.repo.blobSize(sha256)
+    }
+
+    async blobBytes(sha256: string): Promise<Uint8Array | null> {
+        const data = await this.repo.readBlob(sha256)
+        return data ? new Uint8Array(data) : null
+    }
+
+    async storeBlob(sha256: string, data: Uint8Array, type: string): Promise<void> {
+        await this.repo.storeBlob(sha256, data, type)
+    }
+
     /** Image bytes from the library, checked against the recorded type and checksum; null: show a placeholder. */
     async readAsset(info: AssetInfo): Promise<Buffer | null> {
         const data = await this.repo.readBlob(info.sha256)

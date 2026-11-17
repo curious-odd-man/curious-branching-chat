@@ -312,3 +312,44 @@ Drive for Desktop for the backup folder. Keep a copy of `%APPDATA%\BranchChat` b
 8. A library of 100,000 messages (or the largest available): the first results come without a noticeable delay.
 9. Ctrl+Shift+M (and 🌳): the branch map with nested and closed branches; the filters; the arrows and Enter open a
    branch. F1 lists the new shortcuts in the group "Поиск".
+
+## T. Release 2.4: reactions and file attachments (two or three Windows users)
+
+1. Reactions: point at a message: ☺+ shows; choose 👍; the count and your name (mouse-over) show; a second click removes
+   it. With the keyboard: Tab to ☺+, Enter, arrows, Enter; Escape closes. No unread mark and no notification for a
+   reaction. In a shared discussion the other members see it; two people react at the same time: both see the same.
+2. Attach with 📎 (several files at once), by dragging from Explorer onto the message field, and by Ctrl+V of a file
+   copied in Explorer. A screenshot pasted or dropped is still a picture in the text. A message with files only (no
+   text) can be sent.
+3. Settings: "Наибольший размер вложения" 1 MB: a 2 MB file is refused with "1 МБ" in the message. Back to 100.
+4. "Сохранить как…" of a `.docx`: Word opens the saved copy in Protected View ("Защищённый просмотр"). File properties
+   of the copy show "Этот файл получен с другого компьютера…" (Mark of the Web). Repeat with "Открыть".
+5. "Открыть" of each warned type: `.exe`, `.bat`, `.cmd`, `.ps1`, `.js`, `.vbs`, `.msi`, `.lnk`, `.docm`, `.xlsm`: the
+   warning names the type and the author; "Отмена" opens nothing. For `.exe` and `.msi` after "Открыть", SmartScreen
+   warns (downloaded file). A `.txt` and a `.pdf` open without a warning.
+6. Names: a file named with right-to-left override (`отчёт‮fdp.exe`) is listed with `_` in its place and gets the
+   `.exe` warning; a name with 250 characters keeps its extension; `con.txt` saves as `_con.txt`.
+7. Shared discussion: a 25 MB file arrives at the other member (progress through the folder), can be opened there.
+   Member B sets "Наибольший размер файла в общей папке" to 30 MB, A sends a 40 MB file: A is warned with B's name
+   and "30 МБ"; B sees "Файл слишком большой для ваших настроек (40 МБ)"; B raises the limit to 50: the file arrives.
+8. A member with release 1.5 (or 2.3) in a shared discussion: A reacts and sends a file. The old member sees the message
+   (without the file) and "Обновите приложение"; nothing else is lost. After the update, the reaction and the file
+   arrive.
+9. Export a discussion with files and import it on another computer: the files can be saved there. A backup restore
+   keeps the files.
+
+## U. Release 2.5: English user interface
+
+1. Install on a Windows with English as the display language: the installer is in English without a language
+   question, also the page "Discussion files". On a Russian Windows: in Russian. The app starts in Russian on both
+   (FR-292).
+2. Settings > "Язык / Language" > English: nothing changes yet; "Перезапустить сейчас" restarts; drafts are kept.
+3. In English, at 100 % and at 200 % text size (Settings > Text size), check every screen: start screen, discussion
+   with branches, the list on the left, Settings, the shared wizards, roster, search, branch map, "Go to date", the
+   shortcuts list (F1), update dialog, report dialog, backup restore. Long English texts do not break the layout or hide
+   buttons.
+4. Menus, the tray menu and its tooltip, a notification of a new message, the warning before opening a `.bat`, the
+   file dialogs (titles and filters), the error after opening a damaged file: all in English.
+5. Dates: day separators "Today", "Yesterday", "16 November"; times in 24-hour format.
+6. Russian text in messages stays as it is (FR-295). Back to Russian: everything in Russian after the restart.
+7. The `.branchchat` file type in Explorer shows "BranchChat discussion" after an English install (association on).

@@ -6,7 +6,19 @@ function plural(n: number, one: string, few: string, many: string): string {
     return many
 }
 
-/** All user-visible strings live here (requirements FR-076). Russian only; used by main and renderer. */
+/** "1,5 МБ", "320 КБ", "12 Б". */
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} Б`
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`
+    if (bytes < 1024 * 1024 * 1024)
+        return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} МБ`
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1).replace('.', ',')} ГБ`
+}
+
+/**
+ * All user-visible strings in Russian (requirements FR-076, FR-291). `en.ts` has the same keys; code takes the texts
+ * from `texts()` in `index.ts`, never from this object directly.
+ */
 export const ru = {
     app: {
         name: 'BranchChat',
@@ -281,6 +293,12 @@ export const ru = {
         cancel: 'Отмена',
         defaultFileName: 'Общее обсуждение',
         titleLabel: 'Название обсуждения',
+        folderSteps: {
+            root: 'папка не найдена',
+            write: 'запись',
+            read: 'чтение',
+            delete: 'удаление'
+        } as Record<string, string>,
         folderTitle: 'Выберите общую папку',
         keyFileTitle: 'Выберите файл ключа участника'
     },
@@ -418,6 +436,7 @@ export const ru = {
     },
     report: {
         title: 'Отчёт для поддержки',
+        fileName: (date: string): string => `BranchChat-отчёт-${date}.zip`,
         contents:
             'В отчёт войдут: журнал работы программы, версии программы и Windows, настройки без вашего имени, состояние синхронизации без ключей.\n\nВ отчёте нет текста сообщений, названий обсуждений и ключей. Пути к файлам могут содержать имя пользователя Windows и названия файлов.',
         save: 'Сохранить…',
@@ -475,6 +494,12 @@ export const ru = {
         startWithWindows: 'Запускать вместе с Windows',
         startWithWindowsHint:
             'BranchChat запустится без окна, в области уведомлений, и будет получать сообщения общих обсуждений.',
+        languageHeading: 'Язык / Language',
+        languageRu: 'Русский',
+        languageEn: 'English',
+        languageHint:
+            'Язык программы. Тексты сообщений не переводятся. Новый язык будет применён после перезапуска BranchChat.',
+        restartNow: 'Перезапустить сейчас',
         close: 'Закрыть'
     },
     identity: {
@@ -498,7 +523,7 @@ export const ru = {
         loading: 'Загрузка…',
         sizeLimitLabel: 'Наибольший размер файла в общей папке, МБ',
         sizeLimitHint:
-            'Файлы общей папки больше этого размера программа не читает (защита от чужих файлов). От 5 до 1000 МБ, по умолчанию 30. Большие картинки передаются частями по 4 МБ, поэтому на них это не влияет.',
+            'Файлы общей папки больше этого размера программа не читает (защита от чужих файлов). От 5 до 1000 МБ, по умолчанию 30. Большие картинки передаются частями по 4 МБ, поэтому на них это не влияет. Вложения больше этого размера вы получите только после того, как увеличите предел. Другие участники узнают ваш предел.',
         saveTitle: 'Сохранить ключ',
         fileFilter: 'Ключ BranchChat'
     },
@@ -659,7 +684,62 @@ export const ru = {
             'Файл не синхронизируется и не содержит списка участников. Его можно отправить как обычный файл обсуждения или сохранить как копию.',
         exportFailedTitle: 'Не удалось экспортировать обсуждение'
     },
-    /** Messages for document errors, keyed by DocumentError code. */
+    reactions: {
+        add: 'Добавить реакцию',
+        picker: 'Реакции',
+        names: (names: string[]): string => names.join(', '),
+        count: (emoji: string, n: number, names: string[]): string =>
+            `${emoji} ${n}: ${names.join(', ')}`,
+        toggle: (emoji: string, mine: boolean): string =>
+            mine ? `Убрать реакцию ${emoji}` : `Поставить реакцию ${emoji}`
+    },
+    attachments: {
+        attach: 'Прикрепить файл…',
+        pickTitle: 'Выберите файлы',
+        remove: (name: string): string => `Убрать «${name}»`,
+        save: 'Сохранить как…',
+        open: 'Открыть',
+        saveTitle: 'Сохранить вложение',
+        list: 'Вложения',
+        size: (bytes: number): string => formatBytes(bytes),
+        adding: 'Добавление файлов…',
+        tooLarge: (names: string, limitMb: number): string =>
+            `Файл больше предела ${limitMb} МБ и не добавлен: ${names}. Предел можно изменить: Файл > Настройки > «Наибольший размер вложения».`,
+        unreadable: (names: string): string => `Не удалось прочитать файл: ${names}.`,
+        tooMany: (max: number): string => `В одном сообщении не больше ${max} файлов.`,
+        defaultName: 'файл',
+        missing: 'Файл отсутствует',
+        missingHint: 'Данных этого файла нет в библиотеке.',
+        loading: 'Файл загружается…',
+        tooLargeForYou: (mb: number): string =>
+            `Файл слишком большой для ваших настроек (${mb} МБ)`,
+        changeLimit: 'Изменить предел',
+        warnTitle: 'Открыть файл?',
+        warnMessage: (name: string, ext: string): string =>
+            `«${name}» — файл типа .${ext}. Такие файлы могут запускать программы на компьютере.`,
+        warnDetail: (author: string): string =>
+            `Файл прислал(а): ${author}. Открывайте его, только если доверяете этому человеку и ждали этот файл. Windows проверит его как файл из интернета.`,
+        warnOpen: 'Открыть',
+        warnCancel: 'Отмена',
+        smallLimitsTitle: 'Не все получат файл',
+        smallLimits: (names: string, mb: number): string =>
+            `${names} не получат этот файл: их предел ${mb} МБ.`,
+        joinNames: (names: string[]): string =>
+            names.length <= 1
+                ? names.join('')
+                : `${names.slice(0, -1).join(', ')} и ${names[names.length - 1]}`,
+        smallLimitsOne: (name: string, mb: number): string =>
+            `${name} не получит этот файл: предел ${mb} МБ.`,
+        smallLimitsHint:
+            'Участник получит файл, если увеличит «Наибольший размер файла в общей папке» в своих настройках в течение 30 дней.',
+        sendAnyway: 'Всё равно отправить',
+        cancel: 'Отмена',
+        limitLabel: 'Наибольший размер вложения, МБ',
+        limitHint:
+            'Файлы больше этого размера нельзя прикрепить к сообщению. От 1 до 1000 МБ, по умолчанию 100. Изображения добавляются в текст и не зависят от этого предела.',
+        heading: 'Вложения'
+    },
+    /** Messages for errors, keyed by the error code. */
     errors: {
         NOT_FOUND: 'Файл не найден.',
         ACCESS_DENIED:
@@ -722,11 +802,13 @@ export const ru = {
         EMPTY_QUOTE: 'Выделите текст, от которого нужно создать ветку.',
         THREAD_NOT_FOUND: 'Ветка не найдена.',
         MESSAGE_NOT_FOUND: 'Сообщение не найдено.',
+        INVALID_REACTION: 'Такой реакции нет.',
+        TOO_MANY_ATTACHMENTS: 'В одном сообщении слишком много файлов.',
+        ATTACHMENT_NOT_FOUND: 'Вложение не найдено.',
+        ATTACHMENT_MISSING: 'Данных этого файла нет на компьютере.',
+        ATTACHMENT_SAVE_FAILED: 'Не удалось сохранить файл.',
+        ATTACHMENT_OPEN_FAILED: 'Не удалось открыть файл.',
         NO_DOCUMENT: 'Нет открытого обсуждения.',
         UNKNOWN: 'Произошла непредвиденная ошибка.'
     } as Record<string, string>
 } as const
-
-export function describeError(code: string | undefined): string {
-    return ru.errors[code ?? 'UNKNOWN'] ?? ru.errors['UNKNOWN']!
-}

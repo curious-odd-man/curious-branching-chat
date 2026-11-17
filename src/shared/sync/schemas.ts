@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { richDocSchema } from '../validation/richText'
-import { IMAGE_MEDIA_TYPES } from '../validation/schemas'
+import {
+    IMAGE_MEDIA_TYPES,
+    MAX_ATTACHMENTS_PER_MESSAGE,
+    attachmentSchema,
+    reactionEmojiSchema
+} from '../validation/schemas'
 import {
     SYNC_PROTOCOL_VERSION,
     fingerprintSchema,
@@ -32,6 +37,8 @@ export const INCOMPLETE_FILE_GRACE_MINUTES = 10
 
 /** File size limit setting for shared-folder files, in MB (FR-166, D-11, D-30). */
 export const FILE_SIZE_LIMIT_MB = { min: 5, max: 1000, default: 30 } as const
+/** FR-265: "Наибольший размер вложения", in MB. */
+export const ATTACHMENT_LIMIT_MB = { min: 1, max: 1000, default: 100 } as const
 
 export const uuidSchema = z
     .string()
@@ -206,6 +213,70 @@ export const invitationPartPayloadSchema = z
     .object({ invitationId: uuidSchema, partId: uuidSchema })
     .strict()
 
+/** `reaction.set` (section 7.13, FR-233): the last change of a person wins for each emoji. */
+export const reactionSetPayloadSchema = z
+    .object({ messageId: docId, emoji: reactionEmojiSchema, on: z.boolean() })
+    .strict()
+
+/** `member.limits.set` (section 7.14, FR-268): the file size limit of the sender; the newest event wins. */
+export const memberLimitsSetPayloadSchema = z
+    .object({
+        maxFileMb: z.number().int().min(FILE_SIZE_LIMIT_MB.min).max(FILE_SIZE_LIMIT_MB.max)
+    })
+    .strict()
+
+export const attachmentPartEntrySchema = z
+    .object({
+        partId: uuidSchema,
+        index: wholeNumber,
+        size: z.number().int().positive().max(PART_SIZE),
+        sha256: sha256HexSchema
+    })
+    .strict()
+export type AttachmentPartEntry = z.infer<typeof attachmentPartEntrySchema>
+
+/**
+ * `message.attachments` (section 7.15, FR-261): the files of an own message, sent right after its `message.sent`.
+ * The bytes follow in `attachment.part` events (a version 1.5 member checks every `message.part` against the images of
+ * `message.sent`, so attachment parts have their own type).
+ */
+export const messageAttachmentsPayloadSchema = z
+    .object({
+        messageId: docId,
+        attachments: z
+            .array(attachmentSchema.extend({ parts: z.array(attachmentPartEntrySchema) }).strict())
+            .min(1)
+            .max(MAX_ATTACHMENTS_PER_MESSAGE)
+    })
+    .strict()
+    .superRefine((p, ctx) => {
+        const partIds = new Set<string>()
+        p.attachments.forEach((a, n) => {
+            for (const part of a.parts) {
+                if (partIds.has(part.partId))
+                    ctx.addIssue({ code: 'custom', message: `duplicate part ${part.partId}` })
+                partIds.add(part.partId)
+            }
+            const sorted = a.parts.map((x) => x.index).sort((x, y) => x - y)
+            if (sorted.some((v, i) => v !== i))
+                ctx.addIssue({
+                    code: 'custom',
+                    message: `attachment ${n}: part indexes must be 0..n-1`
+                })
+            const total = a.parts.reduce((sum, x) => sum + x.size, 0)
+            if (total !== a.size)
+                ctx.addIssue({
+                    code: 'custom',
+                    message: `attachment ${n}: part sizes do not add up`
+                })
+        })
+    })
+export type MessageAttachmentsPayload = z.infer<typeof messageAttachmentsPayloadSchema>
+
+export const attachmentPartPayloadSchema = z
+    .object({ messageId: docId, partId: uuidSchema })
+    .strict()
+
 // --- Envelope (section 5) ---------------------------------------------------------------------------------------
 
 export const PAYLOAD_SCHEMAS = {
@@ -221,13 +292,22 @@ export const PAYLOAD_SCHEMAS = {
     'profile.updated': profileUpdatedPayloadSchema,
     'receipt.delivered': receiptDeliveredPayloadSchema,
     invitation: invitationPayloadSchema,
-    'invitation.part': invitationPartPayloadSchema
+    'invitation.part': invitationPartPayloadSchema,
+    // release 2.4: new types, so an older version keeps them waiting and asks for an update (section 10)
+    'reaction.set': reactionSetPayloadSchema,
+    'member.limits.set': memberLimitsSetPayloadSchema,
+    'message.attachments': messageAttachmentsPayloadSchema,
+    'attachment.part': attachmentPartPayloadSchema
 } as const
 
 export type EventType = keyof typeof PAYLOAD_SCHEMAS
 export const EVENT_TYPES = Object.keys(PAYLOAD_SCHEMAS) as EventType[]
 /** Event types whose frame carries a binary payload. */
-export const PART_EVENT_TYPES: readonly EventType[] = ['message.part', 'invitation.part']
+export const PART_EVENT_TYPES: readonly EventType[] = [
+    'message.part',
+    'invitation.part',
+    'attachment.part'
+]
 
 export type EventPayload<T extends EventType> = z.infer<(typeof PAYLOAD_SCHEMAS)[T]>
 

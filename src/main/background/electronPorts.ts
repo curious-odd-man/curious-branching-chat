@@ -7,7 +7,7 @@ import {
     type MenuItemConstructorOptions
 } from 'electron'
 import { join } from 'node:path'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { BACKGROUND_ARG, type LoginItemPort, type NotifierPort, type TrayPort } from './ports'
 
 /** The icon file of the tray: shipped next to the app (extraResources), or the build folder in a development run. */
@@ -25,7 +25,7 @@ export function electronTray(): TrayPort {
             click = onClick
             if (!tray) {
                 tray = new Tray(nativeImage.createFromPath(trayIconPath()))
-                tray.setToolTip(ru.tray.tooltip)
+                tray.setToolTip(texts().tray.tooltip)
                 // left click: open (D-42); right click shows the context menu (Windows default)
                 tray.on('click', () => click())
             }

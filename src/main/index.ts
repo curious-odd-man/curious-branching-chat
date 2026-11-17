@@ -1,8 +1,8 @@
-import { app, BrowserWindow, clipboard, dialog, Menu, session } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { release } from 'node:os'
-import { ru } from '@shared/i18n/ru'
+import { language, locale, setLanguage, texts } from '@shared/i18n'
 import { AppController } from './application/appController'
 import { installAssetProtocol, registerAssetScheme } from './application/assetProtocol'
 import { systemContext } from './application/clock'
@@ -10,6 +10,7 @@ import { createMainWindow } from './application/mainWindow'
 import { buildMenu } from './application/menu'
 import { describeDiscussions } from './application/recentView'
 import { electronUi } from './application/ui'
+import { AttachmentService } from './application/attachments'
 import { IPC } from '@shared/types/ipc'
 import {
     e2eBackgroundPorts,
@@ -130,6 +131,12 @@ if (!gotLock) {
         })
         zoom = zoomService
         await settings.load()
+        // FR-292, FR-293: the language is chosen once, before any text is shown
+        setLanguage(settings.get().language)
+        // the preload script of each window asks once, synchronously (no live switch, FR-293)
+        ipcMain.on(IPC.languageGet, (event) => {
+            event.returnValue = language()
+        })
         // The recent files list of release 1.5 and older: read only, for the migration of those files (FR-206).
         const recent = new RecentFilesStore(app.getPath('userData'))
         await recent.load()
@@ -144,7 +151,7 @@ if (!gotLock) {
                 (
                     await dialog.showMessageBox({
                         type: 'warning',
-                        title: ru.app.name,
+                        title: texts().app.name,
                         message,
                         detail,
                         buttons,
@@ -154,7 +161,7 @@ if (!gotLock) {
                 ).response,
             log: libraryLog,
             formatDate: (iso) =>
-                new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long', timeStyle: 'short' }).format(
+                new Intl.DateTimeFormat(locale(), { dateStyle: 'long', timeStyle: 'short' }).format(
                     new Date(iso)
                 )
         })
@@ -251,9 +258,9 @@ if (!gotLock) {
             writeClipboard: (text) => clipboard.writeText(text),
             pickBundlePath: async (parent, defaultName) => {
                 const options = {
-                    title: ru.identity.saveTitle,
+                    title: texts().identity.saveTitle,
                     defaultPath: join(app.getPath('documents'), defaultName),
-                    filters: [{ name: ru.identity.fileFilter, extensions: ['bckey'] }]
+                    filters: [{ name: texts().identity.fileFilter, extensions: ['bckey'] }]
                 }
                 const result = parent
                     ? await dialog.showSaveDialog(parent, options)
@@ -303,6 +310,17 @@ if (!gotLock) {
             log: (message) => logger.area('library').info(message)
         })
         const migrationPending = (await migration.candidates()).length > 0
+        // FR-261 to FR-267: opened copies go to a new folder in the temporary folder each time
+        const attachments = new AttachmentService({
+            library,
+            ui: electronUi,
+            limitMb: () => settings.get().attachmentLimitMb,
+            openDir: join(app.getPath('temp'), 'BranchChat', 'open'),
+            openPath: (path) => shell.openPath(path),
+            platform: process.platform,
+            log: (message) => logger.area('window').info(message)
+        })
+        void attachments.cleanOpenDir()
         registerIpcHandlers(controller, settings, library, association, updates, identity, sync, {
             onboarding,
             ui: electronUi,
@@ -310,10 +328,16 @@ if (!gotLock) {
             zoom: zoomService,
             migration,
             backups,
+            attachments,
             relaunch: () => {
                 // test builds only end; the test starts the app again
                 if (!__E2E_HOOKS__) app.relaunch()
                 app.exit(0)
+            },
+            restart: () => {
+                if (!__E2E_HOOKS__) app.relaunch()
+                background?.quitStarted()
+                app.quit()
             }
         })
         // FR-207: a backup once a day: shortly after the first start of the day, then checked every full hour
@@ -362,15 +386,15 @@ if (!gotLock) {
                             .then(async (r) => {
                                 await dialog.showMessageBox({
                                     type: r.folderError ? 'warning' : 'info',
-                                    title: ru.app.name,
-                                    message: ru.backup.done(
-                                        new Intl.DateTimeFormat('ru-RU', {
+                                    title: texts().app.name,
+                                    message: texts().backup.done(
+                                        new Intl.DateTimeFormat(locale(), {
                                             dateStyle: 'long',
                                             timeStyle: 'short'
                                         }).format(new Date(r.backups[0]!.createdAt))
                                     ),
                                     ...(r.folderError
-                                        ? { detail: ru.backup.folderFailed(r.folderError) }
+                                        ? { detail: texts().backup.folderFailed(r.folderError) }
                                         : {})
                                 })
                             })

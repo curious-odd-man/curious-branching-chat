@@ -1,5 +1,5 @@
 import { useEditorState, type Editor } from '@tiptap/react'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import { withKeys } from '@shared/shortcuts'
 import { ColorMenu } from './ColorMenu'
 
@@ -76,12 +76,12 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
     const run = () => editor.chain().focus()
 
     return (
-        <div className="toolbar" role="toolbar" aria-label={ru.editor.toolbar}>
+        <div className="toolbar" role="toolbar" aria-label={texts().editor.toolbar}>
             {([1, 2, 3] as const).map((level) => (
                 <ToolButton
                     key={level}
                     testId={`tb-h${level}`}
-                    label={ru.editor.heading(level)}
+                    label={texts().editor.heading(level)}
                     active={s[`h${level}`]}
                     onClick={() => run().toggleHeading({ level }).run()}
                 >
@@ -91,7 +91,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             <span className="sep" />
             <ToolButton
                 testId="tb-bold"
-                label={withKeys(ru.editor.bold, 'bold')}
+                label={withKeys(texts().editor.bold, 'bold')}
                 active={s.bold}
                 onClick={() => run().toggleBold().run()}
             >
@@ -99,7 +99,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-italic"
-                label={withKeys(ru.editor.italic, 'italic')}
+                label={withKeys(texts().editor.italic, 'italic')}
                 active={s.italic}
                 onClick={() => run().toggleItalic().run()}
             >
@@ -107,7 +107,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-underline"
-                label={withKeys(ru.editor.underline, 'underline')}
+                label={withKeys(texts().editor.underline, 'underline')}
                 active={s.underline}
                 onClick={() => run().toggleUnderline().run()}
             >
@@ -116,7 +116,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             <span className="sep" />
             <ToolButton
                 testId="tb-bullet"
-                label={ru.editor.bulletList}
+                label={texts().editor.bulletList}
                 active={s.bullet}
                 onClick={() => run().toggleBulletList().run()}
             >
@@ -124,7 +124,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-ordered"
-                label={ru.editor.orderedList}
+                label={texts().editor.orderedList}
                 active={s.ordered}
                 onClick={() => run().toggleOrderedList().run()}
             >
@@ -132,7 +132,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-indent"
-                label={withKeys(ru.editor.indent, 'indent')}
+                label={withKeys(texts().editor.indent, 'indent')}
                 disabled={!s.canIndent}
                 onClick={() => run().sinkListItem('listItem').run()}
             >
@@ -140,7 +140,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-outdent"
-                label={withKeys(ru.editor.outdent, 'outdent')}
+                label={withKeys(texts().editor.outdent, 'outdent')}
                 disabled={!s.canOutdent}
                 onClick={() => run().liftListItem('listItem').run()}
             >
@@ -149,14 +149,14 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             <span className="sep" />
             <ColorMenu
                 testId="tb-textcolor"
-                label={ru.editor.textColor}
+                label={texts().editor.textColor}
                 glyph={<span className="glyph-text-color">A</span>}
                 colors={TEXT_COLORS}
                 onPick={(color) => (color ? run().setColor(color).run() : run().unsetColor().run())}
             />
             <ColorMenu
                 testId="tb-bgcolor"
-                label={ru.editor.backgroundColor}
+                label={texts().editor.backgroundColor}
                 glyph={<span className="glyph-bg-color">A</span>}
                 colors={BACKGROUND_COLORS}
                 onPick={(color) =>
@@ -167,19 +167,19 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             />
             <ToolButton
                 testId="tb-link"
-                label={withKeys(ru.editor.link, 'link')}
+                label={withKeys(texts().editor.link, 'link')}
                 active={s.link}
                 onClick={onLink}
             >
                 🔗
             </ToolButton>
-            <ToolButton testId="tb-image" label={ru.images.insert} onClick={onImage}>
+            <ToolButton testId="tb-image" label={texts().images.insert} onClick={onImage}>
                 🖼
             </ToolButton>
             <span className="sep" />
             <ToolButton
                 testId="tb-undo"
-                label={withKeys(ru.editor.undo, 'undo')}
+                label={withKeys(texts().editor.undo, 'undo')}
                 disabled={!s.canUndo}
                 onClick={() => run().undo().run()}
             >
@@ -187,7 +187,7 @@ export function EditorToolbar({ editor, onLink, onImage }: Props): React.JSX.Ele
             </ToolButton>
             <ToolButton
                 testId="tb-redo"
-                label={withKeys(ru.editor.redo, 'redo')}
+                label={withKeys(texts().editor.redo, 'redo')}
                 disabled={!s.canRedo}
                 onClick={() => run().redo().run()}
             >

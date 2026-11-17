@@ -1,4 +1,12 @@
-import type { AssetInfo, DiscussionData, Message, Participant, Thread } from '../validation/schemas'
+import {
+    MAX_ATTACHMENTS_PER_MESSAGE,
+    type AssetInfo,
+    type Attachment,
+    type DiscussionData,
+    type Message,
+    type Participant,
+    type Thread
+} from '../validation/schemas'
 import { collectImageAssetIds, type RichDoc } from '../validation/richText'
 import { nextClock } from '../validation/order'
 import type { Author, DomainContext } from './context'
@@ -118,12 +126,17 @@ function hasContent(doc: RichDoc): boolean {
 export function appendMessage(
     ctx: DomainContext,
     d: DiscussionData,
-    input: { threadId: string; author: Author; content: RichDoc }
+    input: { threadId: string; author: Author; content: RichDoc; attachments?: Attachment[] }
 ): { discussion: DiscussionData; message: Message } {
     const thread = findThread(d, input.threadId)
     if (thread.status === 'closed')
         throw new DomainError('THREAD_CLOSED', 'this branch is closed; reopen it to write in it')
-    if (!hasContent(input.content)) throw new DomainError('EMPTY_MESSAGE', 'message is empty')
+    const attachments = input.attachments ?? []
+    // FR-261: a message can be only files
+    if (!hasContent(input.content) && attachments.length === 0)
+        throw new DomainError('EMPTY_MESSAGE', 'message is empty')
+    if (attachments.length > MAX_ATTACHMENTS_PER_MESSAGE)
+        throw new DomainError('TOO_MANY_ATTACHMENTS', 'too many attachments')
     const assetReferences = collectImageAssetIds(input.content)
     for (const ref of assetReferences) {
         if (!d.assets.some((a) => a.assetId === ref))
@@ -139,7 +152,8 @@ export function appendMessage(
         authorDisplayName: input.author.displayName,
         createdAt: ctx.now(),
         content: input.content,
-        assetReferences
+        assetReferences,
+        ...(attachments.length > 0 ? { attachments: attachments.map((a) => ({ ...a })) } : {})
     }
     const withAuthor = ensureParticipant(d, input.author)
     const threads = withAuthor.threads.map((t) =>

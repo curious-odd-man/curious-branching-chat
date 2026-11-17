@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ru } from '@shared/i18n/ru'
+import { texts } from '@shared/i18n'
 import type { BackupView } from '@shared/types/ipc'
 import { formatBytes, formatTimestamp } from '../i18n/format'
 import { Modal } from './Modal'
@@ -38,9 +38,9 @@ export function RestoreDialog({ onClose }: Props): React.JSX.Element {
     return (
         <Modal labelledBy="restore-title">
             <div className="dialog wide" data-testid="restore-dialog">
-                <h2 id="restore-title">{ru.backup.restoreTitle}</h2>
-                <p>{ru.backup.restoreHint}</p>
-                {list && list.length === 0 && <p className="hint">{ru.backup.restoreNone}</p>}
+                <h2 id="restore-title">{texts().backup.restoreTitle}</h2>
+                <p>{texts().backup.restoreHint}</p>
+                {list && list.length === 0 && <p className="hint">{texts().backup.restoreNone}</p>}
                 {list && list.length > 0 && (
                     <ul className="migration-list">
                         {list.map((b) => (
@@ -57,14 +57,14 @@ export function RestoreDialog({ onClose }: Props): React.JSX.Element {
                                         {formatTimestamp(b.createdAt)}
                                         <span className="recent-shared">
                                             {' '}
-                                            · {ru.backup.reasons[b.reason] ?? b.reason} ·{' '}
+                                            · {texts().backup.reasons[b.reason] ?? b.reason} ·{' '}
                                             {b.place === 'app'
-                                                ? ru.backup.placeApp
-                                                : ru.backup.placeFolder}
+                                                ? texts().backup.placeApp
+                                                : texts().backup.placeFolder}
                                         </span>
                                     </span>
                                     <span className="recent-dir">
-                                        {ru.backup.counts(b.discussions, b.messages)},{' '}
+                                        {texts().backup.counts(b.discussions, b.messages)},{' '}
                                         {formatBytes(b.size)}
                                     </span>
                                 </label>
@@ -79,7 +79,7 @@ export function RestoreDialog({ onClose }: Props): React.JSX.Element {
                 )}
                 <div className="buttons">
                     <button type="button" onClick={onClose} disabled={busy}>
-                        {ru.backup.restoreCancel}
+                        {texts().backup.restoreCancel}
                     </button>
                     <button
                         type="button"
@@ -88,7 +88,7 @@ export function RestoreDialog({ onClose }: Props): React.JSX.Element {
                         disabled={busy || !chosen}
                         onClick={restore}
                     >
-                        {ru.backup.restoreConfirm}
+                        {texts().backup.restoreConfirm}
                     </button>
                 </div>
             </div>

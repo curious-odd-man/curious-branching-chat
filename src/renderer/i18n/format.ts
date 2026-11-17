@@ -1,8 +1,8 @@
-import { ru } from '@shared/i18n/ru'
+import { locale, texts } from '@shared/i18n'
 
 /** Timestamps are stored in UTC and shown in the local time zone (FR-081). */
 export function formatTimestamp(isoUtc: string, timeZone?: string): string {
-    return new Intl.DateTimeFormat('ru-RU', {
+    return new Intl.DateTimeFormat(locale(), {
         dateStyle: 'short',
         timeStyle: 'short',
         ...(timeZone ? { timeZone } : {})
@@ -11,23 +11,15 @@ export function formatTimestamp(isoUtc: string, timeZone?: string): string {
 
 /** A release date, shown in the local time zone. */
 export function formatDate(isoUtc: string, timeZone?: string): string {
-    return new Intl.DateTimeFormat('ru-RU', {
+    return new Intl.DateTimeFormat(locale(), {
         dateStyle: 'long',
         ...(timeZone ? { timeZone } : {})
     }).format(new Date(isoUtc))
 }
 
-/** A download size such as "85,4 МБ". */
+/** A download size such as "85,4 МБ" (or "85.4 MB"). */
 export function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} Б`
-    const units = ['КБ', 'МБ', 'ГБ']
-    let value = bytes / 1024
-    let unit = 0
-    while (value >= 1024 && unit < units.length - 1) {
-        value /= 1024
-        unit++
-    }
-    return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value)} ${units[unit]}`
+    return texts().attachments.size(bytes)
 }
 
 /**
@@ -35,11 +27,11 @@ export function formatBytes(bytes: number): string {
  * `day` and `today` are local `YYYY-MM-DD` keys.
  */
 export function formatDayLabel(day: string, today: string, yesterday: string): string {
-    if (day === today) return ru.days.today
-    if (day === yesterday) return ru.days.yesterday
+    if (day === today) return texts().days.today
+    if (day === yesterday) return texts().days.yesterday
     const [y, m, d] = day.split('-').map(Number) as [number, number, number]
     const date = new Date(Date.UTC(y, m - 1, d, 12))
-    return new Intl.DateTimeFormat('ru-RU', {
+    return new Intl.DateTimeFormat(locale(), {
         day: 'numeric',
         month: 'long',
         ...(day.slice(0, 4) === today.slice(0, 4) ? {} : { year: 'numeric' }),
@@ -49,10 +41,11 @@ export function formatDayLabel(day: string, today: string, yesterday: string): s
 
 /** The month title of the calendar, for example "Ноябрь 2026". */
 export function formatMonth(year: number, month: number): string {
-    const text = new Intl.DateTimeFormat('ru-RU', {
+    const text = new Intl.DateTimeFormat(locale(), {
         month: 'long',
         year: 'numeric',
         timeZone: 'UTC'
     }).format(new Date(Date.UTC(year, month - 1, 1, 12)))
+    // Russian adds "г." after the year
     return text.charAt(0).toUpperCase() + text.slice(1).replace(' г.', '')
 }

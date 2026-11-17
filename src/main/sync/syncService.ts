@@ -172,6 +172,7 @@ export class SyncService {
                 void this.refreshView(conv)
                 this.statusChanged(conv)
             },
+            onAttachments: () => conv.session?.onChange(),
             onNewMessages: (messages, contents) =>
                 this.deps.onNewMessages?.({
                     conversationId: entry.conversationId,
@@ -477,6 +478,31 @@ export class SyncService {
     /** Roster of a discussion with the state of each invitation (design 12.3, step 8). */
     invitationStatus(conversationId: string): Record<string, 'invited' | 'joined'> {
         return this.conversations.get(conversationId)?.sync.invitationStatus() ?? {}
+    }
+
+    /** FR-268: the file size limit changed in Settings: tell the other members, and read files that waited. */
+    async limitChanged(): Promise<void> {
+        for (const c of this.conversations.values())
+            await c.sync
+                .announceLimits()
+                .catch((err) => this.deps.log?.(`limits failed: ${(err as Error).message}`))
+        await this.scanAll()
+    }
+
+    /** FR-268: members of a discussion that will not get a file of `bytes` (their limit is smaller), with names. */
+    async receiversBelow(
+        conversationId: string,
+        bytes: number
+    ): Promise<Array<{ displayName: string; maxFileMb: number }>> {
+        const conv = this.conversations.get(conversationId)
+        if (!conv) return []
+        const contents = await conv.store.read()
+        const nameOf = (id: string): string =>
+            contents.sync?.members.find((m) => m.participantId === id)?.displayName ?? id
+        return (await conv.sync.receiversBelow(bytes)).map((r) => ({
+            displayName: nameOf(r.participantId),
+            maxFileMb: r.maxFileMb
+        }))
     }
 
     /** The number of registered discussions of this identity: the app stays in the tray if it is not 0 (D-33). */
