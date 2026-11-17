@@ -6,7 +6,7 @@ import { language, locale, setLanguage, texts } from '@shared/i18n'
 import { AppController } from './application/appController'
 import { installAssetProtocol, registerAssetScheme } from './application/assetProtocol'
 import { systemContext } from './application/clock'
-import { createMainWindow } from './application/mainWindow'
+import { createMainWindow, setQuietWindows } from './application/mainWindow'
 import { buildMenu } from './application/menu'
 import { describeDiscussions } from './application/recentView'
 import { electronUi } from './application/ui'
@@ -56,6 +56,14 @@ if (__E2E_HOOKS__) {
     installE2eHooks()
     const userDataOverride = process.env['BRANCHCHAT_USER_DATA']
     if (userDataOverride) app.setPath('userData', userDataOverride)
+    // e2e runs do not take the focus or cover the screen (BRANCHCHAT_E2E_FOREGROUND=1 shows the windows)
+    if (process.env['BRANCHCHAT_E2E_QUIET'] === '1') {
+        setQuietWindows(true)
+        // Windows marks a window outside the screen as hidden; keep it drawn
+        app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+        app.commandLine.appendSwitch('disable-background-timer-throttling')
+        app.commandLine.appendSwitch('disable-renderer-backgrounding')
+    }
 }
 
 // Windows groups the taskbar button and notifications under this ID; it matches the installer's appId.

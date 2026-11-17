@@ -5,6 +5,7 @@ import { basename, resolve } from 'node:path'
 import type { DomainContext } from '@shared/domain'
 import { describeError, texts } from '@shared/i18n'
 import type { StagedImage } from '@shared/types/assets'
+import { quietWindows, showWindow } from './mainWindow'
 import {
     IPC,
     type DocumentStatus,
@@ -623,6 +624,6 @@ function hasDraftContent(node: unknown): boolean {
 function focusWindow(win: BrowserWindow): void {
     if (win.isDestroyed()) return
     if (win.isMinimized()) win.restore()
-    win.show()
-    win.focus()
+    showWindow(win)
+    if (!quietWindows()) win.focus()
 }

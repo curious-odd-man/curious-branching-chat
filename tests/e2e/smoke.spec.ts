@@ -173,3 +173,21 @@ test('only one application instance runs (a second launch exits and the first ke
     expect(code).toBe(0) // quit by itself because the first instance holds the lock
     expect(t.app.windows()).toHaveLength(1)
 })
+
+test('test windows open outside the screen and do not take the focus (quiet test runs)', async () => {
+    test.skip(process.env['BRANCHCHAT_E2E_FOREGROUND'] === '1', 'windows are shown on request')
+    const t = await launchApp()
+    try {
+        const win = await t.app.firstWindow()
+        await expect(win.getByTestId('launcher-new')).toBeVisible()
+        const state = await t.app.evaluate(({ BrowserWindow }) => {
+            const w = BrowserWindow.getAllWindows()[0]!
+            return { x: w.getBounds().x, focused: w.isFocused(), visible: w.isVisible() }
+        })
+        expect(state.visible).toBe(true)
+        expect(state.focused).toBe(false)
+        expect(state.x).toBeLessThan(-10000)
+    } finally {
+        await t.close()
+    }
+})

@@ -51,6 +51,11 @@ export async function launchApp(
         args,
         env: {
             ...(process.env as Record<string, string>),
+            // test windows open outside the screen and never take the focus; set
+            // BRANCHCHAT_E2E_FOREGROUND=1 to watch them
+            ...(process.env['BRANCHCHAT_E2E_FOREGROUND'] === '1'
+                ? {}
+                : { BRANCHCHAT_E2E_QUIET: '1' }),
             ...(options.env ?? {}),
             BRANCHCHAT_USER_DATA: userData
         }

@@ -24,6 +24,10 @@ Also there: [security review](docs/02-done/security-review.md), [performance res
 
 On Linux as root, run the e2e tests with `BRANCHCHAT_NO_SANDBOX=1 xvfb-run -a npm run test:e2e`.
 
+The e2e test windows open outside the visible screen, have no taskbar button, and never take the focus, so you can
+keep working during a run. To watch them, set `BRANCHCHAT_E2E_FOREGROUND=1` (PowerShell:
+`$env:BRANCHCHAT_E2E_FOREGROUND=1; npm run test:e2e`).
+
 ## Layout
 
 ```
