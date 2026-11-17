@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { simple, writeDiscussionFile } from './helpers/craft'
 
-// Release 2.2 (ADR-003): the start screen lists the discussions of the library, most recently used first; the File
+// ADR-003: the start screen lists the discussions of the library, most recently used first; the File
 // menu and the jump list show the newest ones; the last discussion opens at startup.
 
 const apps: TestApp[] = []

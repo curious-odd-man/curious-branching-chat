@@ -42,7 +42,7 @@ const roster: SyncInfo = {
     ]
 }
 
-/** The sample written the way version 1.0 wrote it: no clocks, schemaVersion 1. */
+/** The sample in schema version 1: no clocks. */
 function asVersion1(c: DocumentContents): {
     manifest: string
     discussion: string

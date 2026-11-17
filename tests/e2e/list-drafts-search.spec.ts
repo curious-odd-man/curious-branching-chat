@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { simple, writeDiscussionFile, type CraftMessage } from './helpers/craft'
 
-// Release 2.3: the discussion list in the window (FR-221 to FR-225), drafts (FR-251 to FR-254), search (FR-211 to
+// The discussion list in the window (FR-221 to FR-225), drafts (FR-251 to FR-254), search (FR-211 to
 // FR-215), and the branch map (FR-271 to FR-273).
 
 const apps: TestApp[] = []

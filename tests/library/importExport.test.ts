@@ -134,7 +134,7 @@ describe('import and export (FR-203 to FR-205a)', () => {
     it('imports a file with an image, exports it again, and the export imports into a clean library unchanged', async () => {
         await withTempDir(async (dir) => {
             const { contents, image } = withImage()
-            // the file name is the name of the discussion (release 1.x showed the file name)
+            // the file name is the name of the discussion (the earlier storage showed the file name)
             const file = join(dir, 'Тест.branchchat')
             await writeDocument(file, contents, { discardExisting: true, newAssets: [image] })
 

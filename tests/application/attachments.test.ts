@@ -27,7 +27,7 @@ function fakeUi(answers: { confirm?: boolean; save?: string | null; pick?: strin
     return { ui, asked }
 }
 
-describe('attachments in the main process (phase 14)', () => {
+describe('attachments in the main process', () => {
     it('stores files for a draft, refuses a file above the limit, and sends a message with files only', async () => {
         await withTempDir(async (dir) => {
             const deps = { ctx: makeCtx('a') }

@@ -51,7 +51,7 @@ describe('backups (FR-207, FR-208)', () => {
             const backups = new BackupService(lib, {
                 appDir: dir,
                 folder: () => folder,
-                appVersion: '2.2.0',
+                appVersion: '9.9.0',
                 now: () => new Date(clock.t)
             })
             const first = await backups.make('manual')
@@ -84,7 +84,7 @@ describe('backups (FR-207, FR-208)', () => {
             const backups = new BackupService(lib, {
                 appDir: dir,
                 folder: () => null,
-                appVersion: '2.2.0',
+                appVersion: '9.9.0',
                 now: () => new Date(clock.t)
             })
             expect(await backups.dailyIfDue()).toBe(true)
@@ -102,7 +102,7 @@ describe('backups (FR-207, FR-208)', () => {
             const backups = new BackupService(lib, {
                 appDir: dir,
                 folder: () => file,
-                appVersion: '2.2.0'
+                appVersion: '9.9.0'
             })
             const r = await backups.make('manual')
             expect(r.backups).toHaveLength(1)
@@ -119,7 +119,7 @@ describe('backups (FR-207, FR-208)', () => {
             const backups = new BackupService(lib, {
                 appDir: dir,
                 folder: () => null,
-                appVersion: '2.2.0'
+                appVersion: '9.9.0'
             })
             const [saved] = (await backups.make('manual')).backups
             // a change after the backup
@@ -153,7 +153,7 @@ describe('backups (FR-207, FR-208)', () => {
             await new BackupService(lib, {
                 appDir: dir,
                 folder: () => null,
-                appVersion: '2.2.0'
+                appVersion: '9.9.0'
             }).make('daily')
             lib.close()
             await fs.writeFile(join(dir, 'library.sqlite'), 'this is not a database')
@@ -164,7 +164,7 @@ describe('backups (FR-207, FR-208)', () => {
             const restored = await startLibrary({
                 appDir: dir,
                 folder: () => null,
-                appVersion: '2.2.0',
+                appVersion: '9.9.0',
                 ask: async (_m, _d, buttons) => {
                     asked.push(buttons)
                     return 0 // "Восстановить копию"
@@ -187,7 +187,7 @@ describe('backups (FR-207, FR-208)', () => {
             const quit = await startLibrary({
                 appDir: dir,
                 folder: () => null,
-                appVersion: '2.2.0',
+                appVersion: '9.9.0',
                 ask: async () => 1, // "Выход"
                 log: silent,
                 formatDate: (iso) => iso
@@ -197,7 +197,7 @@ describe('backups (FR-207, FR-208)', () => {
             const empty = await startLibrary({
                 appDir: dir,
                 folder: () => null,
-                appVersion: '2.2.0',
+                appVersion: '9.9.0',
                 ask: async () => 0, // "Начать с пустой библиотекой"
                 log: silent,
                 formatDate: (iso) => iso

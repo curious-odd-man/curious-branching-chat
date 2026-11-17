@@ -51,7 +51,7 @@ interface Props {
     restorePosition?: boolean
     /** FR-213: the search words to highlight in the shown messages. */
     highlightWords?: readonly string[]
-    /** Release 2.4: reactions and files under the messages. */
+    /** Reactions and files under the messages. */
     extras?: MessageExtrasContext
 }
 

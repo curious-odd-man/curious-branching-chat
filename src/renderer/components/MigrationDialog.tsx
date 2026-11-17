@@ -8,7 +8,7 @@ interface Props {
     onClose(): void
 }
 
-/** FR-206: the first start of release 2.2 offers the files of release 1.x for the library, all selected. */
+/** FR-206: the first start with the library offers the discussion files of the earlier storage, all selected. */
 export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Element {
     const api = window.branchchat
     const [chosen, setChosen] = useState<Set<string>>(

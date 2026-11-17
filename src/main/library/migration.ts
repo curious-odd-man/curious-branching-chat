@@ -12,9 +12,9 @@ const DONE_KEY = 'migration_1x'
 
 export interface MigrationDeps {
     library: LibraryService
-    /** The recent files list of release 1.5 and older (read only). */
+    /** The recent files list of the earlier storage (read only). */
     recent: () => readonly RecentEntry[]
-    /** The sync registry; entries of release 1.5 and older have the path of the local file. */
+    /** The sync registry; entries of the earlier storage have the path of the local file. */
     registry: () => readonly RegistryEntry[]
     /** The participant ID of this computer: a registered file of another identity is imported as a normal one. */
     ownId: () => string
@@ -22,7 +22,7 @@ export interface MigrationDeps {
 }
 
 /**
- * FR-206: at the first start of release 2.2, the files of the recent list and the sync registry are offered for the
+ * FR-206: at the first start with the library, the files of the recent list and the sync registry are offered for the
  * library, all selected. The files are only read: they are never changed or deleted. A synchronized discussion keeps
  * its conversation ID, member list, keys, sync state, outbox, and shared folder (the registry entry and
  * `sync\<id>\` stay as they are).

@@ -5,7 +5,7 @@ import { LibraryService, openLibrary } from '../../src/main/library'
 import { Database } from '../../src/main/library/db'
 import { anna, boris, buildSample, simple, withTempDir } from '../helpers/fixtures'
 
-describe('library for release 2.3', () => {
+describe('library: unread counts, drafts, and schema migration', () => {
     it('counts unread messages of others per discussion (FR-221)', async () => {
         await withTempDir(async (dir) => {
             const lib = await openLibrary(dir)
@@ -65,7 +65,7 @@ describe('library for release 2.3', () => {
         })
     })
 
-    it('migrates a library of release 2.2 (schema 1) with a backup first', async () => {
+    it('migrates a library of schema 1 with a backup first', async () => {
         await withTempDir(async (dir) => {
             const first = await openLibrary(dir)
             const s = buildSample()

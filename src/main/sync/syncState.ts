@@ -46,7 +46,7 @@ export interface LoadingEntry {
     payload: VerifiedEvent<'message.sent'>['payload']
 }
 
-/** An attachment of another member whose bytes are still coming (release 2.4, FR-261, FR-268a). */
+/** An attachment of another member whose bytes are still coming (FR-261, FR-268a). */
 export interface AttachmentLoad {
     senderId: string
     messageId: string
@@ -97,7 +97,7 @@ export interface StateData {
      * accepted the new keys; the others have not (yet).
      */
     rejoin: { at: string; heardFrom: string[] } | null
-    /** Release 2.4: attachments of others that are loading. */
+    /** Attachments of others that are loading. */
     attachmentLoads: AttachmentLoad[]
     /**
      * FR-268a: part files of attachments larger than this member's file size limit, with the attachment size; they

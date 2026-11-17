@@ -56,7 +56,7 @@ export function App(): React.JSX.Element {
 
     useEffect(() => {
         void api.getAppInfo().then((r) => r.ok && setVersion(r.data.version))
-        // FR-206: at the first start of release 2.2 the files of release 1.x are offered for the library
+        // FR-206: at the first start with the library, the discussion files of the earlier storage are offered
         void api.getMigration().then((r) => r.ok && r.data.length > 0 && setMigration(r.data))
     }, [api])
 

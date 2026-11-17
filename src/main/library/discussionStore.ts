@@ -127,7 +127,7 @@ export class DiscussionStore {
         return data ? new Uint8Array(data) : null
     }
 
-    // ---- attachments (release 2.4): bytes are in the library, also while the window is open -----------------------
+    // ---- attachments: bytes are in the library, also while the window is open -------------------------------------
 
     async hasBlob(sha256: string): Promise<boolean> {
         return this.repo.hasBlob(sha256)

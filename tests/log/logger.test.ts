@@ -143,7 +143,7 @@ describe('diagnostics report (FR-323)', () => {
             const target = join(dir, 'report.zip')
             await writeReport(target, {
                 logs: log.fileNames().map((name) => ({ name, path: join(log.dir, name) })),
-                info: { appVersion: '1.6.0' },
+                info: { appVersion: '9.9.0' },
                 settings: { displayName: 'Анна', fileSizeLimitMb: 30 },
                 registry: { version: 1, entries: [] },
                 syncStates: { c1: state }

@@ -6,7 +6,7 @@ import { StateFileWriter } from '../document/atomicWrite'
 /**
  * Synchronized discussions on this computer (design section 18): which shared folder belongs to each conversation.
  * The discussion itself is in the library (ADR-003) under the conversation ID. `filePath` is the local file of
- * release 1.5 and older; it is kept only for the migration of that file into the library (FR-206).
+ * the earlier storage; it is kept only for the migration of that file into the library (FR-206).
  */
 const entrySchema = z
     .object({

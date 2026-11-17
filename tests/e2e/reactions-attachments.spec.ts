@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { draftRows, newDiscussion, readLibrary } from './helpers/library'
 
-// Release 2.4: reactions (FR-231 to FR-234) and file attachments (FR-261 to FR-267).
+// Reactions (FR-231 to FR-234) and file attachments (FR-261 to FR-267).
 
 const apps: TestApp[] = []
 const dirs: string[] = []

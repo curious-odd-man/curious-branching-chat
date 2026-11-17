@@ -103,7 +103,7 @@ export function SettingsDialog({
         })
     }
 
-    /** Notifications and start with Windows (release 1.4): the box changes at once; an error puts it back. */
+    /** Notifications and start with Windows: the box changes at once; an error puts it back. */
     const [flags, setFlags] = useState<Partial<Record<BackgroundFlag, boolean>>>({})
     const flag = (name: BackgroundFlag, label: string, hint: string): React.JSX.Element => (
         <>

@@ -154,13 +154,13 @@ async function connect(m: Member): Promise<void> {
         now,
         newId: randomUUID,
         maxFileBytes: () => 30 * 1024 * 1024,
-        appVersion: '1.2.0',
+        appVersion: '9.9.0',
         stableMs: 0,
         onNewMessages: (messages) => (m.arrived ??= []).push(messages.map((x) => x.messageId))
     })
 }
 
-/** A local change, as the document session will do it (Phase 8). */
+/** A local change, as the document session does it. */
 async function change(m: Member, fn: (c: DocumentContents) => DocumentContents): Promise<void> {
     const before = m.contents
     m.ctx.tick()
@@ -507,7 +507,7 @@ describe('sync service with three members (design 13 to 18)', () => {
                     now,
                     newId: randomUUID,
                     maxFileBytes: () => 30 * 1024 * 1024,
-                    appVersion: '1.2.0',
+                    appVersion: '9.9.0',
                     stableMs: 0
                 })
             const post = async (sender: ConversationSync, text: string) => {
@@ -672,7 +672,7 @@ describe('sync service with three members (design 13 to 18)', () => {
     })
 })
 
-describe('sync service under random faults (implementation plan, phase 7 exit criteria)', () => {
+describe('sync service under random faults', () => {
     function rng(seed: number): () => number {
         let x = seed >>> 0
         return () => {
@@ -786,7 +786,7 @@ describe('sync service under random faults (implementation plan, phase 7 exit cr
     }
 })
 
-describe('delivery marks and sync health (release 1.3: D-09, D-29, D-34, D-35)', () => {
+describe('delivery marks and sync health (D-09, D-29, D-34, D-35)', () => {
     const DAY = 24 * 60 * 60_000
     const ownMessage = (m: Member) =>
         mainThread(m.contents.discussion).messages.find(

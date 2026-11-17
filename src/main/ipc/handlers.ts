@@ -479,7 +479,7 @@ export function registerIpcHandlers(
         return null
     })
 
-    // ---- release 2.4: reactions and attachments ---------------------------------------------------------------
+    // ---- reactions and attachments ---------------------------------------------------------------------------
     handle(IPC.reactionToggle, reactionToggleSchema, (entry, p) => {
         // FR-234: no read mark, so no read notice
         requireSession(entry).toggleReaction(requireName(), p.messageId, p.emoji)

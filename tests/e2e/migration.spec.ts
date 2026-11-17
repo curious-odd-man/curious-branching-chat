@@ -7,8 +7,8 @@ import { doc, img, p, sha256, t as text, writeDiscussionFile } from './helpers/c
 import { libraryList, readLibrary } from './helpers/library'
 import { makePng } from './helpers/png'
 
-// FR-206: the first start of release 2.2 offers the files of release 1.x (recent list and sync registry) for the
-// library. A profile of release 1.5 is built here from a running shared discussion: its library is written back into a
+// FR-206: the first start with the library offers the discussion files of the earlier storage (recent list and sync
+// registry) for the library. A profile of the earlier storage is built here from a running shared discussion: its library is written back into a
 // `.branchchat` file with the member list, and the library is removed.
 
 const apps: TestApp[] = []
@@ -65,7 +65,7 @@ async function send(win: Page, value: string): Promise<void> {
 }
 const message = (win: Page, value: string) => win.getByTestId('message').filter({ hasText: value })
 
-/** Writes a discussion of a library as a release 1.5 file (with the member list and delivery marks). */
+/** Writes a discussion of a library as a file of the earlier storage (with the member list and delivery marks). */
 async function writeOldFile(userData: string, title: string, path: string): Promise<void> {
     const d = readLibrary(userData, title)
     const zip = new yazl.ZipFile()
@@ -82,7 +82,7 @@ async function writeOldFile(userData: string, title: string, path: string): Prom
     await fs.writeFile(path, Buffer.concat(chunks))
 }
 
-test('a release 1.5 profile: the files are offered once, imported with images and sync state, and sync goes on (FR-206)', async () => {
+test('a profile of the earlier storage: the files are offered once, imported with images and sync state, and sync goes on (FR-206)', async () => {
     const work = await dir()
     const shared = join(work, 'Общая')
     await fs.mkdir(shared)
@@ -111,7 +111,7 @@ test('a release 1.5 profile: the files are offered once, imported with images an
     await expect(message(b.win, 'До обновления')).toBeVisible({ timeout: 15_000 })
     await expect(a.win.getByTestId('status')).toHaveText('Сохранено')
 
-    // Anna's computer as release 1.5 left it: files, the recent list, and the registry with file paths
+    // Anna's computer as the earlier storage left it: files, the recent list, and the registry with file paths
     const annaData = a.t.userData
     await a.t.close()
     apps.splice(apps.indexOf(a.t), 1)
@@ -162,7 +162,7 @@ test('a release 1.5 profile: the files are offered once, imported with images an
     // Boris writes while Anna is away
     await send(b.win, 'Пока ты обновлялась')
 
-    // the first start of release 2.2 asks once, with everything selected that exists
+    // the first start with the library asks once, with everything selected that exists
     const again = await start(annaData)
     const dialog = again.win.getByTestId('migration-dialog')
     await expect(dialog).toBeVisible()
@@ -203,8 +203,10 @@ test('a release 1.5 profile: the files are offered once, imported with images an
     expect(result.ok).toBe(true)
     const plans = again.win // FR-225: in place, in the same window
     await expect(message(plans!, 'Пока ты обновлялась')).toBeVisible({ timeout: 15_000 })
-    await send(plans!, 'Я снова здесь, уже в 2.2')
-    await expect(message(b.win, 'Я снова здесь, уже в 2.2')).toBeVisible({ timeout: 15_000 })
+    await send(plans!, 'Я снова здесь, уже с библиотекой')
+    await expect(message(b.win, 'Я снова здесь, уже с библиотекой')).toBeVisible({
+        timeout: 15_000
+    })
 
     // the question is not asked again
     await again.t.close()

@@ -98,7 +98,7 @@ const contents = {
     discussion: { participants: [{ participantId: 'p-boris', displayName: 'Борис' }] }
 } as unknown as DocumentContents
 
-describe('BackgroundService (release 1.4)', () => {
+describe('BackgroundService', () => {
     it('stays in the tray when the last window closes, with the notice only the first time (D-33)', async () => {
         await withTempDir(async (dir) => {
             const w = await world(dir)

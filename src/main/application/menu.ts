@@ -11,7 +11,7 @@ export function buildMenu(
     updates: UpdateService,
     discussions: readonly DiscussionListItem[],
     recentLimit: number,
-    /** "Выход": the whole application closes, also from the tray (release 1.4). */
+    /** "Выход": the whole application closes, also from the tray. */
     exit: () => void = () => app.quit(),
     /** "Справка > Сохранить отчёт…" (FR-323). */
     saveReport: () => void = () => undefined,

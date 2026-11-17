@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 
-// Release 2.5: the English user interface (FR-291 to FR-295).
+// The English user interface (FR-291 to FR-295).
 
 const apps: TestApp[] = []
 const dirs: string[] = []

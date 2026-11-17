@@ -7,7 +7,7 @@ import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { writeBigDiscussion } from './helpers/bigFile'
 import { localDayKey } from '../../src/shared/domain/days'
 
-// Release 2.1: log file and report (phase 1), text size and shortcuts (phase 2), dates (phase 3).
+// Log file and report, text size and shortcuts, dates.
 
 const apps: TestApp[] = []
 const dirs: string[] = []
@@ -52,7 +52,7 @@ async function zipEntries(path: string): Promise<Record<string, string>> {
     return out
 }
 
-test('phase 1: the log file, and a report without message text, names, or keys (FR-321 to FR-323)', async () => {
+test('the log file, and a report without message text, names, or keys (FR-321 to FR-323)', async () => {
     const dir = await workDir()
     const { t, win } = await start()
     await createDiscussion(t, win, join(dir, 'Тайные планы.branchchat'))
@@ -101,7 +101,7 @@ test('phase 1: the log file, and a report without message text, names, or keys (
     expect(JSON.parse(entries['info.json']!)).toMatchObject({ appVersion: expect.any(String) })
 })
 
-test('phase 1: "Отмена" in the report dialog saves nothing', async () => {
+test('"Отмена" in the report dialog saves nothing', async () => {
     const { t } = await start()
     await t.answer({ box: [1] })
     await clickMenu(t, 'Сохранить отчёт…')
@@ -116,7 +116,7 @@ const zoomFactor = (t: TestApp): Promise<number> =>
         BrowserWindow.getAllWindows()[0]!.webContents.getZoomFactor()
     )
 
-test('phase 2: Ctrl+plus, Ctrl+minus, Ctrl+0 change the text size of the window; it is kept (FR-301, FR-302)', async () => {
+test('Ctrl+plus, Ctrl+minus, Ctrl+0 change the text size of the window; it is kept (FR-301, FR-302)', async () => {
     const { t, win } = await start()
     await expect(win.getByTestId('launcher-new')).toBeVisible()
     expect(await zoomFactor(t)).toBeCloseTo(1)
@@ -146,13 +146,13 @@ test('phase 2: Ctrl+plus, Ctrl+minus, Ctrl+0 change the text size of the window;
     await expect.poll(() => zoomFactor(again.t)).toBeCloseTo(1)
 })
 
-test('phase 2: F1 shows every shortcut, grouped (FR-311)', async () => {
+test('F1 shows every shortcut, grouped (FR-311)', async () => {
     const { t, win } = await start()
     await expect(win.getByTestId('launcher-new')).toBeVisible()
     await clickMenu(t, 'Сочетания клавиш')
     const dialog = win.getByTestId('shortcuts-dialog')
     await expect(dialog).toBeVisible()
-    await expect(dialog.getByTestId('shortcuts-group')).toHaveCount(5) // window, messages, search (release 2.3), editor, dialogs
+    await expect(dialog.getByTestId('shortcuts-group')).toHaveCount(5) // window, messages, search, editor, dialogs
     await expect(dialog.locator('[data-id="send"]')).toContainText('Ctrl+Enter')
     await expect(dialog.locator('[data-id="bold"]')).toContainText('Ctrl+B')
     await expect(dialog.locator('[data-id="zoomIn"]')).toContainText('Ctrl++')
@@ -160,7 +160,7 @@ test('phase 2: F1 shows every shortcut, grouped (FR-311)', async () => {
     await expect(dialog).toHaveCount(0)
 })
 
-test('phase 3: day separators, and "Перейти к дате…" opens the first message of a day (FR-241, FR-242)', async () => {
+test('day separators, and "Перейти к дате…" opens the first message of a day (FR-241, FR-242)', async () => {
     const dir = await workDir()
     const file = join(dir, 'Дни.branchchat')
     // 6 messages, 12 hours apart, from 1 January 2026 09:00 UTC

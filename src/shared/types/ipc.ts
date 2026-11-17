@@ -182,7 +182,7 @@ export interface BackupResult {
     folderError: string | null
 }
 
-/** On/off settings of the background section (release 1.4). */
+/** On/off settings of the background section. */
 export type BackgroundFlag = 'notifyNewMessages' | 'notifyShowText' | 'startWithWindows'
 
 /** FR-211 to FR-215: one search result (a message, or a branch whose title matches). */
@@ -217,7 +217,7 @@ export interface BackupView {
     messages: number
 }
 
-/** FR-206: a file of release 1.x offered for the library at the first start. */
+/** FR-206: a discussion file of the earlier storage, offered for the library at the first start. */
 export interface MigrationCandidate {
     path: string
     /** File name without the extension. */
@@ -332,7 +332,7 @@ export interface DocumentView {
     localParticipantId: string
     /** Assets listed in the discussion whose data is missing from the file (placeholders, FR-075). */
     missingAssetIds: string[]
-    /** Release 2.4: attachments (hashes) whose bytes are not here: loading, too large (FR-268a), or missing. */
+    /** Attachments (hashes) whose bytes are not here: loading, too large (FR-268a), or missing. */
     missingAttachments: string[]
     /** Set when the last write to the file failed (FR-008). */
     saveError: string | null

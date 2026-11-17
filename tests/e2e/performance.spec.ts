@@ -7,7 +7,7 @@ import { doc, img, p, sha256, t, writeDiscussionFile } from './helpers/craft'
 import { makePng } from './helpers/png'
 import { savedFile } from './helpers/library'
 
-// Performance pass (phase 9). There are no product limits to enforce (NFR-015); these tests record how the
+// Performance pass. There are no product limits to enforce (NFR-015); these tests record how the
 // application behaves on large discussions and fail only on gross regressions (budgets are deliberately loose,
 // because CI machines differ). The measured numbers are written to test-results/performance.json and summarized in
 // docs/performance.md.

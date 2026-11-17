@@ -157,7 +157,7 @@ export function installE2eHooks(): void {
 }
 
 /**
- * Tray, notifications, and start with Windows for test builds (release 1.4): nothing is shown; tests read what would
+ * Tray, notifications, and start with Windows for test builds: nothing is shown; tests read what would
  * have been shown and act on it through `__tray`, `__notifications`, and `__loginItem`.
  */
 export function e2eBackgroundPorts(): {

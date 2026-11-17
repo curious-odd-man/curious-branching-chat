@@ -42,7 +42,7 @@ export interface SessionStore {
     save(after: DocumentContents, newAssets: BlobRef[]): Promise<void>
     readAsset(info: AssetInfo): Promise<Buffer | null>
     setOwner(owner: DiscussionOwner | null): void
-    /** Release 2.4: true if the bytes of an attachment are in the library. */
+    /** True if the bytes of an attachment are in the library. */
     hasBlobNow?(sha256: string): boolean
     blobSizeNow?(sha256: string): number | null
 }

@@ -145,7 +145,7 @@ if (!gotLock) {
         ipcMain.on(IPC.languageGet, (event) => {
             event.returnValue = language()
         })
-        // The recent files list of release 1.5 and older: read only, for the migration of those files (FR-206).
+        // The recent files list of the earlier storage: read only, for the migration of those files (FR-206).
         const recent = new RecentFilesStore(app.getPath('userData'))
         await recent.load()
         // ADR-003: the discussions of this computer, in %APPDATA%\BranchChat (library.sqlite and blobs\);
@@ -196,7 +196,7 @@ if (!gotLock) {
             __E2E_HOOKS__ ? e2eKeyProtector() : safeStorageProtector,
             systemContext.now
         )
-        // Synchronized discussions (release 1.2): the registry says which file and shared folder belong together.
+        // Synchronized discussions: the registry says which file and shared folder belong together.
         const registry = new SyncRegistry(join(app.getPath('userData'), 'sync'))
         await registry.load()
         const sync = new SyncService({
@@ -286,7 +286,7 @@ if (!gotLock) {
             ctx: systemContext,
             appVersion: app.getVersion()
         })
-        // Release 1.4: tray, notifications, start with Windows (D-16, D-33, D-36, D-38, D-42)
+        // Tray, notifications, start with Windows (D-16, D-33, D-36, D-38, D-42)
         const ports = __E2E_HOOKS__
             ? e2eBackgroundPorts()
             : { tray: electronTray(), notifier: electronNotifier(), loginItem: electronLoginItem() }
@@ -309,7 +309,7 @@ if (!gotLock) {
             log: (message) => logger.area('background').info(message)
         })
         const bg = background
-        // FR-206: the files of release 1.x are offered for the library at the first start
+        // FR-206: the discussion files of the earlier storage are offered for the library at the first start
         const migration = new Migration({
             library,
             recent: () => recent.list(),

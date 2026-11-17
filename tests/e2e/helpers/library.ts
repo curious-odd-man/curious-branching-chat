@@ -6,7 +6,7 @@ import { readEntries, type SavedDiscussion, type SavedThread } from './readFile'
 import { readFile } from 'node:fs/promises'
 
 /**
- * Release 2.2 (ADR-003): discussions live in the library of the profile (`library.sqlite`). These helpers make a
+ * ADR-003: discussions live in the library of the profile (`library.sqlite`). These helpers make a
  * discussion through the window, and read the library directly, independent of the app's own code.
  */
 
@@ -165,7 +165,7 @@ export function readLibrary(userData: string, title?: string, byId = false): Lib
 const created = new Map<string, { userData: string; title: string }>()
 
 /**
- * The tests of release 1.x named a discussion by its file. This keeps that: the discussion gets the file name as its
+ * Earlier tests named a discussion by its file. This keeps that: the discussion gets the file name as its
  * title, and `savedFile(file)` reads it from the library of that profile.
  */
 export async function createAt(t: TestApp, win: Page, file: string, name = 'Анна'): Promise<void> {

@@ -128,7 +128,7 @@ async function group(dir: string, limits: number[] = [30, 30, 30]): Promise<Memb
             now,
             newId: randomUUID,
             maxFileBytes: () => m.limitMb * MB,
-            appVersion: '2.4.0',
+            appVersion: '9.9.0',
             stableMs: 0
         })
         members.push(m)
@@ -174,7 +174,7 @@ function fileOf(size: number, seed: number): { data: Uint8Array; attachment: Att
 
 const first = (m: Member) => mainThread(m.contents.discussion).messages[0]!
 
-describe('release 2.4: protocol additions (phase 12)', () => {
+describe('reactions and attachments through the shared folder', () => {
     it('reactions converge in any order; the last change of a person wins per emoji (FR-233)', async () => {
         await withTempDir(async (dir) => {
             const members = await group(dir)
@@ -272,7 +272,7 @@ describe('release 2.4: protocol additions (phase 12)', () => {
     })
 })
 
-describe('release 2.4: apply rules', () => {
+describe('reactions and attachments: apply rules', () => {
     const base = (): DocumentContents => {
         const ctx = makeCtx('x')
         const c = newDocumentContents(ctx, { title: 'T', author: anna })

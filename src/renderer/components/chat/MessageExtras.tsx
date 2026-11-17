@@ -3,7 +3,7 @@ import { ATTACHMENT_ICONS, attachmentKind, reactionCounts } from '@shared/domain
 import { texts } from '@shared/i18n'
 import { REACTION_EMOJI, type Message, type ReactionEmoji } from '@shared/validation'
 
-/** What a message needs for its reactions and files (release 2.4). */
+/** What a message needs for its reactions and files. */
 export interface MessageExtrasContext {
     localId: string
     /** Display names by participant ID (for "who reacted", FR-232). */

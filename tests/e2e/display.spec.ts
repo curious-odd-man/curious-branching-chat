@@ -5,7 +5,7 @@ import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { doc, img, p, sha256, simple, t, writeDiscussionFile } from './helpers/craft'
 import { makePng } from './helpers/png'
 
-// Display and input (phase 9, NFR-003): Windows display scaling, the smallest window, keyboard use, focus handling,
+// Display and input (NFR-003): Windows display scaling, the smallest window, keyboard use, focus handling,
 // and high-contrast (forced colors) themes.
 
 const apps: TestApp[] = []

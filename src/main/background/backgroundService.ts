@@ -31,7 +31,7 @@ export interface BackgroundDeps {
 }
 
 /**
- * Release 1.4 (D-16, D-33, D-35, D-36, D-38, D-42): the tray, the life cycle without windows, notifications for
+ * Background work (D-16, D-33, D-35, D-36, D-38, D-42): the tray, the life cycle without windows, notifications for
  * new messages, and "Запускать вместе с Windows".
  */
 export class BackgroundService {

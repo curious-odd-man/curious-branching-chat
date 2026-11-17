@@ -55,7 +55,7 @@ async function person(dir: string, author: Author): Promise<P> {
         settings,
         now: () => new Date().toISOString(),
         newId: randomUUID,
-        appVersion: '1.2.0',
+        appVersion: '9.9.0',
         stableMs: 0,
         watch: false,
         scanIntervalMs: 3_600_000
@@ -69,7 +69,7 @@ async function person(dir: string, author: Author): Promise<P> {
         registry,
         sync,
         ctx: makeCtx(author.participantId),
-        appVersion: '1.2.0'
+        appVersion: '9.9.0'
     })
     return { author, dir: pdir, lib, settings, keys, registry, sync, onboarding }
 }
@@ -205,7 +205,7 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
         })
     })
 
-    it('converts and joins a discussion of 5,000 messages in reasonable time (implementation plan, phase 10)', async () => {
+    it('converts and joins a discussion of 5,000 messages in reasonable time', async () => {
         await withTempDir(async (dir) => {
             const shared = join(dir, 'shared')
             await fs.mkdir(shared)

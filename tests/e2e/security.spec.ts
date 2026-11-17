@@ -7,7 +7,7 @@ import { doc, link, p, simple, t, writeDiscussionFile } from './helpers/craft'
 import { startFeed, type Feed } from './helpers/feed'
 import { readEntries } from './helpers/readFile'
 
-// Security review (phase 9, ADR section 7): what a received file or a compromised page could do to the running app.
+// Security review (ADR section 7): what a received file or a compromised page could do to the running app.
 
 const apps: TestApp[] = []
 const dirs: string[] = []

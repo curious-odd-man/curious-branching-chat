@@ -1007,7 +1007,7 @@ mark.quote {
     margin: 0.1rem 0;
 }
 
-/* release 1.5: re-invite a member, and the decision about new keys (D-32) */
+/* re-invite a member, and the decision about new keys (D-32) */
 .link-button {
     padding: 0;
     border: none;
@@ -1026,7 +1026,7 @@ mark.quote {
     justify-content: flex-start;
 }
 
-/* release 2.1: text size (FR-301) and the shortcut list (FR-311) */
+/* text size (FR-301) and the shortcut list (FR-311) */
 .settings .text-size {
     display: flex;
     align-items: center;
@@ -1060,7 +1060,7 @@ mark.quote {
     font-size: 0.85em;
 }
 
-/* release 2.1: day separators (FR-241) and "Перейти к дате…" (FR-242) */
+/* day separators (FR-241) and "Перейти к дате…" (FR-242) */
 .day-separator {
     display: flex;
     align-items: center;
@@ -1108,7 +1108,7 @@ mark.quote {
     text-decoration: underline;
 }
 
-/* Release 2.2: the list of discussions and the migration of release 1.x files (FR-206). */
+/* The list of discussions and the migration of the earlier discussion files (FR-206). */
 .dialog.wide {
     width: min(38rem, 92vw);
 }
@@ -1146,7 +1146,7 @@ mark.quote {
     color: GrayText;
 }
 
-/* Release 2.3: the discussion list on the left (FR-221 to FR-225). */
+/* The discussion list on the left (FR-221 to FR-225). */
 .layout {
     display: flex;
     flex: 1;
@@ -1267,7 +1267,7 @@ mark.quote {
     }
 }
 
-/* Release 2.3: search (FR-211 to FR-215). */
+/* Search (FR-211 to FR-215). */
 ::highlight(search) {
     background-color: #ffe066;
     color: #000;
@@ -1339,7 +1339,7 @@ mark.quote {
     max-height: none;
 }
 
-/* Release 2.3: the branch map (FR-271 to FR-273). */
+/* The branch map (FR-271 to FR-273). */
 .branch-map-filters {
     display: flex;
     gap: 1.2rem;
@@ -1395,7 +1395,7 @@ mark.quote {
     white-space: nowrap;
 }
 
-/* release 2.4: reactions (FR-231, FR-232) */
+/* reactions (FR-231, FR-232) */
 .reactions {
     display: flex;
     flex-wrap: wrap;
@@ -1451,7 +1451,7 @@ mark.quote {
     background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-/* release 2.4: attachments (FR-261, FR-262, FR-268a) */
+/* attachments (FR-261, FR-262, FR-268a) */
 .attachments,
 .draft-files {
     list-style: none;

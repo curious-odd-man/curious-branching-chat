@@ -125,7 +125,7 @@ export function DiscussionScreen({
         : view.saving
           ? texts().discussion.saving
           : texts().discussion.saved
-    // release 2.4: reactions (names of the people) and files (which ones are here)
+    // reactions (names of the people) and files (which ones are here)
     const extras = useMemo<MessageExtrasContext>(() => {
         const names = new Map<string, string>()
         for (const p of discussion.participants) names.set(p.participantId, p.displayName)

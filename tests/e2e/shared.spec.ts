@@ -275,7 +275,7 @@ test('an existing discussion becomes shared; the key is pasted as text; the hist
     await expect(message(a.win, 'А это уже после')).toBeVisible({ timeout: 15_000 })
 })
 
-test('release 1.3: delivery marks, per-member details, and the status line (FR-169, FR-172)', async () => {
+test('delivery marks, per-member details, and the status line (FR-169, FR-172)', async () => {
     const { a, b, shared, fileA } = await createAndJoin()
     await send(a.win, 'Дошло?')
     const mark = message(a.win, 'Дошло?').getByTestId('message-mark')
@@ -338,7 +338,7 @@ test('release 1.3: delivery marks, per-member details, and the status line (FR-1
     await expect(back.win.getByTestId('sync-status')).toHaveCount(0, { timeout: 10_000 })
 })
 
-// ---- release 1.4: tray, background sync, notifications (FR-173 to FR-175) ------------------------------------------
+// ---- tray, background sync, notifications (FR-173 to FR-175) ------------------------------------------------------
 
 type Note = { title: string; body: string }
 const notes = (t: TestApp): Promise<Note[]> =>
@@ -360,7 +360,7 @@ const closeAllWindows = (t: TestApp): Promise<void> =>
         for (const w of BrowserWindow.getAllWindows()) w.close()
     })
 
-test('release 1.4: the app stays in the tray, syncs with no window, and notifies (FR-173 to FR-175)', async () => {
+test('the app stays in the tray, syncs with no window, and notifies (FR-173 to FR-175)', async () => {
     const { a, b } = await createAndJoin()
 
     // FR-174: the first synchronized discussion turned "start with Windows" on, on both computers
@@ -425,7 +425,7 @@ test('release 1.4: the app stays in the tray, syncs with no window, and notifies
     await exited
 })
 
-test('release 1.4: a normal discussion does not keep the app in the tray', async () => {
+test('a normal discussion does not keep the app in the tray', async () => {
     const userData = await profile('p-solo', 'Соло')
     const { t } = await start(userData)
     expect(await trayLabels(t)).toBeNull()
@@ -434,9 +434,9 @@ test('release 1.4: a normal discussion does not keep the app in the tray', async
     await exited
 })
 
-// ---- release 1.5: add members after activation (FR-176) -------------------------------------------------------------
+// ---- add members after activation (FR-176) -------------------------------------------------------------------------
 
-test('release 1.5: a member who did not create the discussion invites a new person (FR-176)', async () => {
+test('a member who did not create the discussion invites a new person (FR-176)', async () => {
     const { a, b, shared } = await createAndJoin()
     await send(a.win, 'Сообщение до приглашения')
     await expect(message(b.win, 'Сообщение до приглашения')).toBeVisible({ timeout: 15_000 })
@@ -499,9 +499,9 @@ test('release 1.5: a member who did not create the discussion invites a new pers
     await expect(message(b.win, 'Спасибо!')).toBeVisible({ timeout: 15_000 })
 })
 
-// ---- release 1.5: rejoin after key loss (FR-177) -----------------------------------------------------------------------
+// ---- rejoin after key loss (FR-177) -----------------------------------------------------------------------------------
 
-test('release 1.5: a person who lost the keys is re-invited; another member rejects, then accepts (FR-177)', async () => {
+test('a person who lost the keys is re-invited; another member rejects, then accepts (FR-177)', async () => {
     const { a, b, shared } = await createAndJoin()
     // Anna invites Clara (three members)
     const c = await start(await profile('p-clara', 'Клара'))
@@ -592,7 +592,7 @@ test('release 1.5: a person who lost the keys is re-invited; another member reje
     await expect(b2.win.getByTestId('sync-status')).toHaveCount(0, { timeout: 15_000 })
 })
 
-test('release 2.4: a reaction and a file travel through the shared folder; a smaller limit warns and waits (FR-233, FR-261, FR-268, FR-268a)', async () => {
+test('a reaction and a file travel through the shared folder; a smaller limit warns and waits (FR-233, FR-261, FR-268, FR-268a)', async () => {
     const { a, b } = await createAndJoin()
     const work = await dir()
     const file = join(work, 'смета.xlsx')

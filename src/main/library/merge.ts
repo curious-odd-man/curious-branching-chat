@@ -50,7 +50,7 @@ export function mergeDiscussion(base: DocumentContents, incoming: DocumentConten
         if (!other) return t
         incomingThreads.delete(t.threadId)
         let next = t
-        // release 2.4: reactions of a message that both have (last change of a person wins), and its files
+        // reactions of a message that both have (last change of a person wins), and its files
         const otherById = new Map(other.messages.map((m) => [m.messageId, m]))
         let touchedMessages = false
         const kept = t.messages.map((m) => {

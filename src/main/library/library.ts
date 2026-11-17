@@ -59,7 +59,7 @@ export interface ImportOptions {
      */
     keepSync?: boolean
     /**
-     * A new discussion takes the file name (without `.branchchat`) as its name, as release 1.x showed the file name
+     * A new discussion takes the file name (without `.branchchat`) as its name, as the earlier storage showed the file name
      * (default). Off for the snapshot of an invitation, whose file name is technical.
      */
     titleFromFileName?: boolean
@@ -320,7 +320,7 @@ export class LibraryService {
         return out
     }
 
-    // ---- attachments (release 2.4) ---------------------------------------------------------------------------
+    // ---- attachments ---------------------------------------------------------------------------------------
 
     /** FR-261: stores a file to attach (streamed); refuses a file above `maxBytes` (code TOO_LARGE). */
     storeBlobFile(

@@ -46,10 +46,10 @@ export interface ControllerDeps {
     ctx: DomainContext
     appVersion: string
     createWindow: () => BrowserWindow
-    /** Synchronized discussions (release 1.2); absent in tests that do not need them. */
+    /** Synchronized discussions; absent in tests that do not need them. */
     sync?: SyncService
     registry?: SyncRegistry
-    /** The person cancelled the close of a window (the app must not quit, release 1.4). */
+    /** The person cancelled the close of a window (the app must not quit). */
     onCloseCancelled?: () => void
 }
 

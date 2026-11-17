@@ -2,7 +2,7 @@ import type { Database } from './db'
 
 /**
  * The library schema (ADR-003 section 6). Migrations go forward only; each one runs in one transaction and raises
- * `meta.schema_version` by one. Release 2.3 is migration 2, release 2.4 (attachments) migration 3.
+ * `meta.schema_version` by one. Migration 2: authors and drafts; migration 3: attachments.
  *
  * Data that the domain model keeps as JSON with unknown extra fields (zod `passthrough`) is stored as JSON, so a
  * discussion comes back exactly as it went in: the columns next to the JSON are for queries (list, order, search).
@@ -86,7 +86,7 @@ const MIGRATIONS: ReadonlyArray<(db: Database) => void> = [
             -- normalized text (lower case, ё → е); rowid = message.rowid
             CREATE VIRTUAL TABLE search_index USING fts5 (text, tokenize = 'unicode61 remove_diacritics 0');
         `),
-    // release 2.3: the author of a message (unread counts in the list, FR-221) and drafts (FR-251 to FR-254)
+    // the author of a message (unread counts in the list, FR-221) and drafts (FR-251 to FR-254)
     (db) =>
         db.exec(`
             ALTER TABLE message ADD COLUMN author_id TEXT NOT NULL DEFAULT '';
@@ -102,7 +102,7 @@ const MIGRATIONS: ReadonlyArray<(db: Database) => void> = [
                 PRIMARY KEY (discussion_id, thread_id)
             ) STRICT, WITHOUT ROWID;
         `),
-    // release 2.4: file attachments (FR-261, FR-266) and the export schema version 3. Reactions stay in the message
+    // file attachments (FR-261, FR-266) and the export schema version 3. Reactions stay in the message
     // JSON (they change with the message row); the attachment rows keep the files in the cleanup of unused files.
     (db) =>
         db.exec(`
@@ -134,7 +134,7 @@ export function schemaVersionOf(db: Database): number {
 
 /**
  * Brings the database to the current schema. `beforeMigration` runs before the first migration of an existing library
- * (the backup of phase 7). A library of a newer app version is refused, so an older app does not damage it.
+ * (the backup of FR-207). A library of a newer app version is refused, so an older app does not damage it.
  */
 export async function migrate(
     db: Database,

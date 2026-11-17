@@ -37,7 +37,7 @@ export function isRiskyAttachment(name: string): boolean {
 }
 
 /**
- * A file name that is safe on Windows and in the export (security review of phase 14): no control or direction
+ * A file name that is safe on Windows and in the export (security review of attachments): no control or direction
  * characters, no path separators or reserved characters, no reserved device names, no dots or spaces at the end, at
  * most 200 characters (the extension is kept). An empty result becomes "файл" ("file" in English).
  */

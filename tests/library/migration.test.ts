@@ -9,7 +9,7 @@ import { closeLibraries, libraryIn } from '../helpers/library'
 
 afterEach(() => closeLibraries())
 
-describe('migration of release 1.x files (FR-206)', () => {
+describe('migration of the discussion files of the earlier storage (FR-206)', () => {
     it('offers the recent and registered files, imports them, keeps the originals, and asks only once', async () => {
         await withTempDir(async (dir) => {
             const sample = buildSample()

@@ -16,7 +16,6 @@ import {
 /**
  * Wire schemas of the sync protocol, version 1 (docs/02-done/sync-protocol.md).
  * All objects are strict: an unknown key is refused. A new key needs a new protocol version (section 10).
- * Release 1.1 contains these schemas only; later releases send and apply the events.
  */
 
 export { SYNC_PROTOCOL_VERSION }
@@ -237,7 +236,7 @@ export type AttachmentPartEntry = z.infer<typeof attachmentPartEntrySchema>
 
 /**
  * `message.attachments` (section 7.15, FR-261): the files of an own message, sent right after its `message.sent`.
- * The bytes follow in `attachment.part` events (a version 1.5 member checks every `message.part` against the images of
+ * The bytes follow in `attachment.part` events (an app without attachment support checks every `message.part` against the images of
  * `message.sent`, so attachment parts have their own type).
  */
 export const messageAttachmentsPayloadSchema = z
@@ -293,7 +292,8 @@ export const PAYLOAD_SCHEMAS = {
     'receipt.delivered': receiptDeliveredPayloadSchema,
     invitation: invitationPayloadSchema,
     'invitation.part': invitationPartPayloadSchema,
-    // release 2.4: new types, so an older version keeps them waiting and asks for an update (section 10)
+    // reactions and attachments: own types, so an app without them keeps them waiting and asks for an update
+    // (section 10)
     'reaction.set': reactionSetPayloadSchema,
     'member.limits.set': memberLimitsSetPayloadSchema,
     'message.attachments': messageAttachmentsPayloadSchema,

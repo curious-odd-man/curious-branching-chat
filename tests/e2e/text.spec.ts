@@ -7,7 +7,7 @@ import { savedFile } from './helpers/library'
 import { selectText } from './helpers/select'
 import { doc, p, simple, t, writeDiscussionFile } from './helpers/craft'
 
-// Russian text (phase 9, NFR-001/NFR-003): Cyrillic, ё/Ё and emoji survive typing, saving, reopening and branching.
+// Russian text (NFR-001/NFR-003): Cyrillic, ё/Ё and emoji survive typing, saving, reopening and branching.
 
 const apps: TestApp[] = []
 const dirs: string[] = []

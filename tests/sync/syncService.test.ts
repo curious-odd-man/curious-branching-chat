@@ -96,7 +96,7 @@ async function profiles(dir: string): Promise<{ a: Profile; b: Profile; shared: 
             settings: p.settings,
             now,
             newId: randomUUID,
-            appVersion: '1.2.0',
+            appVersion: '9.9.0',
             stableMs: 0,
             watch: false,
             scanIntervalMs: 3_600_000

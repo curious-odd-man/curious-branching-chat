@@ -36,7 +36,7 @@ function withAttachment(
     return { contents: { ...c, discussion }, attachment }
 }
 
-describe('library and file for release 2.4 (phase 12)', () => {
+describe('library and file: reactions and attachments', () => {
     it('exports attachments as ZIP entries and imports them into another library (schema version 3)', async () => {
         await withTempDir(async (dir) => {
             const data = Buffer.from('содержимое файла'.repeat(1000))
@@ -185,7 +185,7 @@ describe('library and file for release 2.4 (phase 12)', () => {
         })
     })
 
-    it('makes file names safe (security review of phase 14)', () => {
+    it('makes file names safe (security review of attachments)', () => {
         expect(safeAttachmentName('..\\..\\evil.exe')).toBe('.._.._evil.exe')
         expect(safeAttachmentName('a‮gpj.exe')).toBe('a_gpj.exe')
         expect(safeAttachmentName('con.txt')).toBe('_con.txt')

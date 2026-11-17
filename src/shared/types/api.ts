@@ -143,7 +143,7 @@ export interface BranchChatApi {
     setOpenLastFileOnStartup(enabled: boolean): Promise<IpcResult<SettingsView>>
     /** Largest file read from a shared folder, 5 to 1 000 MB (FR-166). */
     setFileSizeLimit(mb: number): Promise<IpcResult<SettingsView>>
-    /** Notifications and start with Windows (release 1.4). */
+    /** Notifications and start with Windows. */
     setBackgroundFlag(flag: BackgroundFlag, enabled: boolean): Promise<IpcResult<SettingsView>>
     /** FR-301: text size of all windows, in percent. */
     setTextSize(percent: number): Promise<IpcResult<SettingsView>>
@@ -165,7 +165,7 @@ export interface BranchChatApi {
     clearBackupFolder(): Promise<IpcResult<SettingsView>>
     /** FR-207: restores a backup after a confirmation; false if the person cancelled. The app restarts. */
     restoreBackup(path: string): Promise<IpcResult<boolean>>
-    /** FR-206: the files of release 1.x to offer (empty: nothing to ask). */
+    /** FR-206: the discussion files of the earlier storage to offer (empty: nothing to ask). */
     getMigration(): Promise<IpcResult<MigrationCandidate[]>>
     /** FR-206: imports the chosen files. */
     runMigration(paths: string[]): Promise<IpcResult<MigrationResult[]>>

@@ -181,7 +181,7 @@ describe('plainTextToRichDoc', () => {
     })
 })
 
-describe('background settings (release 1.4)', () => {
+describe('background settings', () => {
     it('defaults: notifications and text on, start with Windows off', async () => {
         await withTempDir(async (dir) => {
             const s = new SettingsStore(dir, () => 'p-1')

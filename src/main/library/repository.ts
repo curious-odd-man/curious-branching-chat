@@ -259,7 +259,7 @@ export class LibraryRepository {
 
     /**
      * Stores or (with `content` null) removes the draft of a branch. `images` are the hashes of the draft's images,
-     * `attachments` its files (release 2.4).
+     * `attachments` its files.
      */
     setDraft(
         id: string,
@@ -311,7 +311,7 @@ export class LibraryRepository {
         return out
     }
 
-    /** A value of the library itself (for example "the files of release 1.x were offered for migration"). */
+    /** A value of the library itself (for example "the files of the earlier storage were offered for migration"). */
     getMeta(key: string): string | null {
         const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key)
         return row ? String(row.value) : null

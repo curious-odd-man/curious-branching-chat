@@ -50,11 +50,11 @@ export interface DocumentPort {
     ): Promise<void>
     /** Bytes of an image of the discussion (for sending it as parts). */
     imageBytes(assetId: string): Promise<Uint8Array | null>
-    /** Release 2.4: bytes of an attachment (by hash), for sending it as parts. */
+    /** Bytes of an attachment (by hash), for sending it as parts. */
     blobBytes?(sha256: string): Promise<Uint8Array | null>
-    /** Release 2.4: true if the bytes of an attachment are here. */
+    /** True if the bytes of an attachment are here. */
     hasBlob?(sha256: string): Promise<boolean>
-    /** Release 2.4: stores the checked bytes of an attachment of another member. */
+    /** Stores the checked bytes of an attachment of another member. */
     storeBlob?(sha256: string, data: Uint8Array, type: string): Promise<void>
 }
 
@@ -83,7 +83,7 @@ export interface ConversationSyncDeps {
      * the discussion (D-33, D-38). Not called for the history of an invitation.
      */
     onNewMessages?: (messages: Message[], contents: DocumentContents) => void
-    /** Release 2.4: bytes of attachments of others arrived (the window shows them). */
+    /** Bytes of attachments of others arrived (the window shows them). */
     onAttachments?: () => void
     log?: (message: string) => void
 }
@@ -1188,7 +1188,7 @@ export class ConversationSync {
         this.state.data.pending.push(event)
     }
 
-    /** Release 2.4: the files of a message of another member start loading (their parts may come in any order). */
+    /** The files of a message of another member start loading (their parts may come in any order). */
     private async noteAttachments(event: VerifiedEvent): Promise<void> {
         const p = event.payload as MessageAttachmentsPayload
         const loads = this.state.data.attachmentLoads
