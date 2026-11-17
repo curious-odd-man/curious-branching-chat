@@ -10,8 +10,19 @@ import { exportOpen, libraryList, newDiscussion, readLibrary } from './helpers/l
 
 const apps: TestApp[] = []
 const dirs: string[] = []
-test.afterEach(async () => {
-    await Promise.all(apps.splice(0).map((a) => a.close()))
+// Playwright needs a destructured first argument
+// eslint-disable-next-line no-empty-pattern
+test.afterEach(async ({}, testInfo) => {
+    const running = apps.splice(0)
+    await Promise.all(running.map((a) => a.close()))
+    // a failed test keeps the app logs of each profile next to its error context (CI uploads test-results)
+    if (testInfo.status !== testInfo.expectedStatus)
+        for (const [i, a] of running.entries())
+            await fs
+                .cp(join(a.userData, 'logs'), testInfo.outputPath(`app-log-${i + 1}`), {
+                    recursive: true
+                })
+                .catch(() => undefined)
     await cleanup(...dirs.splice(0))
 })
 test.setTimeout(120_000)
