@@ -1,39 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
     branchesBySourceMessage,
-    daySeparators,
     firstMessageOfEachDay,
-    localDayKey,
-    previousDayKey,
     buildReadSets,
     type MarkSync,
     findMessage,
     mainThread,
     resolveContext,
-    resolveQuoteRange,
     unreadSummary
 } from '@shared/domain'
 import { texts } from '@shared/i18n'
 import { assetUrl } from '@shared/types/assets'
 import type { DocumentView } from '@shared/types/ipc'
-import {
-    richTextToPlain,
-    type Attachment,
-    type ReactionEmoji,
-    type RichDoc
-} from '@shared/validation'
+import type { Attachment, ReactionEmoji, RichDoc } from '@shared/validation'
+import { useApi } from '../../api'
 import type { MessageExtrasContext } from './MessageExtras'
 import { BranchHeader } from '../branches/BranchHeader'
 import { BranchPanel } from '../branches/BranchPanel'
 import { BranchMap } from '../branches/BranchMap'
 import { Composer } from './Composer'
+import { DiscussionHeader } from './DiscussionHeader'
 import { ImageViewer } from './ImageViewer'
-import { MessageList, type ListRow } from './MessageList'
-import { RosterDialog, type ReinviteTarget } from '../SharedWizard'
-import { formatDayLabel, formatTimestamp } from '../../i18n/format'
-import { JumpToDateDialog } from './JumpToDateDialog'
+import { MessageList } from './MessageList'
+import type { ReinviteTarget } from '../wizard/SharedWizard'
 import { SearchBar } from '../search/SearchBar'
-import { withKeys } from '@shared/shortcuts'
+import { SyncStatusLine } from './SyncStatusLine'
+import { buildThreadRows } from './threadRows'
+import { useOpenOnRequest, useToday } from './screenHooks'
 
 interface Props {
     view: DocumentView
@@ -98,15 +91,9 @@ export function DiscussionScreen({
     highlightWords,
     onHighlight
 }: Props): React.JSX.Element {
-    // the local day; checked every minute, so "Сегодня" moves at midnight
-    const [today, setToday] = useState(() => localDayKey(new Date().toISOString()))
-    useEffect(() => {
-        const timer = setInterval(() => setToday(localDayKey(new Date().toISOString())), 60_000)
-        return () => clearInterval(timer)
-    }, [])
+    const api = useApi()
+    const today = useToday()
     const [dismissed, setDismissed] = useState<string[]>([])
-    const [showRoster, setShowRoster] = useState(false)
-    const [checking, setChecking] = useState(false)
     const [viewer, setViewer] = useState<{ assetId: string; alt: string } | null>(null)
     const discussion = view.discussion
     const mainId = mainThread(discussion).threadId
@@ -120,11 +107,6 @@ export function DiscussionScreen({
         }),
         [view.sessionId, view.missingAssetIds]
     )
-    const status = view.saveError
-        ? null
-        : view.saving
-          ? texts().discussion.saving
-          : texts().discussion.saved
     // reactions (names of the people) and files (which ones are here)
     const extras = useMemo<MessageExtrasContext>(() => {
         const names = new Map<string, string>()
@@ -177,84 +159,21 @@ export function DiscussionScreen({
     const thread = context.thread
     const isBranch = thread.parentThreadId !== undefined
 
-    // Inherited context first (read-only), then the branch's own messages (FR-053, requirements 4.5).
-    const rows = useMemo<ListRow[]>(() => {
-        const out: ListRow[] = []
-        if (isBranch && context.inherited.length > 0) {
-            out.push({
-                kind: 'divider',
-                id: 'context-start',
-                label: texts().branches.contextCaption
-            })
-            for (const message of context.inherited) {
-                const isSource = message.messageId === thread.sourceMessageId
-                const highlight = isSource
-                    ? resolveQuoteRange(richTextToPlain(message.content), thread)
-                    : null
-                out.push({ kind: 'message', message, inherited: true, highlight })
-            }
-            out.push({ kind: 'divider', id: 'context-end', label: texts().branches.contextDivider })
-        }
-        // loading messages of this thread take their place in the clock order (FR-152, D-37)
-        const loading = view.loading
-            .filter((l) => l.threadId === thread.threadId)
-            .sort((a, b) => compareByClock(a, b))
-        let li = 0
-        for (const message of context.own) {
-            while (li < loading.length && compareByClock(loading[li]!, message) < 0)
-                out.push({ kind: 'loading', loading: loading[li++]! })
-            out.push({ kind: 'message', message, inherited: false, highlight: null })
-        }
-        while (li < loading.length) out.push({ kind: 'loading', loading: loading[li++]! })
-        // FR-241: a separator before the first message of each later day
-        const yesterday = previousDayKey(today)
-        const separators = daySeparators(out, (r) =>
-            r.kind === 'message'
-                ? r.message.createdAt
-                : r.kind === 'loading'
-                  ? r.loading.createdAt
-                  : null
-        )
-        for (const { index, day } of [...separators].reverse())
-            out.splice(index, 0, {
-                kind: 'day',
-                id: `day-${day}`,
-                day,
-                label: formatDayLabel(day, today, yesterday)
-            })
-        return out
-    }, [context, isBranch, thread, view.loading, today])
+    const rows = useMemo(
+        () => buildThreadRows(context, view.loading, today),
+        [context, view.loading, today]
+    )
 
     // FR-242: the days of the branch's own messages, with the first message of each day
     const days = useMemo(
         () => firstMessageOfEachDay(context.own, (m) => m.createdAt),
         [context.own]
     )
-    const [showJump, setShowJump] = useState(false)
-    // only a new request opens the dialog (the screen can mount again with the old value, after a jump)
-    const handledJump = useRef(jumpRequest)
-    useEffect(() => {
-        if (jumpRequest === handledJump.current) return
-        handledJump.current = jumpRequest
-        setShowJump(true)
-    }, [jumpRequest])
-
+    const [showJump, setShowJump] = useOpenOnRequest(jumpRequest)
+    const [showSearch, setShowSearch] = useOpenOnRequest(findRequest)
+    const [showMap, setShowMap] = useOpenOnRequest(branchMapRequest)
     // FR-224: only the first list after the discussion is shown again opens at the kept position
     const firstList = useRef(threadId)
-    const [showSearch, setShowSearch] = useState(false)
-    const handledFind = useRef(findRequest)
-    useEffect(() => {
-        if (findRequest === handledFind.current) return
-        handledFind.current = findRequest
-        setShowSearch(true)
-    }, [findRequest])
-    const [showMap, setShowMap] = useState(false)
-    const handledMap = useRef(branchMapRequest)
-    useEffect(() => {
-        if (branchMapRequest === handledMap.current) return
-        handledMap.current = branchMapRequest
-        setShowMap(true)
-    }, [branchMapRequest])
     const closed = isBranch && thread.status === 'closed'
     const goToSource = (): void => {
         if (thread.parentThreadId && thread.sourceMessageId) {
@@ -270,109 +189,20 @@ export function DiscussionScreen({
 
     return (
         <div className="discussion">
-            <header className="discussion-header">
-                <h1 data-testid="discussion-title">{view.discussion.title}</h1>
-                <button
-                    type="button"
-                    className="roster-button"
-                    data-testid="open-search"
-                    title={withKeys(texts().search.open, 'find')}
-                    aria-label={texts().search.open}
-                    onClick={() => setShowSearch(true)}
-                >
-                    🔍
-                </button>
-                <button
-                    type="button"
-                    className="roster-button"
-                    data-testid="open-branch-map"
-                    title={withKeys(texts().branchMap.button, 'branchMap')}
-                    aria-label={texts().branchMap.button}
-                    onClick={() => setShowMap(true)}
-                >
-                    🌳
-                </button>
-                <button
-                    type="button"
-                    className="roster-button"
-                    data-testid="jump-to-date"
-                    title={withKeys(texts().days.jumpTitle, 'jumpToDate')}
-                    aria-label={texts().days.jumpTitle}
-                    onClick={() => setShowJump(true)}
-                >
-                    📅
-                </button>
-                {view.synced && (
-                    <button
-                        type="button"
-                        className="roster-button"
-                        data-testid="roster-button"
-                        title={texts().shared.rosterTitle}
-                        onClick={() => setShowRoster(true)}
-                    >
-                        👥 {view.knownParticipants.length}
-                    </button>
-                )}
-                {view.synced && (
-                    <button
-                        type="button"
-                        className="roster-button"
-                        data-testid="sync-check"
-                        title={
-                            view.syncStatus?.lastScanAt
-                                ? texts().syncStatus.lastScan(
-                                      formatTimestamp(view.syncStatus.lastScanAt)
-                                  )
-                                : texts().syncStatus.check
-                        }
-                        disabled={checking}
-                        onClick={() => {
-                            setChecking(true)
-                            void window.branchchat.checkSyncNow().finally(() => setChecking(false))
-                        }}
-                    >
-                        {checking ? texts().syncStatus.checking : `⟳ ${texts().syncStatus.check}`}
-                    </button>
-                )}
-                {showJump && (
-                    <JumpToDateDialog
-                        days={new Set(days.keys())}
-                        today={today}
-                        onClose={() => setShowJump(false)}
-                        onPick={(day) => {
-                            setShowJump(false)
-                            const message = days.get(day)
-                            if (message) onSelectThread(threadId, message.messageId)
-                        }}
-                    />
-                )}
-                {showRoster && (
-                    <RosterDialog
-                        onClose={() => setShowRoster(false)}
-                        onInvite={() => {
-                            setShowRoster(false)
-                            onInvite()
-                        }}
-                        onReinvite={(target) => {
-                            setShowRoster(false)
-                            onReinvite(target)
-                        }}
-                    />
-                )}
-                {status && (
-                    <span className="status" data-testid="status">
-                        {status}
-                    </span>
-                )}
-                {unread.total > 0 && (
-                    <span className="unread-total">
-                        <span data-testid="unread-total">{texts().unread.total(unread.total)}</span>
-                        <button type="button" data-testid="mark-all-read" onClick={onMarkAllRead}>
-                            {texts().unread.markAll}
-                        </button>
-                    </span>
-                )}
-            </header>
+            <DiscussionHeader
+                view={view}
+                today={today}
+                days={days}
+                showJump={showJump}
+                setShowJump={setShowJump}
+                unreadTotal={unread.total}
+                onMarkAllRead={onMarkAllRead}
+                onOpenSearch={() => setShowSearch(true)}
+                onOpenMap={() => setShowMap(true)}
+                onShowMessage={(messageId) => onSelectThread(threadId, messageId)}
+                onInvite={onInvite}
+                onReinvite={onReinvite}
+            />
             <SyncStatusLine status={view.syncStatus} />
             {showSearch && (
                 <SearchBar
@@ -451,7 +281,7 @@ export function DiscussionScreen({
                         onMarkRead={onMarkMessageRead}
                         images={images}
                         branchesByMessage={branchesByMessage}
-                        onOpenLink={(href) => void window.branchchat.openLink(href)}
+                        onOpenLink={(href) => void api.openLink(href)}
                         onReply={onReply}
                         onOpenBranch={(id) => onSelectThread(id)}
                         sync={markSync}
@@ -497,94 +327,6 @@ export function DiscussionScreen({
                     onClose={closeViewer}
                 />
             )}
-        </div>
-    )
-}
-
-/** The same order as messages in a thread (FR-152): clock, then author ID, then message ID. */
-function compareByClock(
-    a: { clock: number; authorId: string; messageId: string },
-    b: { clock: number; authorId: string; messageId: string }
-): number {
-    const s = (x: string, y: string): number => (x < y ? -1 : x > y ? 1 : 0)
-    return a.clock - b.clock || s(a.authorId, b.authorId) || s(a.messageId, b.messageId)
-}
-
-/** Problems of a synchronized discussion (FR-172, D-35): only in this line and the tray menu, no notifications. */
-function SyncStatusLine({
-    status
-}: {
-    status: DocumentView['syncStatus']
-}): React.JSX.Element | null {
-    const [busy, setBusy] = useState(false)
-    if (!status) return null
-    const lines: string[] = []
-    if (status.folder === 'missing') lines.push(texts().syncStatus.missing(status.folderPath))
-    if (status.folder === 'no-permission') lines.push(texts().syncStatus.noPermission)
-    if (status.needsUpdate) lines.push(texts().syncStatus.needsUpdate)
-    if (status.quarantined > 0) lines.push(texts().syncStatus.quarantined(status.quarantined))
-    if (status.notAccepted.length > 0)
-        lines.push(texts().syncStatus.notAccepted(status.notAccepted.join(', ')))
-    if (lines.length === 0 && status.keyRequests.length === 0) return null
-    // D-32: the decision about new keys of a member; no Windows notification for it (D-35)
-    const decide = (participantId: string, accept: boolean): void => {
-        setBusy(true)
-        void window.branchchat.decideKeys(participantId, accept).finally(() => setBusy(false))
-    }
-    return (
-        <div
-            className="sync-status"
-            role="status"
-            data-testid="sync-status"
-            data-folder={status.folder}
-        >
-            {lines.map((l) => (
-                <p key={l}>{l}</p>
-            ))}
-            {status.keyRequests.map((r) => (
-                <div
-                    key={r.participantId}
-                    className="key-request"
-                    data-testid="key-request"
-                    data-state={r.state}
-                    data-name={r.displayName}
-                >
-                    <p>
-                        {r.state === 'pending'
-                            ? texts().syncStatus.keysChanged(r.displayName)
-                            : texts().syncStatus.keysRejected(r.displayName)}
-                    </p>
-                    <p className="fingerprint-row">
-                        <span>{texts().identity.fingerprintLabel}: </span>
-                        <code className="fingerprint" data-testid="key-request-fingerprint">
-                            {r.fingerprint}
-                        </code>
-                    </p>
-                    <div className="buttons">
-                        {r.state === 'pending' && (
-                            <button
-                                type="button"
-                                data-testid="key-reject"
-                                disabled={busy}
-                                onClick={() => decide(r.participantId, false)}
-                            >
-                                {texts().syncStatus.keysReject}
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            className="primary"
-                            data-testid="key-accept"
-                            disabled={busy}
-                            onClick={() => decide(r.participantId, true)}
-                        >
-                            {r.state === 'pending'
-                                ? texts().syncStatus.keysAccept
-                                : texts().syncStatus.keysAcceptLater}
-                        </button>
-                    </div>
-                </div>
-            ))}
         </div>
     )
 }

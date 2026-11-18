@@ -2,6 +2,7 @@ import { Modal } from './Modal'
 import { describeError, texts } from '@shared/i18n'
 import type { UpdateView } from '@shared/types/ipc'
 import { formatBytes, formatDate } from '../i18n/format'
+import { useApi } from '../api'
 
 interface Props {
     view: UpdateView
@@ -12,7 +13,7 @@ interface Props {
  * install. Release notes come from the internet and are shown as plain text only.
  */
 export function UpdateDialog({ view }: Props): React.JSX.Element {
-    const api = window.branchchat
+    const api = useApi()
     const { phase, info } = view
 
     const close = (): void => void api.dismissUpdateDialog()

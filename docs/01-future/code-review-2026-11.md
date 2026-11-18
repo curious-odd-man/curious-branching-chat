@@ -130,6 +130,20 @@ The repository has discussions, messages, the search index, attachments, blobs, 
 | `Composer.tsx`         | 561   | 8          | Custom hooks: `useDrafts(threadId)`, `useAttachments()`, `useImageUpload()`; many refs mirror state for callbacks today |
 | `App.tsx`              | 432   | 19         | A small state container (context + reducer) for view, dialogs, and settings                                             |
 
+**Done (2026-11-18):**
+
+- `SharedWizard`: `components/wizard/` with `CreateWizard`, `InviteWizard` (invite and reinvite), `JoinWizard`, the
+  shared steps in `steps.tsx`, hooks in `useWizard.ts`, and the key choice as a reducer in `candidates.ts`.
+- `SettingsDialog`: `components/settings/` with one component per section and `NumberField` for the three number
+  fields.
+- `DiscussionScreen`: `DiscussionHeader`, `SyncStatusLine`, `buildThreadRows` (`threadRows.ts`), and the hooks
+  `useToday` and `useOpenOnRequest`.
+- `Composer`: `components/chat/composer/` with `useDraftSaving`, `useThreadDrafts`, `useAttachments`,
+  `useImageUpload`, `DraftFiles`, and `SmallLimitsDialog`.
+- `App`: the dialogs and the requests are in `appReducer`, and the menu commands in `menuAction` (`appState.ts`).
+  The settings are in `useSettings()`. The other hooks are in `appHooks.ts`, and the banners are in `AppBanners.tsx`.
+  A context was not necessary: the components get their values as props.
+
 ### 4.5 The renderer API
 
 The renderer calls `window.branchchat` directly in 12 files (33 places), and the result handling repeats in about 35
@@ -137,6 +151,9 @@ places: `if (r.ok) … else setError(r.error.message)`.
 
 **Suggestion:** provide the API through a React context (easier to fake in component tests) and a small helper such as
 `useIpcAction()` that runs a call, sets busy state, and reports the error in one way.
+
+**Done (2026-11-18):** `src/renderer/api.tsx` has `ApiProvider`, `useApi()` and `useIpcAction()` (`run` is busy,
+`load` is not; `report` sends the errors to the error line of a dialog). Only `main.tsx` reads `window.branchchat`.
 
 ### 4.6 One CSS file
 
@@ -190,6 +207,12 @@ to find.
 | TS-5 | Test file and test names mix languages and requirement IDs                                                                                      | Keep one rule: behavior in the name, requirement ID in brackets (as most tests do now)                                   |
 
 ---
+
+**TS-1 done (2026-11-18):** component tests with Testing Library and jsdom in `tests/renderer/` for the composer,
+the discussion list, the search bar, the Settings dialog, and `useIpcAction`. `helpers/fakeApi.tsx` gives a fake API.
+The window state, the menu commands, the key choice of the wizards, and the rows of the message list have unit tests.
+The composer tests found a bug: after a message with files was sent, the draft was saved again with those files.
+This is fixed.
 
 ## 9. Smaller points
 

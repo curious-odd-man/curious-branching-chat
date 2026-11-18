@@ -3,6 +3,7 @@ import { texts } from '@shared/i18n'
 import type { BackupView } from '@shared/types/ipc'
 import { formatBytes, formatTimestamp } from '../i18n/format'
 import { Modal } from './Modal'
+import { useApi, useIpcAction } from '../api'
 
 interface Props {
     onClose(): void
@@ -10,11 +11,10 @@ interface Props {
 
 /** FR-207: "Восстановить из резервной копии…": the backups of both places, newest first. */
 export function RestoreDialog({ onClose }: Props): React.JSX.Element {
-    const api = window.branchchat
+    const api = useApi()
     const [list, setList] = useState<BackupView[] | null>(null)
     const [chosen, setChosen] = useState<string | null>(null)
-    const [busy, setBusy] = useState(false)
-    const [error, setError] = useState<string | null>(null)
+    const { error, setError, busy, run } = useIpcAction()
 
     useEffect(() => {
         void api.getBackups().then((r) => {
@@ -22,17 +22,13 @@ export function RestoreDialog({ onClose }: Props): React.JSX.Element {
             setList(r.data.backups)
             setChosen(r.data.backups[0]?.path ?? null)
         })
-    }, [api])
+    }, [api, setError])
 
     const restore = (): void => {
         if (!chosen) return
-        setBusy(true)
         setError(null)
-        void api.restoreBackup(chosen).then((r) => {
-            setBusy(false)
-            if (!r.ok) setError(r.error.message)
-            // on success the application restarts
-        })
+        // on success the application restarts
+        void run(() => api.restoreBackup(chosen))
     }
 
     return (

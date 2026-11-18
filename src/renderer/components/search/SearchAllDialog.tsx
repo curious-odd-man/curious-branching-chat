@@ -4,6 +4,7 @@ import { texts } from '@shared/i18n'
 import type { SearchHit } from '@shared/types/ipc'
 import { Modal } from '../Modal'
 import { SearchHitView } from './SearchHitView'
+import { useApi } from '../../api'
 
 interface Props {
     onShow(hit: SearchHit, words: string[]): void
@@ -12,6 +13,7 @@ interface Props {
 
 /** FR-215: Ctrl+Shift+F: all discussions of the library, results grouped by discussion. */
 export function SearchAllDialog({ onShow, onClose }: Props): React.JSX.Element {
+    const api = useApi()
     const [query, setQuery] = useState('')
     const [hits, setHits] = useState<SearchHit[] | null>(null)
     const seq = useRef(0)
@@ -23,12 +25,12 @@ export function SearchAllDialog({ onShow, onClose }: Props): React.JSX.Element {
             return
         }
         const timer = setTimeout(() => {
-            void window.branchchat.searchAll(query).then((r) => {
+            void api.searchAll(query).then((r) => {
                 if (n === seq.current && r.ok) setHits(r.data)
             })
         }, 150)
         return () => clearTimeout(timer)
-    }, [query])
+    }, [api, query])
 
     const groups = useMemo(() => {
         const out = new Map<string, { title: string; hits: SearchHit[] }>()

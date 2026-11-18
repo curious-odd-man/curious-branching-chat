@@ -4,6 +4,7 @@ import { texts } from '@shared/i18n'
 import { withKeys } from '@shared/shortcuts'
 import type { SearchHit } from '@shared/types/ipc'
 import { SearchHitView } from './SearchHitView'
+import { useApi } from '../../api'
 
 interface Props {
     /** Opens the branch and shows the message (or only the branch for a branch title). */
@@ -13,6 +14,7 @@ interface Props {
 
 /** FR-211 to FR-213: Ctrl+F in a discussion; Enter and Shift+Enter (or the arrows) go to the next and previous result. */
 export function SearchBar({ onShow, onClose }: Props): React.JSX.Element {
+    const api = useApi()
     const [query, setQuery] = useState('')
     const [hits, setHits] = useState<SearchHit[] | null>(null)
     const [current, setCurrent] = useState(-1)
@@ -27,14 +29,14 @@ export function SearchBar({ onShow, onClose }: Props): React.JSX.Element {
             return
         }
         const timer = setTimeout(() => {
-            void window.branchchat.searchDiscussion(query).then((r) => {
+            void api.searchDiscussion(query).then((r) => {
                 if (n !== seq.current || !r.ok) return
                 setHits(r.data)
                 setCurrent(-1)
             })
         }, 150)
         return () => clearTimeout(timer)
-    }, [query])
+    }, [api, query])
 
     const go = (index: number): void => {
         if (!hits || hits.length === 0) return

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { describeError, texts } from '@shared/i18n'
 import type { MigrationCandidate, MigrationResult } from '@shared/types/ipc'
 import { Modal } from './Modal'
+import { useApi, useIpcAction } from '../api'
 
 interface Props {
     candidates: MigrationCandidate[]
@@ -10,13 +11,12 @@ interface Props {
 
 /** FR-206: the first start with the library offers the discussion files of the earlier storage, all selected. */
 export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Element {
-    const api = window.branchchat
+    const api = useApi()
     const [chosen, setChosen] = useState<Set<string>>(
         () => new Set(candidates.filter((c) => c.exists).map((c) => c.path))
     )
-    const [busy, setBusy] = useState(false)
     const [results, setResults] = useState<MigrationResult[] | null>(null)
-    const [error, setError] = useState<string | null>(null)
+    const { error, setError, busy, run: call } = useIpcAction()
 
     const toggle = (path: string, on: boolean): void =>
         setChosen((s) => {
@@ -26,12 +26,11 @@ export function MigrationDialog({ candidates, onClose }: Props): React.JSX.Eleme
             return n
         })
     const run = (): void => {
-        setBusy(true)
         setError(null)
-        void api
-            .runMigration(candidates.filter((c) => chosen.has(c.path)).map((c) => c.path))
-            .then((r) => (r.ok ? setResults(r.data) : setError(r.error.message)))
-            .finally(() => setBusy(false))
+        void call(
+            () => api.runMigration(candidates.filter((c) => chosen.has(c.path)).map((c) => c.path)),
+            setResults
+        )
     }
     const skip = (): void => {
         void api.skipMigration().then(() => onClose())
