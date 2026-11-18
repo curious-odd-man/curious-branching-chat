@@ -368,7 +368,7 @@ export function checkEnvelope(value: unknown): EnvelopeCheck {
     if (type !== 'receipt.delivered' && env.senderSeq === 0) problems.push('senderSeq starts at 1')
     if (problems.length > 0) return { status: 'invalid', problems }
 
-    return { status: 'ok', envelope: { ...env, type, payload: payload.data } as Envelope }
+    return { status: 'ok', envelope: { ...env, type, payload: payload.data } }
 }
 
 // --- Public-key bundle (section 4) -------------------------------------------------------------------------------

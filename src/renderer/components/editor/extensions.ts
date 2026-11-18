@@ -71,9 +71,7 @@ const ImageNode = TiptapNode.create<{ srcFor(assetId: string): string }>({
             {
                 tag: 'img[data-asset-id]',
                 getAttrs: (el) =>
-                    IMAGE_ID.test((el as HTMLElement).getAttribute('data-asset-id') ?? '')
-                        ? null
-                        : false
+                    IMAGE_ID.test(el.getAttribute('data-asset-id') ?? '') ? null : false
             }
         ]
     },

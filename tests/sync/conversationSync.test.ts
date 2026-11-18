@@ -245,7 +245,7 @@ function imageMessage(assetId: string, text: string): RichDoc {
                 ]
             }
         ]
-    } as RichDoc
+    }
 }
 
 describe('sync service with three members (design 13 to 18)', () => {

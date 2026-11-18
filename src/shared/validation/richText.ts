@@ -97,11 +97,11 @@ export const richNodeSchema: z.ZodType<RichNode> = z.lazy(() =>
         z.object({ type: z.literal('orderedList'), content: z.array(richNodeSchema) }).strict(),
         z.object({ type: z.literal('listItem'), content: z.array(richNodeSchema) }).strict()
     ])
-) as z.ZodType<RichNode>
+)
 
 export const richDocSchema: z.ZodType<RichDoc> = z
     .object({ type: z.literal('doc'), content: z.array(richNodeSchema) })
-    .strict() as z.ZodType<RichDoc>
+    .strict()
 
 export type TextNode = Extract<RichNode, { type: 'text' }>
 

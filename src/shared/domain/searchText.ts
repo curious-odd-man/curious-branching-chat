@@ -24,7 +24,7 @@ export function matchRanges(text: string, words: readonly string[]): Array<[numb
     const out: Array<[number, number]> = []
     const wordStart = /[\p{L}\p{N}]+/gu
     for (let m = wordStart.exec(norm); m; m = wordStart.exec(norm)) {
-        const best = words.filter((w) => m![0].startsWith(w)).sort((a, b) => b.length - a.length)[0]
+        const best = words.filter((w) => m[0].startsWith(w)).sort((a, b) => b.length - a.length)[0]
         if (best) out.push([m.index, m.index + best.length])
     }
     return out

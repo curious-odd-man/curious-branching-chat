@@ -11,7 +11,7 @@ import {
     setThreadTitle,
     type Author
 } from '@shared/domain'
-import type { DocumentContents, RichDoc } from '@shared/types'
+import type { DocumentContents } from '@shared/types'
 import {
     applyAll,
     applyEvent,
@@ -54,7 +54,7 @@ function sharedStart(): DocumentContents {
 
 let seq = 0
 function verified(e: LocalEvent, senderId: string): VerifiedEvent {
-    return { eventId: `e-${++seq}`, senderId, ...e } as VerifiedEvent
+    return { eventId: `e-${++seq}`, senderId, ...e }
 }
 
 /** Comparable form: every member must end with exactly this (updatedAt is display information). */
@@ -301,7 +301,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
             clock: 1,
             createdAt: 'x',
             payload: { member: dora }
-        } as VerifiedEvent)
+        })
         const forged = applyEvent(start, {
             eventId: 'b',
             type: 'member.added',
@@ -309,7 +309,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
             clock: 1,
             createdAt: 'x',
             payload: { member: dora }
-        } as VerifiedEvent)
+        })
         expect(ok.status).toBe('applied')
         expect(forged.status).toBe('rejected')
         if (ok.status !== 'applied') return
@@ -341,7 +341,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
                 clock: 1,
                 createdAt: 'x',
                 payload: { threadId: main, status: 'closed' }
-            } as VerifiedEvent).status
+            }).status
         ).toBe('rejected')
         const withImage: MessageSentPayload = {
             message: {
@@ -357,7 +357,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
                             content: [{ type: 'image', attrs: { assetId: 'a'.repeat(64) } }]
                         }
                     ]
-                } as RichDoc,
+                },
                 assetReferences: []
             },
             images: [],
@@ -371,7 +371,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
                 clock: 1,
                 createdAt: 'x',
                 payload: withImage
-            } as VerifiedEvent).status
+            }).status
         ).toBe('rejected')
     })
 
@@ -390,7 +390,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
                     content: [
                         { type: 'paragraph', content: [{ type: 'image', attrs: { assetId: id } }] }
                     ]
-                } as RichDoc,
+                },
                 assetReferences: [id]
             },
             images: [{ assetId: id, mediaType: 'image/webp', size: 10 }],
@@ -403,7 +403,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
             clock: 1,
             createdAt: 'x',
             payload
-        } as VerifiedEvent)
+        })
         if (r.status !== 'applied') throw new Error(r.status)
         expect(r.newAssetIds).toEqual([id])
         expect(r.contents.discussion.assets[0]).toMatchObject({
@@ -420,7 +420,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
                 clock: 2,
                 createdAt: 'x',
                 payload: again
-            } as VerifiedEvent).status
+            }).status
         ).toBe('pending')
         expect(
             applyEvent(r.contents, {
@@ -430,7 +430,7 @@ describe('apply rules (sync-protocol.md 7 to 9)', () => {
                 clock: 2,
                 createdAt: 'x',
                 payload: again
-            } as VerifiedEvent).status
+            }).status
         ).toBe('applied')
     })
 

@@ -28,6 +28,10 @@ export function Modal({
     // Captured during the first render, before any child (autoFocus) moves focus into the dialog.
     const previousRef = useRef<HTMLElement | null>(document.activeElement as HTMLElement | null)
 
+    // read when the dialog closes: the value of the last render
+    const restoreRef = useRef(restoreFocus)
+    restoreRef.current = restoreFocus
+
     useEffect(() => {
         const previous = previousRef.current
         return () => {
@@ -36,7 +40,7 @@ export function Modal({
             // editor), moving it again would reset the editor's selection.
             const lost = !document.activeElement || document.activeElement === document.body
             if (
-                restoreFocus &&
+                restoreRef.current &&
                 lost &&
                 previous &&
                 previous !== document.body &&

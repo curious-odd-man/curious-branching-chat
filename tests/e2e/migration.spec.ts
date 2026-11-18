@@ -202,8 +202,8 @@ test('a profile of the earlier storage: the files are offered once, imported wit
     )
     expect(result.ok).toBe(true)
     const plans = again.win // FR-225: in place, in the same window
-    await expect(message(plans!, 'Пока ты обновлялась')).toBeVisible({ timeout: 15_000 })
-    await send(plans!, 'Я снова здесь, уже с библиотекой')
+    await expect(message(plans, 'Пока ты обновлялась')).toBeVisible({ timeout: 15_000 })
+    await send(plans, 'Я снова здесь, уже с библиотекой')
     await expect(message(b.win, 'Я снова здесь, уже с библиотекой')).toBeVisible({
         timeout: 15_000
     })

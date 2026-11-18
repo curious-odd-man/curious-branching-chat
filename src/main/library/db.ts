@@ -43,7 +43,7 @@ export class Database {
     prepare(sql: string): Statement {
         let s = this.statements.get(sql)
         if (!s) {
-            s = this.db.prepare(sql) as unknown as Statement
+            s = this.db.prepare(sql)
             this.statements.set(sql, s)
         }
         return s

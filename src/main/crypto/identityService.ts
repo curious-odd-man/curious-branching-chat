@@ -11,7 +11,8 @@ export interface IdentityServiceDeps {
     keys: KeyStore
     settings: SettingsStore
     now: () => string
-    writeClipboard(text: string): void
+    /** Electron's `clipboard.writeText` returns a promise in newer versions. */
+    writeClipboard(text: string): void | Promise<void>
     /** Save dialog for a `.bckey` file; null if cancelled. */
     pickBundlePath(parent: BrowserWindow | undefined, defaultName: string): Promise<string | null>
 }
@@ -46,7 +47,7 @@ export class IdentityService {
 
     /** "Скопировать мой ключ": the text form goes to the clipboard (FR-157). */
     async copyBundle(): Promise<void> {
-        this.deps.writeClipboard(keyBundleToText(await this.bundle()))
+        await this.deps.writeClipboard(keyBundleToText(await this.bundle()))
     }
 
     /** "Сохранить мой ключ…": writes a `.bckey` file. Resolves false if the person cancelled (FR-157). */

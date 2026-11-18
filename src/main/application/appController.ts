@@ -126,7 +126,7 @@ export class AppController {
     }
 
     focusAny(): void {
-        const first = this.entries.values().next().value as WindowEntry | undefined
+        const first = this.entries.values().next().value
         if (first) focusWindow(first.win)
     }
 

@@ -200,7 +200,8 @@ export function MessageList({
         // Row heights are measured after the first paint; settle once more at the true bottom.
         const frame = requestAnimationFrame(toEnd)
         return () => cancelAnimationFrame(frame)
-        // Only the row count matters here (not the other props), so the dependency list below is deliberate.
+        // Only a change of the row count starts a scroll; the other values are read as they are at that moment.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberate, see above
     }, [rows.length])
 
     // FR-213: the search words are highlighted in the rendered messages (CSS Custom Highlight API, no DOM change)

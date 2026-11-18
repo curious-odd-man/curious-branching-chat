@@ -178,7 +178,7 @@ if (!gotLock) {
             return
         }
         const library = new LibraryService(opened)
-        if (__E2E_HOOKS__) e2eLibraryFaults(library.repo as never)
+        if (__E2E_HOOKS__) e2eLibraryFaults(library.repo)
         const backups = new BackupService(opened, {
             appDir: app.getPath('userData'),
             folder: () => settings.get().backupFolder,

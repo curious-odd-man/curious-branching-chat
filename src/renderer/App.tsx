@@ -103,7 +103,7 @@ export function App(): React.JSX.Element {
                     if (viewRef.current && !viewRef.current.synced) setWizard('convert')
                 } else openDialog()
             }),
-        [api, startNew, openDialog]
+        [api, startNew, openDialog, setSettings]
     )
 
     // FR-301: zoom keys that did not pass the main process, and Ctrl + mouse wheel (one step per notch).

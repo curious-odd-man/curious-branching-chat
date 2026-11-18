@@ -86,7 +86,7 @@ test('a branch quoted after an emoji keeps correct offsets (surrogate pairs)', a
     const branch = (await savedFile(file)).discussion.threads[1]!
     expect(branch.quoteText).toBe('ёжик')
     // the stored offsets point at the same characters of the original message (UTF-16 code units)
-    expect(text.slice(branch.selectionStart!, branch.selectionEnd!)).toBe('ёжик')
+    expect(text.slice(branch.selectionStart, branch.selectionEnd)).toBe('ёжик')
 
     // reopen: the quote is still shown in the branch header
     await apps.pop()!.close()

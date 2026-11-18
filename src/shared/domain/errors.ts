@@ -10,7 +10,7 @@ export const DOMAIN_ERROR_CODES = [
     'INVALID_SELECTION',
     'THREAD_CLOSED',
     'INVALID_REACTION',
-    'TOO_MANY_ATTACHMENTS',
+    'TOO_MANY_ATTACHMENTS'
 ] as const
 export type DomainErrorCode = (typeof DOMAIN_ERROR_CODES)[number]
 

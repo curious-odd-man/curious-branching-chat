@@ -37,24 +37,23 @@ function ctxFor(me: Person, roster: Record<string, Person>, recipientId = 'p-bor
         },
         conversationId: 'doc-1',
         recipientId,
-        signingKeysOf: (id) => (roster[id] ? [roster[id]!.sign.publicKey] : null)
+        signingKeysOf: (id) => (roster[id] ? [roster[id].sign.publicKey] : null)
     }
 }
 
-const envelope = (extra: Partial<Envelope> = {}): Envelope =>
-    ({
-        protocolVersion: 1,
-        eventId: randomUUID(),
-        type: 'profile.updated',
-        conversationId: 'doc-1',
-        senderId: 'p-anna',
-        recipientId: 'p-boris',
-        senderSeq: 1,
-        clock: 3,
-        createdAt: '2026-11-11T10:00:00Z',
-        payload: { displayName: 'Аня' },
-        ...extra
-    }) as Envelope
+const envelope = (extra: Partial<Envelope> = {}): Envelope => ({
+    protocolVersion: 1,
+    eventId: randomUUID(),
+    type: 'profile.updated',
+    conversationId: 'doc-1',
+    senderId: 'p-anna',
+    recipientId: 'p-boris',
+    senderSeq: 1,
+    clock: 3,
+    createdAt: '2026-11-11T10:00:00Z',
+    payload: { displayName: 'Аня' },
+    ...extra
+})
 
 describe('recipient copies (sync-protocol.md 3.2, 5, 6)', () => {
     it('round-trips an event and a part with its binary payload', async () => {
@@ -73,7 +72,7 @@ describe('recipient copies (sync-protocol.md 3.2, 5, 6)', () => {
             type: 'message.part',
             payload: { messageId: 'm1', partId: randomUUID() },
             payloadSha256: sha256Hex(data)
-        } as Partial<Envelope>)
+        })
         const openedPart = await openEvent(
             await sealEvent(part, data, signer(anna), boris.box.publicKey),
             ctx
@@ -185,7 +184,7 @@ describe('recipient copies (sync-protocol.md 3.2, 5, 6)', () => {
             type: 'message.part',
             payload: { messageId: 'm', partId: randomUUID() },
             payloadSha256: sha256Hex(new Uint8Array([1]))
-        } as Partial<Envelope>)
+        })
         expect(
             await openEvent(await craft(canonicalJson(part), new Uint8Array([2])), ctx)
         ).toMatchObject({
@@ -338,7 +337,7 @@ describe('parts (D-10, D-30)', () => {
                 type: 'message.part',
                 payload: { messageId: 'm', partId: p.entry.partId },
                 payloadSha256: p.entry.sha256
-            } as Partial<Envelope>)
+            })
             const sealed = await sealEvent(e, p.data, signer(anna), boris.box.publicKey)
             sealedSizes.push(sealed.length)
             const opened = await openEvent(sealed, ctx)

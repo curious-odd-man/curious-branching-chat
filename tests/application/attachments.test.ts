@@ -12,7 +12,7 @@ import type { Ui } from '../../src/main/application/ui'
 import { anna, boris, makeCtx, simple, withTempDir } from '../helpers/fixtures'
 import { createSession, libraryIn, readSaved, reopenSession } from '../helpers/library'
 
-const EMPTY: RichDoc = { type: 'doc', content: [{ type: 'paragraph' }] } as RichDoc
+const EMPTY: RichDoc = { type: 'doc', content: [{ type: 'paragraph' }] }
 
 function fakeUi(answers: { confirm?: boolean; save?: string | null; pick?: string[] } = {}) {
     const asked: string[] = []

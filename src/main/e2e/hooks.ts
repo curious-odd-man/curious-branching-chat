@@ -219,7 +219,7 @@ export function e2eBackgroundPorts(): {
 export function e2eLibraryFaults(repo: { save: (...args: never[]) => Promise<number> }): void {
     const g = globalThis as unknown as { __saveFault: boolean }
     g.__saveFault = false
-    const save = repo.save.bind(repo) as (...args: never[]) => Promise<number>
+    const save = repo.save.bind<(...args: never[]) => Promise<number>>(repo)
     repo.save = (...args: never[]) =>
         g.__saveFault ? Promise.reject(new Error('test: save failed')) : save(...args)
 }

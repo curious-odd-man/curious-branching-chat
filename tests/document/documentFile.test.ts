@@ -233,7 +233,7 @@ describe('malformed and malicious files (FR-009, NFR-014)', () => {
             ]
             await rejectsWith(readDocument(await put(dir, await buildZip(other))), 'INVALID_SCHEMA')
 
-            const d = JSON.parse(v[1]!.data as string)
+            const d = JSON.parse(v[1]!.data)
             d.threads[0].messages[0].content = {
                 type: 'doc',
                 content: [{ type: 'script', src: 'x' }]
@@ -250,7 +250,7 @@ describe('malformed and malicious files (FR-009, NFR-014)', () => {
     it('malicious rich text is rejected: javascript: link', async () => {
         await withTempDir(async (dir) => {
             const v = valid()
-            const d = JSON.parse(v[1]!.data as string)
+            const d = JSON.parse(v[1]!.data)
             d.threads[0].messages[0].content = richDoc(
                 para({
                     type: 'text',
@@ -266,7 +266,7 @@ describe('malformed and malicious files (FR-009, NFR-014)', () => {
     it('inconsistent structure (unknown source message)', async () => {
         await withTempDir(async (dir) => {
             const v = valid()
-            const d = JSON.parse(v[1]!.data as string)
+            const d = JSON.parse(v[1]!.data)
             d.threads[1].sourceMessageId = 'ghost'
             v[1] = { name: 'discussion.json', data: JSON.stringify(d) }
             const err = await rejectsWith(

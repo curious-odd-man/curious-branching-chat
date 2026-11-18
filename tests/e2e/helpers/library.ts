@@ -41,6 +41,8 @@ export async function exportOpen(t: TestApp, win: Page, file: string): Promise<v
  * `node:sqlite` exists only with the `node:` prefix. The Playwright loader on Windows does not know such a module and
  * fails on a static import, so it is taken from Node directly.
  */
+// the Node types give `unknown` for this module name
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- needed by tsc
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite') as typeof Sqlite
 type DatabaseSync = Sqlite.DatabaseSync
 

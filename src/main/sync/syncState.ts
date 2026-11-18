@@ -202,7 +202,7 @@ export class SyncState {
                 data = {
                     ...empty(conversationId, ownId),
                     ...(raw as Partial<StateData>)
-                } as StateData
+                }
         } catch {
             // missing or unreadable: start empty; events are deduplicated by the discussion itself (apply rules)
         }

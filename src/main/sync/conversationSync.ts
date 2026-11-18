@@ -1166,7 +1166,7 @@ export class ConversationSync {
             clock: env.clock,
             createdAt: env.createdAt,
             payload: env.payload
-        } as VerifiedEvent
+        }
         this.state.data.held[entry.name] = { key, senderId: env.senderId, receiptId }
 
         if (event.type === 'message.attachments') await this.noteAttachments(event)

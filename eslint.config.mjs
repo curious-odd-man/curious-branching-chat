@@ -1,4 +1,5 @@
 import js from '@eslint/js'
+import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 
 const nodeBuiltins = [
@@ -37,6 +38,40 @@ export default tseslint.config(
             globals: { require: 'readonly', module: 'writable' }
         },
         rules: { '@typescript-eslint/no-require-imports': 'off' }
+    },
+    // type-aware rules (code review T-1): promises, assertions, exhaustive switches
+    {
+        files: ['src/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}'],
+        languageOptions: {
+            parserOptions: {
+                project: [
+                    './tsconfig.node.json',
+                    './tsconfig.web.json',
+                    './tests/e2e/tsconfig.json',
+                    './tests/renderer/tsconfig.json'
+                ],
+                tsconfigRootDir: import.meta.dirname
+            }
+        },
+        rules: {
+            '@typescript-eslint/no-floating-promises': 'error',
+            '@typescript-eslint/no-misused-promises': 'error',
+            '@typescript-eslint/await-thenable': 'error',
+            '@typescript-eslint/no-unnecessary-type-assertion': 'error',
+            '@typescript-eslint/switch-exhaustiveness-check': [
+                'error',
+                { considerDefaultExhaustiveForUnions: true }
+            ]
+        }
+    },
+    // React hooks (code review T-2)
+    {
+        files: ['src/renderer/**/*.tsx', 'src/renderer/**/*.ts'],
+        plugins: { 'react-hooks': reactHooks },
+        rules: {
+            'react-hooks/rules-of-hooks': 'error',
+            'react-hooks/exhaustive-deps': 'error'
+        }
     },
     {
         rules: {

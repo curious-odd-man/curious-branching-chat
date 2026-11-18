@@ -44,7 +44,7 @@ function refusedText(r: AttachResult): string | null {
     return lines.length > 0 ? lines.join(' ') : null
 }
 
-const EMPTY_DOC: RichDoc = { type: 'doc', content: [{ type: 'paragraph' }] } as RichDoc
+const EMPTY_DOC: RichDoc = { type: 'doc', content: [{ type: 'paragraph' }] }
 
 /** True if an editor document has visible text or an image: something worth sending (or losing). */
 function jsonHasContent(node: unknown): boolean {
