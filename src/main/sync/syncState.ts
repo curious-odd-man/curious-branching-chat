@@ -282,6 +282,177 @@ export class SyncState {
         await fs.rm(join(this.outParts, file), { force: true })
     }
 
+    // ---- changes of the state (code review S-1): the engine reads `data`, but changes it only here -------------------
+
+    /** A copy to write (an event, a part, a receipt, an invitation) for one recipient. */
+    queue(item: OutboxItem): void {
+        this.data.outbox.push(item)
+    }
+
+    /** An inbox file that waits for an event before it (or for its message). */
+    hold(name: string, entry: { key: string; senderId: string; receiptId: string }): void {
+        this.data.held[name] = entry
+    }
+
+    release(name: string): void {
+        delete this.data.held[name]
+    }
+
+    /** A file that cannot be used; it is never read again. */
+    quarantine(name: string, reason: string, at: string): void {
+        delete this.data.held[name]
+        delete this.data.failures[name]
+        this.data.quarantine.push({ name, reason, at })
+    }
+
+    /** A file that could not be opened yet (it may still be syncing): first time with this size and time. */
+    noteFailure(name: string, failure: { size: number; mtimeMs: number; since: string }): void {
+        this.data.failures[name] = failure
+    }
+
+    clearFailure(name: string): void {
+        delete this.data.failures[name]
+    }
+
+    /** All files are tried again (after new keys arrived). */
+    clearFailures(): void {
+        this.data.failures = {}
+    }
+
+    /** A file that this member keeps and does not try again (D-32, or a delete that failed). */
+    keepFile(name: string): void {
+        if (!this.data.keptFiles.includes(name)) this.data.keptFiles.push(name)
+    }
+
+    /** Forgets the records of inbox files that are gone. */
+    forgetMissingFiles(present: ReadonlySet<string>): void {
+        const d = this.data
+        d.keptFiles = d.keptFiles.filter((n) => present.has(n))
+        for (const name of Object.keys(d.failures)) if (!present.has(name)) delete d.failures[name]
+        for (const name of Object.keys(d.deferred)) if (!present.has(name)) delete d.deferred[name]
+    }
+
+    scanned(at: string): void {
+        this.data.lastScanAt = at
+    }
+
+    peerSeen(participantId: string, at: string): void {
+        this.data.peers[participantId] = { lastActivityAt: at }
+    }
+
+    noteNeedsUpdate(name: string, appVersion: string): void {
+        this.data.needsUpdate = [
+            ...this.data.needsUpdate.filter((n) => n.name !== name),
+            { name, appVersion }
+        ]
+    }
+
+    addPending(event: VerifiedEvent): void {
+        this.data.pending.push(event)
+    }
+
+    setPending(events: VerifiedEvent[]): void {
+        this.data.pending = events
+    }
+
+    startLoading(messageId: string, entry: LoadingEntry): void {
+        this.data.loading[messageId] = entry
+    }
+
+    stopLoading(messageId: string): void {
+        delete this.data.loading[messageId]
+    }
+
+    addOwnReceipt(receipt: { recipientId: string; fileName: string; writtenAt: string }): void {
+        this.data.ownReceipts.push(receipt)
+    }
+
+    setOwnReceipts(receipts: StateData['ownReceipts']): void {
+        this.data.ownReceipts = receipts
+    }
+
+    /** D-32: one open key request per person; a newer one replaces the older one. */
+    putKeyRequest(request: KeyRequest): void {
+        this.data.keyRequests = [
+            ...this.data.keyRequests.filter((r) => r.participantId !== request.participantId),
+            request
+        ]
+    }
+
+    removeKeyRequest(request: KeyRequest): void {
+        this.data.keyRequests = this.data.keyRequests.filter((r) => r !== request)
+    }
+
+    startRejoin(at: string, inviterId: string): void {
+        this.data.rejoin = { at, heardFrom: [inviterId] }
+    }
+
+    /** D-32: an event that opened with the new key shows that its sender accepted it. True if this is new. */
+    heardAfterRejoin(participantId: string): boolean {
+        const rejoin = this.data.rejoin
+        if (!rejoin || rejoin.heardFrom.includes(participantId)) return false
+        rejoin.heardFrom.push(participantId)
+        return true
+    }
+
+    rejectKeyRequest(request: KeyRequest): void {
+        request.state = 'rejected'
+    }
+
+    /** A copy was written to the shared folder (again). */
+    written(item: OutboxItem, at: string): void {
+        item.writtenAt ??= at
+        item.lastWriteAt = at
+    }
+
+    /** The recipient confirmed the copy (D-19). */
+    delivered(item: OutboxItem, at: string): void {
+        item.deliveredAt = at
+    }
+
+    // FR-268, FR-268a: file size limits
+
+    /** The limit of another member; the event with the higher `senderSeq` wins. */
+    recordPeerLimit(participantId: string, maxFileMb: number, seq: number): void {
+        const current = this.data.peerLimits[participantId]
+        if (!current || seq > current.seq) this.data.peerLimits[participantId] = { maxFileMb, seq }
+    }
+
+    limitSent(participantId: string, maxFileMb: number): void {
+        this.data.limitsSent[participantId] = maxFileMb
+    }
+
+    /** A part file of an attachment larger than the own limit: skipped until the limit is at least `size`. */
+    defer(name: string, size: number): void {
+        this.data.deferred[name] = size
+    }
+
+    undefer(name: string): void {
+        delete this.data.deferred[name]
+    }
+
+    /** The files of a message of another member start loading (once per sender, message, and hash). */
+    addAttachmentLoad(load: AttachmentLoad): void {
+        const known = this.data.attachmentLoads.some(
+            (l) =>
+                l.senderId === load.senderId &&
+                l.messageId === load.messageId &&
+                l.sha256 === load.sha256
+        )
+        if (!known) this.data.attachmentLoads.push(load)
+    }
+
+    finishAttachmentLoad(load: AttachmentLoad): void {
+        load.done = true
+    }
+
+    /** Finished loads are kept for `keepMs`, so late copies of their parts are confirmed. */
+    forgetAttachmentLoads(nowMs: number, keepMs: number): void {
+        this.data.attachmentLoads = this.data.attachmentLoads.filter(
+            (l) => !l.done || nowMs - Date.parse(l.at) < keepMs
+        )
+    }
+
     private readonly writer = new StateFileWriter(() => join(this.dir, 'state.json'))
 
     async save(): Promise<void> {

@@ -144,16 +144,9 @@ export class SyncService {
         )
         const transport = new FolderTransport(entry.sharedRoot, state.stagingDir)
         const store = this.deps.library.store(entry.conversationId)
-        const conv: Conversation = {
-            entry,
-            sync: null as unknown as ConversationSync,
-            store,
-            session: null,
-            stopWatch: null,
-            viewJson: '',
-            timer: null
-        }
-        conv.sync = new ConversationSync({
+        // the callbacks run only after start(), when the conversation exists (code review Y-2)
+        const ref: { conv?: Conversation } = {}
+        const sync = new ConversationSync({
             conversationId: entry.conversationId,
             ownId: entry.ownId,
             transport,
@@ -169,10 +162,11 @@ export class SyncService {
             appVersion: this.deps.appVersion,
             ...(this.deps.stableMs !== undefined ? { stableMs: this.deps.stableMs } : {}),
             onChange: () => {
-                void this.refreshView(conv)
-                this.statusChanged(conv)
+                if (!ref.conv) return
+                void this.refreshView(ref.conv)
+                this.statusChanged(ref.conv)
             },
-            onAttachments: () => conv.session?.onChange(),
+            onAttachments: () => ref.conv?.session?.onChange(),
             onNewMessages: (messages, contents) =>
                 this.deps.onNewMessages?.({
                     conversationId: entry.conversationId,
@@ -182,6 +176,16 @@ export class SyncService {
                 }),
             ...(this.deps.log ? { log: this.deps.log } : {})
         })
+        const conv: Conversation = {
+            entry,
+            sync,
+            store,
+            session: null,
+            stopWatch: null,
+            viewJson: '',
+            timer: null
+        }
+        ref.conv = conv
         this.conversations.set(entry.conversationId, conv)
         await conv.sync.start()
         if (this.deps.watch !== false) {

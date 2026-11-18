@@ -1,17 +1,20 @@
 import type { DocumentContents, Message, Thread } from '../validation/schemas'
 import { documentClock, type DocumentEventType } from './apply'
-import type { EventPayload, MessageSentPayload } from './schemas'
+import type { EventPayload, EventType, MessageSentPayload } from './schemas'
+
+/**
+ * An event that this member sends, before the sync service adds envelope fields, parts, and encryption. A union over
+ * the event types, so `payload` has the type that belongs to `type` (code review Y-1).
+ */
+export type OutgoingEvent<T extends EventType = EventType> = {
+    [K in T]: { type: K; clock: number; createdAt: string; payload: EventPayload<K> }
+}[T]
 
 /**
  * Events for a local change (design section 9.1): compares the discussion before and after the change, so local
- * and remote changes give the same data. The sync service adds envelope fields, parts, and encryption.
+ * and remote changes give the same data.
  */
-export interface LocalEvent<T extends DocumentEventType = DocumentEventType> {
-    type: T
-    clock: number
-    createdAt: string
-    payload: EventPayload<T>
-}
+export type LocalEvent = OutgoingEvent<DocumentEventType>
 
 /** `message.sent` before parts are planned: the content is inline; `parts` is filled in by the sync service. */
 export function messageSentDraft(message: Message, contents: DocumentContents): MessageSentPayload {
