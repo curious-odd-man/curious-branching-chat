@@ -68,7 +68,7 @@
     "@tiptap/extension-text-style": "^3.32.2",
     "@tiptap/extension-underline": "^3.32.2",
     "@tiptap/extensions": "^3.32.2",
-    "@tiptap/pm": "^3.32.2",
+    "@tiptap/pm": "^3.34.0",
     "@tiptap/react": "^3.32.2",
     "chokidar": "^4.0.3",
     "electron-updater": "^6.8.11",
