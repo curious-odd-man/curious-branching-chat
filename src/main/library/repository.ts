@@ -1,7 +1,6 @@
 import { messageSearchText, normalizeSearchText } from '@shared/domain'
 import {
     type AssetInfo,
-    type Attachment,
     type DiscussionData,
     type DocumentContents,
     type Message,
@@ -9,6 +8,9 @@ import {
     type Thread
 } from '@shared/validation'
 import type { BlobStore } from './blobs'
+import { BlobRows, type BlobRef } from './blobRows'
+import { DraftRows } from './draftRows'
+import { MetaRows } from './metaRows'
 import type { Database, Row } from './db'
 import { LibraryError } from './schema'
 
@@ -33,13 +35,7 @@ export interface LoadedDiscussion {
     revision: number
 }
 
-/** An image for the library: with `data`, the bytes are stored first; without, the file must already be there. */
-export interface BlobRef {
-    sha256: string
-    mediaType: string
-    size: number
-    data?: Uint8Array
-}
+export type { BlobRef } from './blobRows'
 
 interface MarkKeys {
     read: string[]
@@ -56,10 +52,18 @@ const DELIVERY = 1
  * few rows also in a discussion with 20,000 messages (NFR-202).
  */
 export class LibraryRepository {
+    private readonly draftRows: DraftRows
+    private readonly metaRows: MetaRows
+    private readonly blobRows: BlobRows
+
     constructor(
         private readonly db: Database,
-        private readonly blobs: BlobStore
-    ) {}
+        blobs: BlobStore
+    ) {
+        this.draftRows = new DraftRows(db)
+        this.metaRows = new MetaRows(db)
+        this.blobRows = new BlobRows(db, blobs, () => this.draftRows.draftBlobs())
+    }
 
     has(id: string): boolean {
         return this.db.prepare('SELECT 1 FROM discussion WHERE id = ?').get(id) !== undefined
@@ -163,7 +167,7 @@ export class LibraryRepository {
 
     /** Adds a new discussion. Refused if the ID is in the library. Returns the revision. */
     async create(contents: DocumentContents, newAssets: BlobRef[] = []): Promise<number> {
-        await this.storeBlobs(newAssets)
+        await this.blobRows.storeBlobs(newAssets)
         return this.db.transaction(() => {
             const id = contents.manifest.documentId
             if (this.has(id))
@@ -175,7 +179,7 @@ export class LibraryRepository {
                      VALUES (?, ?, '', '', '', '{}', '{}', '{"read":[],"delivery":null}')`
                 )
                 .run(id, contents.manifest.schemaVersion)
-            this.registerBlobs(newAssets)
+            this.blobRows.registerBlobs(newAssets)
             this.writeDiff(id, null, contents)
             return this.finish(id, contents, 0)
         })
@@ -193,13 +197,13 @@ export class LibraryRepository {
         expectedRevision: number,
         newAssets: BlobRef[] = []
     ): Promise<number> {
-        await this.storeBlobs(newAssets)
+        await this.blobRows.storeBlobs(newAssets)
         return this.db.transaction(() => {
             const row = this.db.prepare('SELECT revision FROM discussion WHERE id = ?').get(id)
             if (!row) throw new LibraryError('NOT_FOUND', 'The discussion is not in the library.')
             if (Number(row.revision) !== expectedRevision)
                 throw new LibraryError('CONFLICT', 'The discussion was changed by another writer.')
-            this.registerBlobs(newAssets)
+            this.blobRows.registerBlobs(newAssets)
             this.writeDiff(id, before, after)
             return this.finish(id, after, expectedRevision)
         })
@@ -234,187 +238,77 @@ export class LibraryRepository {
         return out
     }
 
-    // ---- drafts (FR-251 to FR-254): local only, never in an export ------------------------------------------------
+    // ---- drafts, meta values, and files: own classes; these methods keep the callers unchanged -----------------
 
-    drafts(id: string): Array<{
-        threadId: string
-        content: string
-        images: string[]
-        attachments: Attachment[]
-        updatedAt: string
-    }> {
-        return this.db
-            .prepare(
-                'SELECT thread_id, content, images, attachments, updated_at FROM draft WHERE discussion_id = ?'
-            )
-            .all(id)
-            .map((r) => ({
-                threadId: String(r.thread_id),
-                content: String(r.content),
-                images: JSON.parse(String(r.images)) as string[],
-                attachments: JSON.parse(String(r.attachments)) as Attachment[],
-                updatedAt: String(r.updated_at)
-            }))
+    drafts(id: string): ReturnType<DraftRows['drafts']> {
+        return this.draftRows.drafts(id)
     }
 
-    /**
-     * Stores or (with `content` null) removes the draft of a branch. `images` are the hashes of the draft's images,
-     * `attachments` its files.
-     */
-    setDraft(
-        id: string,
-        threadId: string,
-        content: string | null,
-        images: string[] = [],
-        attachments: Attachment[] = []
-    ): void {
-        if (content === null)
-            this.db
-                .prepare('DELETE FROM draft WHERE discussion_id = ? AND thread_id = ?')
-                .run(id, threadId)
-        else
-            this.db
-                .prepare(
-                    `INSERT INTO draft (discussion_id, thread_id, content, images, attachments, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?)
-                     ON CONFLICT (discussion_id, thread_id) DO UPDATE
-                        SET content = excluded.content, images = excluded.images,
-                            attachments = excluded.attachments, updated_at = excluded.updated_at`
-                )
-                .run(
-                    id,
-                    threadId,
-                    content,
-                    JSON.stringify(images),
-                    JSON.stringify(attachments),
-                    new Date().toISOString()
-                )
+    setDraft(...args: Parameters<DraftRows['setDraft']>): void {
+        this.draftRows.setDraft(...args)
     }
 
-    /** Discussions that have at least one draft (the mark in the list, FR-253). */
     discussionsWithDrafts(): Set<string> {
-        return new Set(
-            this.db
-                .prepare('SELECT DISTINCT discussion_id FROM draft')
-                .all()
-                .map((r) => String(r.discussion_id))
-        )
+        return this.draftRows.discussionsWithDrafts()
     }
 
-    /** Image hashes that drafts use (kept by the cleanup of unused image files). */
     draftBlobs(): Set<string> {
-        const out = new Set<string>()
-        for (const r of this.db.prepare('SELECT images, attachments FROM draft').all()) {
-            for (const h of JSON.parse(String(r.images)) as string[]) out.add(h)
-            for (const a of JSON.parse(String(r.attachments)) as Attachment[]) out.add(a.sha256)
-        }
-        return out
+        return this.draftRows.draftBlobs()
     }
 
-    /** A value of the library itself (for example "the files of the earlier storage were offered for migration"). */
     getMeta(key: string): string | null {
-        const row = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key)
-        return row ? String(row.value) : null
+        return this.metaRows.getMeta(key)
     }
 
     setMeta(key: string, value: string): void {
-        this.db
-            .prepare(
-                'INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value'
-            )
-            .run(key, value)
+        this.metaRows.setMeta(key, value)
     }
 
     markOpened(id: string, at = new Date().toISOString()): void {
         this.db.prepare('UPDATE discussion SET opened_at = ? WHERE id = ?').run(at, id)
     }
 
-    /** Image bytes by hash, checked; null when missing or damaged. */
     readBlob(sha256: string): Promise<Buffer | null> {
-        return this.blobs.read(sha256)
+        return this.blobRows.readBlob(sha256)
     }
 
-    /** Hashes that rows refer to (for the cleanup of unused files and for the integrity check). */
     usedBlobs(): Set<string> {
-        return new Set(
-            this.db
-                .prepare('SELECT sha256 FROM blob')
-                .all()
-                .map((r) => String(r.sha256))
-        )
+        return this.blobRows.usedBlobs()
     }
 
-    /**
-     * Deletes image files that no asset row uses and that are older than `minAgeMs` (ADR-003 Q-07: 7 days, so a file
-     * written just before a crash or a restore can still be used). Returns the number of files removed.
-     */
-    async removeUnusedBlobs(minAgeMs: number, now = Date.now()): Promise<number> {
-        const used = new Set(
-            this.db
-                .prepare('SELECT sha256 FROM asset UNION SELECT sha256 FROM attachment')
-                .all()
-                .map((r) => String(r.sha256))
-        )
-        for (const h of this.draftBlobs()) used.add(h)
-        let removed = 0
-        for (const { sha256, modifiedMs } of await this.blobs.list()) {
-            if (used.has(sha256) || now - modifiedMs < minAgeMs) continue
-            this.db.prepare('DELETE FROM blob WHERE sha256 = ?').run(sha256)
-            await this.blobs.remove(sha256)
-            removed++
-        }
-        return removed
+    removeUnusedBlobs(minAgeMs: number, now?: number): Promise<number> {
+        return this.blobRows.removeUnusedBlobs(minAgeMs, now)
     }
 
-    // ---------------------------------------------------------------------------------------------------------------
-
-    private async storeBlobs(assets: BlobRef[]): Promise<void> {
-        for (const a of assets) if (a.data) await this.blobs.put(a.sha256, a.data)
-    }
-
-    private registerBlobs(assets: BlobRef[]): void {
-        for (const a of assets) this.registerBlob(a)
-    }
-
-    /** True if the bytes of this hash are in the library (a row exists; rows come after their file). */
     hasBlob(sha256: string): boolean {
-        return this.db.prepare('SELECT 1 FROM blob WHERE sha256 = ?').get(sha256) !== undefined
+        return this.blobRows.hasBlob(sha256)
     }
 
-    /** The recorded size of stored bytes, or null. */
     blobSize(sha256: string): number | null {
-        const row = this.db.prepare('SELECT size FROM blob WHERE sha256 = ?').get(sha256)
-        return row ? Number(row.size) : null
+        return this.blobRows.blobSize(sha256)
     }
 
-    /** Stores checked bytes (an attachment) and records them. */
-    async storeBlob(sha256: string, data: Uint8Array, mediaType: string): Promise<void> {
-        await this.blobs.put(sha256, data)
-        this.registerBlob({ sha256, mediaType, size: data.length })
+    storeBlob(sha256: string, data: Uint8Array, mediaType: string): Promise<void> {
+        return this.blobRows.storeBlob(sha256, data, mediaType)
     }
 
-    /** Stores a file from disk (an attachment, FR-261) and records it; refuses a file above `maxBytes`. */
-    async storeBlobFile(
+    storeBlobFile(
         path: string,
         mediaType: string,
         maxBytes?: number
     ): Promise<{ sha256: string; size: number }> {
-        const r = await this.blobs.putFile(path, maxBytes)
-        this.registerBlob({ sha256: r.sha256, mediaType, size: r.size })
-        return r
+        return this.blobRows.storeBlobFile(path, mediaType, maxBytes)
     }
 
-    /** The file of a stored blob (to copy an attachment out without reading it into memory). */
     blobPath(sha256: string): string {
-        return this.blobs.pathOf(sha256)
+        return this.blobRows.blobPath(sha256)
     }
 
-    /** Records an image whose file is in the blob folder (the row comes after the file). */
     registerBlob(a: BlobRef): void {
-        this.db
-            .prepare('INSERT OR IGNORE INTO blob (sha256, media_type, size) VALUES (?, ?, ?)')
-            .run(a.sha256, a.mediaType, a.size)
+        this.blobRows.registerBlob(a)
     }
+
+    // ---------------------------------------------------------------------------------------------------------------
 
     private loadMarks(id: string, sorted: boolean): Map<number, Map<string, string[]>> {
         const out = new Map<number, Map<string, string[]>>()

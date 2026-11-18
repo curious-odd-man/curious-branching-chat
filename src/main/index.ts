@@ -329,24 +329,33 @@ if (!gotLock) {
             log: (message) => logger.area('window').info(message)
         })
         void attachments.cleanOpenDir()
-        registerIpcHandlers(controller, settings, library, association, updates, identity, sync, {
-            onboarding,
-            ui: electronUi,
-            background: bg,
-            zoom: zoomService,
-            migration,
-            backups,
-            attachments,
-            log: (message, err) => logger.area('window').error(message, err),
-            relaunch: () => {
-                // test builds only end; the test starts the app again
-                if (!__E2E_HOOKS__) app.relaunch()
-                app.exit(0)
-            },
-            restart: () => {
-                if (!__E2E_HOOKS__) app.relaunch()
-                background?.quitStarted()
-                app.quit()
+        registerIpcHandlers({
+            controller,
+            settings,
+            library,
+            association,
+            updates,
+            identity,
+            sync,
+            shared: {
+                onboarding,
+                ui: electronUi,
+                background: bg,
+                zoom: zoomService,
+                migration,
+                backups,
+                attachments,
+                log: (message, err) => logger.area('window').error(message, err),
+                relaunch: () => {
+                    // test builds only end; the test starts the app again
+                    if (!__E2E_HOOKS__) app.relaunch()
+                    app.exit(0)
+                },
+                restart: () => {
+                    if (!__E2E_HOOKS__) app.relaunch()
+                    background?.quitStarted()
+                    app.quit()
+                }
             }
         })
         // FR-207: a backup once a day: shortly after the first start of the day, then checked every full hour

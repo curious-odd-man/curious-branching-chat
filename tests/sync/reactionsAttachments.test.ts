@@ -20,14 +20,13 @@ import {
     PART_SIZE,
     type VerifiedEvent
 } from '@shared/sync'
-import { checkDiscussionIntegrity, type Attachment, type SyncInfo } from '@shared/validation'
-import { b64, fingerprintOf } from '../../src/main/crypto/identity'
-import { getSodium } from '../../src/main/crypto/sodium'
+import { checkDiscussionIntegrity, type Attachment } from '@shared/validation'
 import { newDocumentContents } from '../../src/main/document/factory'
 import { ConversationSync, type DocumentPort } from '../../src/main/sync/conversationSync'
 import { SyncState } from '../../src/main/sync/syncState'
 import { FolderTransport } from '../../src/main/transport/folderTransport'
 import { anna, boris, clara, makeCtx, simple, withTempDir } from '../helpers/fixtures'
+import { makeKeys, sharedStart } from '../helpers/sync'
 
 const DOC = 'doc-r24'
 const MB = 1024 * 1024
@@ -51,48 +50,12 @@ interface Member {
 const clockMs = Date.parse('2026-11-16T10:00:00Z')
 const now = (): string => new Date(clockMs).toISOString()
 
-async function makeKeys() {
-    const sodium = await getSodium()
-    const sign = sodium.crypto_sign_keypair()
-    const box = sodium.crypto_box_keypair()
-    return {
-        sign,
-        box,
-        own: {
-            sign: async (d: Uint8Array) => sodium.crypto_sign_detached(d, sign.privateKey),
-            open: async (s: Uint8Array) => {
-                try {
-                    return sodium.crypto_box_seal_open(s, box.publicKey, box.privateKey)
-                } catch {
-                    return null
-                }
-            }
-        }
-    }
-}
-
 async function group(dir: string, limits: number[] = [30, 30, 30]): Promise<Member[]> {
     const root = join(dir, 'shared')
     await fs.mkdir(root, { recursive: true })
     const people = [anna, boris, clara]
     const keys = await Promise.all(people.map(() => makeKeys()))
-    const roster: SyncInfo = {
-        protocolVersion: 1,
-        members: people.map((a, i) => ({
-            participantId: a.participantId,
-            displayName: a.displayName,
-            signingPublicKey: b64(keys[i]!.sign.publicKey),
-            encryptionPublicKey: b64(keys[i]!.box.publicKey),
-            fingerprint: fingerprintOf(keys[i]!.sign.publicKey, keys[i]!.box.publicKey),
-            addedBy: anna.participantId,
-            addedAt: '2026-11-16T09:00:00Z'
-        }))
-    }
-    const start = normalizeSynced({
-        ...newDocumentContents(makeCtx('s'), { title: 'Общее', author: anna }),
-        sync: roster
-    })
-    start.manifest.documentId = DOC
+    const start = sharedStart(people, keys, DOC, '2026-11-16T09:00:00Z')
     const members: Member[] = []
     for (const [i, author] of people.entries()) {
         const stateDir = join(dir, 'local', author.participantId)

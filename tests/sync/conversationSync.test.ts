@@ -13,15 +13,14 @@ import {
 } from '@shared/domain'
 import type { DocumentContents, RichDoc } from '@shared/types'
 import { eventsFromChange, normalizeSynced, type Envelope } from '@shared/sync'
-import { checkDiscussionIntegrity, type SyncInfo } from '@shared/validation'
+import { checkDiscussionIntegrity } from '@shared/validation'
 import { b64, fingerprintOf, fromB64 } from '../../src/main/crypto/identity'
-import { getSodium } from '../../src/main/crypto/sodium'
 import { sealEvent, sha256Hex } from '../../src/main/crypto/envelope'
-import { newDocumentContents } from '../../src/main/document/factory'
 import { ConversationSync, type DocumentPort } from '../../src/main/sync/conversationSync'
 import { SyncState } from '../../src/main/sync/syncState'
 import { FolderTransport, type FileOps } from '../../src/main/transport/folderTransport'
 import { anna, boris, clara, makeCtx, simple, withTempDir } from '../helpers/fixtures'
+import { makeKeys, sharedStart } from '../helpers/sync'
 
 const DOC = 'doc-shared'
 
@@ -46,26 +45,6 @@ interface Member {
 let clockMs = Date.parse('2026-11-11T10:00:00Z')
 const now = (): string => new Date(clockMs).toISOString()
 
-async function makeKeys() {
-    const sodium = await getSodium()
-    const sign = sodium.crypto_sign_keypair()
-    const box = sodium.crypto_box_keypair()
-    return {
-        sign,
-        box,
-        own: {
-            sign: async (d: Uint8Array) => sodium.crypto_sign_detached(d, sign.privateKey),
-            open: async (s: Uint8Array) => {
-                try {
-                    return sodium.crypto_box_seal_open(s, box.publicKey, box.privateKey)
-                } catch {
-                    return null
-                }
-            }
-        }
-    }
-}
-
 class FailingDeletes extends FolderTransport {
     override async delete(): Promise<'deleted' | 'missing' | 'failed'> {
         return 'failed'
@@ -80,23 +59,7 @@ async function group(
     await fs.mkdir(root, { recursive: true })
     const people = [anna, boris, clara]
     const keys = await Promise.all(people.map(() => makeKeys()))
-    const roster: SyncInfo = {
-        protocolVersion: 1,
-        members: people.map((a, i) => ({
-            participantId: a.participantId,
-            displayName: a.displayName,
-            signingPublicKey: b64(keys[i]!.sign.publicKey),
-            encryptionPublicKey: b64(keys[i]!.box.publicKey),
-            fingerprint: fingerprintOf(keys[i]!.sign.publicKey, keys[i]!.box.publicKey),
-            addedBy: anna.participantId,
-            addedAt: '2026-11-11T09:00:00Z'
-        }))
-    }
-    const start = normalizeSynced({
-        ...newDocumentContents(makeCtx('s'), { title: 'Общее', author: anna }),
-        sync: roster
-    })
-    start.manifest.documentId = DOC
+    const start = sharedStart(people, keys, DOC, '2026-11-11T09:00:00Z')
     const exdev: FileOps = {
         rename: async () => {
             throw Object.assign(new Error('cross-device'), { code: 'EXDEV' })

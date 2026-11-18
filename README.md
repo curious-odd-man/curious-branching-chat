@@ -50,7 +50,7 @@ src/
     background/  tray, notifications, start with Windows (release 1.4)
     log/         log file with rotation and redaction, diagnostics report (release 2.1)
     e2e/         test hooks, compiled only into `--mode e2e` builds
-    ipc/         validated IPC handlers
+    ipc/         validated IPC handlers, one module per area (handlers.ts checks sender and payload)
   preload/     the narrow contextBridge API
   renderer/    React UI: components/chat (list, composer), components/branches (panel, header), components/editor (TipTap), components/rich (renderer)
 tests/         unit tests and tests/e2e
