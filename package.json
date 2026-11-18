@@ -54,7 +54,7 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
-    "@tanstack/react-virtual": "^3.14.25",
+    "@tanstack/react-virtual": "^3.14.26",
     "@tiptap/core": "^3.32.2",
     "@tiptap/extension-bold": "^3.32.2",
     "@tiptap/extension-document": "^3.32.2",
