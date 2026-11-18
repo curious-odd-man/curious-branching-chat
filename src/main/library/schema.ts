@@ -1,3 +1,4 @@
+import { CodedError } from '@shared/errors'
 import type { Database } from './db'
 
 /**
@@ -158,15 +159,18 @@ export async function migrate(
     return { from, to: LIBRARY_SCHEMA_VERSION }
 }
 
-export type LibraryErrorCode =
-    'NEWER_LIBRARY' | 'NOT_FOUND' | 'EXISTS' | 'SYNCED_IMPORT' | 'DAMAGED' | 'CONFLICT'
+export const LIBRARY_ERROR_CODES = [
+    'NEWER_LIBRARY',
+    'NOT_FOUND',
+    'EXISTS',
+    'SYNCED_IMPORT',
+    'DAMAGED',
+    'CONFLICT'
+] as const
+export type LibraryErrorCode = (typeof LIBRARY_ERROR_CODES)[number]
 
-export class LibraryError extends Error {
-    constructor(
-        readonly code: LibraryErrorCode,
-        message: string
-    ) {
-        super(message)
-        this.name = 'LibraryError'
+export class LibraryError extends CodedError<LibraryErrorCode> {
+    constructor(code: LibraryErrorCode, message: string) {
+        super(code, message, 'LibraryError')
     }
 }

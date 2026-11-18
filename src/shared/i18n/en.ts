@@ -790,6 +790,13 @@ export const en: Texts = {
         ATTACHMENT_MISSING: 'The data of this file is not on this computer.',
         ATTACHMENT_SAVE_FAILED: 'Could not save the file.',
         ATTACHMENT_OPEN_FAILED: 'Could not open the file.',
+        EMPTY_MESSAGE: 'The message is empty: write a text or attach a file.',
+        UNKNOWN_ASSET: 'The image or file was not found. Add it again.',
+        MAIN_THREAD_NOT_CLOSABLE: 'The main discussion cannot be closed.',
+        FORBIDDEN: 'This action is not available.',
+        INVALID_REQUEST: 'Invalid request. Try again.',
+        EXISTS: 'This discussion is already in the library.',
+        DAMAGED: 'The discussion library is damaged.',
         NO_DOCUMENT: 'No discussion is open.',
         UNKNOWN: 'An unexpected error occurred.'
     }

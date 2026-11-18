@@ -1,6 +1,6 @@
 import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { ZodError, type ZodType } from 'zod'
-import { DomainError } from '@shared/domain'
+import { CodedError } from '@shared/errors'
 import { describeError, locale, texts } from '@shared/i18n'
 import { IPC, type IpcResult } from '@shared/types/ipc'
 import {
@@ -51,10 +51,8 @@ import { findAttachment, type AttachmentService } from '../application/attachmen
 import type { AppController, WindowEntry } from '../application/appController'
 import { AppError } from '../application/errors'
 import type { ReadAction } from '../application/documentSession'
-import { DocumentError } from '../document'
 import { openExternalLink } from '../windows/security'
 import { search, type BackupService, type LibraryService, type Migration } from '../library'
-import { LibraryError } from '../library/schema'
 import type { SettingsStore } from '../local-state/settings'
 import type { UpdateService } from '../updates/updateService'
 import type { AssociationService } from '../windows/associationService'
@@ -73,18 +71,19 @@ function isAppPage(url: string): boolean {
     return url.startsWith('file://') || (dev !== undefined && url.startsWith(dev))
 }
 
-function toError(err: unknown): { code: string; message: string } {
-    if (
-        err instanceof AppError ||
-        err instanceof DocumentError ||
-        err instanceof DomainError ||
-        err instanceof LibraryError
-    )
-        return {
-            code: err.code,
-            message: err instanceof DomainError ? err.message : describeError(err.code)
-        }
-    if (err instanceof ZodError) return { code: 'INVALID_REQUEST', message: 'Invalid request.' }
+/**
+ * The error that the window gets: a code and the text of that code in the interface language. The internal message of
+ * an error is never shown; an error without a code is written to the log, so the support report has it (FR-323).
+ */
+export function toError(
+    err: unknown,
+    log?: (message: string, err: unknown) => void,
+    channel = ''
+): { code: string; message: string } {
+    if (err instanceof CodedError) return { code: err.code, message: describeError(err.code) }
+    if (err instanceof ZodError)
+        return { code: 'INVALID_REQUEST', message: describeError('INVALID_REQUEST') }
+    log?.(`unexpected error in ${channel || 'a request'}`, err)
     return { code: 'UNKNOWN', message: describeError('UNKNOWN') }
 }
 
@@ -109,6 +108,8 @@ export function registerIpcHandlers(
         /** FR-293: restarts the application the normal way (windows close, drafts are saved). */
         restart?: () => void
         attachments?: AttachmentService
+        /** Errors without a code (programming errors) go to the log. */
+        log?: (message: string, err: unknown) => void
     }
 ): void {
     function handle<P, R>(
@@ -133,7 +134,7 @@ export function registerIpcHandlers(
                     data: await fn(controller.entryFor(event.sender), payload, event)
                 }
             } catch (err) {
-                return { ok: false, error: toError(err) }
+                return { ok: false, error: toError(err, shared?.log, channel) }
             }
         })
     }

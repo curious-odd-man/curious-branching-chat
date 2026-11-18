@@ -337,6 +337,7 @@ if (!gotLock) {
             migration,
             backups,
             attachments,
+            log: (message, err) => logger.area('window').error(message, err),
             relaunch: () => {
                 // test builds only end; the test starts the app again
                 if (!__E2E_HOOKS__) app.relaunch()
