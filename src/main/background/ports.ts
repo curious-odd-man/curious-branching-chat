@@ -7,7 +7,7 @@ export interface TrayPort {
     hide(): void
 }
 
-export interface NotificationRequest {
+interface NotificationRequest {
     title: string
     body: string
     onClick: () => void

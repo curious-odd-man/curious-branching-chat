@@ -18,6 +18,7 @@ export function ImageViewer({ url, alt, onClose }: Props): React.JSX.Element {
     }, [onClose])
 
     return (
+        // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions -- a click outside the picture closes; keys: Escape and the close button
         <div
             className="overlay viewer"
             role="dialog"
@@ -35,6 +36,7 @@ export function ImageViewer({ url, alt, onClose }: Props): React.JSX.Element {
             >
                 ✕
             </button>
+            {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-noninteractive-element-interactions -- only stops the click that closes */}
             <img
                 className="viewer-image"
                 src={url}

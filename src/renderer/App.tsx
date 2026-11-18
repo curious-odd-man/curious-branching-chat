@@ -20,6 +20,7 @@ import { DiscussionScreen } from './components/chat/DiscussionScreen'
 import { DiscussionSidebar } from './components/DiscussionSidebar'
 import { SearchAllDialog } from './components/search/SearchAllDialog'
 import { useDiscussions, useDocumentView, useSettings, useUpdateState } from './hooks'
+import { FILE_SIZE_LIMIT_MB } from '@shared/sync'
 
 /** The window: the launcher or the discussion, and the dialogs. The dialog state is in `appReducer` (code review 4.4). */
 export function App(): React.JSX.Element {
@@ -257,7 +258,7 @@ export function App(): React.JSX.Element {
                         onSend={send}
                         onToggleReaction={toggleReaction}
                         onAttachment={attachmentAction}
-                        receiveLimitMb={settings?.fileSizeLimitMb ?? 30}
+                        receiveLimitMb={settings?.fileSizeLimitMb ?? FILE_SIZE_LIMIT_MB.default}
                         onOpenSettings={openSettings}
                         onMarkMessageRead={markMessageRead}
                         onMarkThreadRead={markThreadRead}

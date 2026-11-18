@@ -1,4 +1,4 @@
-import { IPC } from '@shared/types/ipc'
+import { IPC, type SidebarSettings } from '@shared/types/ipc'
 import {
     noPayloadSchema,
     setAutoUpdateSchema,
@@ -45,7 +45,11 @@ export function registerSettingsHandlers(ctx: IpcContext): void {
             : settings.setFlag(p.flag, p.enabled)
     )
     handle(IPC.settingsSetSidebar, setSidebarSchema, async (_e, p) => {
-        const updated = await settings.setSidebar(p)
+        // only the values that were sent (a missing value must not overwrite the stored one)
+        const change = Object.fromEntries(
+            Object.entries(p).filter(([, v]) => v !== undefined)
+        ) as Partial<SidebarSettings>
+        const updated = await settings.setSidebar(change)
         controller.broadcast(IPC.settingsChanged, updated)
         return updated
     })

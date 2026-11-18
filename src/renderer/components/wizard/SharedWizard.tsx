@@ -5,7 +5,7 @@ import { InviteWizard } from './InviteWizard'
 import { JoinWizard } from './JoinWizard'
 
 export type { ReinviteTarget } from './candidates'
-export { RosterDialog, RosterList } from './roster'
+export { RosterDialog } from './roster'
 
 export type WizardMode = 'new' | 'convert' | 'join' | 'invite' | 'reinvite'
 

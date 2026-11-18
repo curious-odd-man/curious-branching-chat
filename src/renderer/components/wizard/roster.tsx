@@ -14,7 +14,7 @@ const stateLabel = (state: 'self' | 'invited' | 'joined' | 'member'): string =>
         member: texts().shared.stateMember
     })[state]
 
-export function RosterList({
+function RosterList({
     roster,
     onReinvite
 }: {

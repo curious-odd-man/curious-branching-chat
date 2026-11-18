@@ -589,7 +589,7 @@ export class AppController {
 }
 
 /** A file name from a discussion name: characters Windows does not allow become "_". */
-export function safeFileName(title: string): string {
+function safeFileName(title: string): string {
     const name = [...title]
         .map((ch) => (ch.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(ch) ? '_' : ch))
         .join('')

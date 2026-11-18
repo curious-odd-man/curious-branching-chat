@@ -1,5 +1,5 @@
 import type { DiscussionListItem } from '@shared/types/ipc'
-import type { DiscussionSummary } from '../library'
+import type { DiscussionSummary } from '../library/repository'
 
 /** The discussions as the start screen and the menus show them: most recently used first. */
 export function describeDiscussions(

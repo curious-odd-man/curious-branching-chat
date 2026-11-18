@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { knownProfiles } from './library'
 
-export interface DialogLogEntry {
+interface DialogLogEntry {
     kind: 'save' | 'open' | 'box'
     type?: string
     title?: string

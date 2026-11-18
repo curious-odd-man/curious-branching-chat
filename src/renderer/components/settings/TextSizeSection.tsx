@@ -10,7 +10,7 @@ export function TextSizeSection({
     onSettingsChanged
 }: Omit<SectionProps, 'setError'>): React.JSX.Element {
     const api = useApi()
-    const size = settings?.textSize ?? 100
+    const size = settings?.textSize ?? TEXT_SIZE_DEFAULT
     const setTextSize = (percent: number): void =>
         void run(() => api.setTextSize(percent), onSettingsChanged)
     return (

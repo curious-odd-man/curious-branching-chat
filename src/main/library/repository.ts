@@ -158,7 +158,7 @@ export class LibraryRepository {
             discussion: { ...head, participants, threads, assets } as DiscussionData,
             readState,
             ...(d.sync !== null
-                ? { sync: JSON.parse(String(d.sync)) as DocumentContents['sync'] }
+                ? { sync: JSON.parse(String(d.sync)) as NonNullable<DocumentContents['sync']> }
                 : {}),
             ...(delivery ? { delivery } : {})
         }

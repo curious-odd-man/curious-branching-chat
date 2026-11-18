@@ -8,9 +8,9 @@ export interface QuoteRange {
 }
 
 export interface StoredQuote {
-    quoteText?: string
-    selectionStart?: number
-    selectionEnd?: number
+    quoteText?: string | undefined
+    selectionStart?: number | undefined
+    selectionEnd?: number | undefined
 }
 
 /**

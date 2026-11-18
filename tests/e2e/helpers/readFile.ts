@@ -46,11 +46,6 @@ export interface SavedDiscussion {
     assets: { assetId: string; sha256: string; mediaType: string; size: number; path: string }[]
 }
 
-export async function readReadState(path: string): Promise<Record<string, string[]>> {
-    const entries = await readEntries(path)
-    return JSON.parse(entries.get('readstate.json')!.toString('utf8')) as Record<string, string[]>
-}
-
 /** Plain text of a stored message in the offset coordinate system used by branch selections. */
 export function plainTextOf(content: unknown): string {
     const parts: string[] = []
@@ -82,7 +77,7 @@ export async function readDiscussionFile(path: string): Promise<{
     }
 }
 
-export interface SavedMark {
+interface SavedMark {
     type: string
     attrs?: Record<string, string>
 }

@@ -125,7 +125,7 @@ const MIGRATIONS: ReadonlyArray<(db: Database) => void> = [
         `)
 ]
 
-export const LIBRARY_SCHEMA_VERSION = MIGRATIONS.length
+const LIBRARY_SCHEMA_VERSION = MIGRATIONS.length
 
 export function schemaVersionOf(db: Database): number {
     db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT')

@@ -12,6 +12,7 @@ import { NameSection } from './NameSection'
 import { StartupSection } from './StartupSection'
 import { TextSizeSection } from './TextSizeSection'
 import { UpdatesSection } from './UpdatesSection'
+import { ATTACHMENT_LIMIT_MB } from '@shared/sync'
 
 interface Props {
     settings: SettingsView | undefined
@@ -48,10 +49,10 @@ export function SettingsDialog({
                     <NumberField
                         testId="settings-attachment-limit"
                         label={texts().attachments.limitLabel}
-                        min={1}
-                        max={1000}
+                        min={ATTACHMENT_LIMIT_MB.min}
+                        max={ATTACHMENT_LIMIT_MB.max}
                         value={settings?.attachmentLimitMb}
-                        fallback={100}
+                        fallback={ATTACHMENT_LIMIT_MB.default}
                         onApply={(mb) =>
                             void run(() => api.setAttachmentLimit(mb), onSettingsChanged)
                         }

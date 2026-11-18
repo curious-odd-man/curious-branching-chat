@@ -18,7 +18,7 @@ export function compareMessages(a: Message, b: Message): number {
     )
 }
 
-export function compareThreads(a: Thread, b: Thread): number {
+function compareThreads(a: Thread, b: Thread): number {
     return (
         a.clock - b.clock ||
         compareStrings(a.createdBy, b.createdBy) ||

@@ -74,7 +74,7 @@ export class PartsError extends Error {
 }
 
 /** Joins the parts of one group in index order and checks every part and the total (sync-protocol.md 7.1). */
-export function joinParts(
+function joinParts(
     entries: readonly PartEntry[],
     received: ReadonlyMap<string, Uint8Array>
 ): Uint8Array {

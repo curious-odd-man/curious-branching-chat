@@ -24,7 +24,7 @@ export interface LoggerOptions {
     mirror?: (line: string) => void
 }
 
-export const LOG_FILE = 'main.log'
+const LOG_FILE = 'main.log'
 
 /**
  * FR-322: what must never be in a log, removed in one place. Long runs of base64 or hex characters are removed: keys,
@@ -35,7 +35,7 @@ export function redact(text: string): string {
 }
 
 /** The text of an error for the log: the message and the stack, redacted. */
-export function describe(err: unknown): string {
+function describe(err: unknown): string {
     if (err instanceof Error) return redact(err.stack ?? `${err.name}: ${err.message}`)
     return redact(String(err))
 }

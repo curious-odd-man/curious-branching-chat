@@ -15,10 +15,25 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: No known vulnerabilities in the runtime dependencies (code review section 9)
+        run: npm audit --omit=dev --audit-level=moderate
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck
-      - run: npm test
+      - name: No circular imports (code review T-7; type-only imports are allowed)
+        run: npm run check:cycles
+      - name: No unused files, exports, or dependencies (code review T-5)
+        run: npm run check:unused
+      - name: Unit tests with a coverage report (code review T-4; no limit yet)
+        run: npm run test:coverage
+      - name: Keep the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: End-to-end tests (Electron, test build with dialog stubs)
         run: npm run test:e2e
       - name: Keep the results of failed end-to-end tests (error context, app logs)

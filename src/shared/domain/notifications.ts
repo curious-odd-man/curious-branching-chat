@@ -2,10 +2,10 @@ import type { RichDoc, RichNode } from '../validation/richText'
 import { texts } from '../i18n'
 
 /** Longest notification text, in characters, before "…" (D-38). */
-export const NOTIFICATION_TEXT_MAX = 100
+const NOTIFICATION_TEXT_MAX = 100
 
 /** More new messages than this in one discussion in one scan give one summary notification (D-42). */
-export const NOTIFICATION_SUMMARY_ABOVE = 3
+const NOTIFICATION_SUMMARY_ABOVE = 3
 
 /**
  * The plain text of a message for a notification (D-38): the same text as for quotes, but each image is

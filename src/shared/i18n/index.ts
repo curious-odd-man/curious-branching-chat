@@ -1,5 +1,6 @@
 import { en } from './en'
 import { ru } from './ru'
+import type { Texts } from './texts'
 
 /**
  * Text lookup (FR-291, NFR-205). All interface texts are in `ru.ts` and `en.ts`; code takes them from `texts()`, never
@@ -7,20 +8,9 @@ import { ru } from './ru'
  * restart): the main process reads it from the settings, a window gets it from the preload script.
  */
 
-/** A string literal type becomes `string`, so `en.ts` must have the same keys and signatures, not the same words. */
-type Widen<T> = T extends string
-    ? string
-    : T extends (...args: infer A) => infer R
-      ? (...args: A) => Widen<R>
-      : T extends readonly (infer U)[]
-        ? readonly Widen<U>[]
-        : T extends object
-          ? { readonly [K in keyof T]: Widen<T[K]> }
-          : T
+export type { Texts } from './texts'
 
-export type Texts = Widen<typeof ru>
-
-export const LANGUAGES = ['ru', 'en'] as const
+const LANGUAGES = ['ru', 'en'] as const
 export type Language = (typeof LANGUAGES)[number]
 
 let current: Language = 'ru'

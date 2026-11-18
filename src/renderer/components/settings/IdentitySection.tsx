@@ -4,6 +4,7 @@ import type { IdentityView } from '@shared/types/ipc'
 import { useApi } from '../../api'
 import { NumberField } from './NumberField'
 import type { SectionProps } from './types'
+import { FILE_SIZE_LIMIT_MB } from '@shared/sync'
 
 /** The encryption key: fingerprint, copy and save of the public key (FR-155 to FR-157), and the file size limit. */
 export function IdentitySection({
@@ -96,10 +97,10 @@ export function IdentitySection({
             <NumberField
                 testId="settings-size-limit"
                 label={texts().identity.sizeLimitLabel}
-                min={5}
-                max={1000}
+                min={FILE_SIZE_LIMIT_MB.min}
+                max={FILE_SIZE_LIMIT_MB.max}
                 value={settings?.fileSizeLimitMb}
-                fallback={30}
+                fallback={FILE_SIZE_LIMIT_MB.default}
                 onApply={(mb) => void run(() => api.setFileSizeLimit(mb), onSettingsChanged)}
             />
             <p className="hint">{texts().identity.sizeLimitHint}</p>

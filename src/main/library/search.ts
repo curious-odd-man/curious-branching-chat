@@ -13,7 +13,7 @@ const AROUND = 60
 const LIMIT = 200
 
 /** FTS5 query: every word as a quoted prefix, all words required (FR-212). */
-export function ftsQuery(words: readonly string[]): string {
+function ftsQuery(words: readonly string[]): string {
     return words.map((w) => `"${w.replace(/"/g, '""')}"*`).join(' ')
 }
 

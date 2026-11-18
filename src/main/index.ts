@@ -46,6 +46,12 @@ import { Logger } from './log/logger'
 import { saveDiagnosticsReport } from './log/saveReport'
 import { ZoomService } from './windows/zoom'
 import { applyGlobalSecurity } from './windows/security'
+import {
+    BACKUP_FIRST_CHECK_MS,
+    UNUSED_BLOB_MAX_AGE_MS,
+    UPDATE_CHECK_INTERVAL_MS,
+    UPDATE_FIRST_CHECK_MS
+} from './constants'
 
 // A closed console pipe must not end the app (EPIPE from a log line).
 guardConsoleStreams()
@@ -187,7 +193,7 @@ if (!gotLock) {
         })
         // ADR-003 Q-07: image files that nothing uses any more are removed after 7 days
         void library.repo
-            .removeUnusedBlobs(7 * 24 * 3600 * 1000)
+            .removeUnusedBlobs(UNUSED_BLOB_MAX_AGE_MS)
             .then((n) => n > 0 && libraryLog.info(`${n} unused image files removed`))
             .catch((err) => libraryLog.warn(`cleanup of image files failed: ${String(err)}`))
         // Encryption identity (FR-155 to FR-157): keys in the user data folder, protected by Windows DPAPI.
@@ -254,10 +260,13 @@ if (!gotLock) {
             autoCheckEnabled: () => settings.get().autoUpdateCheck,
             log: (message) => logger.area('updates').info(message)
         })
-        setTimeout(() => void updates.checkAutomatically(), testUpdates?.startupDelayMs ?? 20_000)
+        setTimeout(
+            () => void updates.checkAutomatically(),
+            testUpdates?.startupDelayMs ?? UPDATE_FIRST_CHECK_MS
+        )
         setInterval(
             () => void updates.checkAutomatically(),
-            testUpdates?.intervalMs ?? 6 * 60 * 60 * 1000
+            testUpdates?.intervalMs ?? UPDATE_CHECK_INTERVAL_MS
         )
         const identity = new IdentityService({
             keys,
@@ -361,7 +370,7 @@ if (!gotLock) {
         // FR-207: a backup once a day: shortly after the first start of the day, then checked every full hour
         const backupDelay = __E2E_HOOKS__
             ? Number(process.env['BRANCHCHAT_E2E_BACKUP_DELAY_MS'] ?? -1)
-            : 60_000
+            : BACKUP_FIRST_CHECK_MS
         if (backupDelay >= 0) {
             const daily = (): void =>
                 void backups

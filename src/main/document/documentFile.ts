@@ -20,13 +20,13 @@ import { migrateToCurrent, type RawDocument } from './migrations'
 import { writeFileAtomically } from './atomicWrite'
 import { collect, openEntry, readEntryBuffer, scanZip } from './zip'
 
-export const MANIFEST_ENTRY = 'manifest.json'
-export const DISCUSSION_ENTRY = 'discussion.json'
-export const READSTATE_ENTRY = 'readstate.json'
+const MANIFEST_ENTRY = 'manifest.json'
+const DISCUSSION_ENTRY = 'discussion.json'
+const READSTATE_ENTRY = 'readstate.json'
 /** Roster of a synchronized discussion (FR-154). Written only when present; never copied through. */
-export const SYNC_ENTRY = 'sync.json'
+const SYNC_ENTRY = 'sync.json'
 /** Which messages each member has received (D-40). Written only when present; never copied through. */
-export const DELIVERY_ENTRY = 'delivery.json'
+const DELIVERY_ENTRY = 'delivery.json'
 const MANAGED_ENTRIES = new Set([
     MANIFEST_ENTRY,
     DISCUSSION_ENTRY,

@@ -24,7 +24,7 @@ export const img = (assetId: string): Json => ({ type: 'image', attrs: { assetId
 export const doc = (...content: Json[]): Json => ({ type: 'doc', content })
 export const simple = (text: string): Json => doc(p(t(text)))
 
-export type Person = 'anna' | 'boris' | 'clara'
+type Person = 'anna' | 'boris' | 'clara'
 
 export interface CraftMessage {
     id: string
@@ -50,7 +50,7 @@ const PEOPLE = {
     clara: { participantId: 'p-clara', displayName: 'Клара' }
 }
 
-export interface CraftAsset {
+interface CraftAsset {
     data: Buffer
     /** normal: stored correctly; missing: listed but no data in the file; corrupt: data that does not match its checksum. */
     mode?: 'normal' | 'missing' | 'corrupt'

@@ -11,7 +11,7 @@ const OPTIONS: yauzl.Options = {
     validateEntrySizes: true
 }
 
-export function mapZipError(err: unknown): DocumentError {
+function mapZipError(err: unknown): DocumentError {
     if (err instanceof DocumentError) return err
     const e = err as NodeJS.ErrnoException
     const message = e?.message ?? String(err)

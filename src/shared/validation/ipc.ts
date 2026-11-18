@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { richDocSchema } from './richText'
 import { MAX_ATTACHMENTS_PER_MESSAGE, attachmentSchema, reactionEmojiSchema } from './schemas'
+import { ATTACHMENT_LIMIT_MB, FILE_SIZE_LIMIT_MB } from '../sync/schemas'
 
 /** Payload schemas for IPC channels. The renderer is never trusted. */
 export const setNameSchema = z.object({ displayName: z.string().trim().min(1) }).strict()
@@ -36,7 +37,9 @@ export const attachmentRefSchema = z
 export const attachmentReceiversSchema = z
     .object({ size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) })
     .strict()
-export const setAttachmentLimitSchema = z.object({ mb: z.number().int().min(1).max(1000) }).strict()
+export const setAttachmentLimitSchema = z
+    .object({ mb: z.number().int().min(ATTACHMENT_LIMIT_MB.min).max(ATTACHMENT_LIMIT_MB.max) })
+    .strict()
 /** FR-251: an editor document (TipTap JSON, checked again before it is sent as a message); null removes the draft. */
 export const draftSaveSchema = z
     .object({
@@ -125,7 +128,9 @@ export const sharedInviteSchema = z
 export const joinImportSchema = z
     .object({ root: z.string().min(1), invitationId: z.string().min(1) })
     .strict()
-export const setFileSizeLimitSchema = z.object({ mb: z.number().int().min(5).max(1000) }).strict()
+export const setFileSizeLimitSchema = z
+    .object({ mb: z.number().int().min(FILE_SIZE_LIMIT_MB.min).max(FILE_SIZE_LIMIT_MB.max) })
+    .strict()
 export const zoomChangeSchema = z.object({ direction: z.enum(['in', 'out', 'reset']) }).strict()
 export const setSidebarSchema = z
     .object({

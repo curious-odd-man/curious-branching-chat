@@ -4,7 +4,7 @@ import { texts } from '@shared/i18n'
 import { DISCUSSION_ARG } from './launchArgs'
 
 /** The taskbar jump list and the File menu show at most this many entries (Windows limits the jump list anyway). */
-export const MENU_RECENT_LIMIT = 20
+const MENU_RECENT_LIMIT = 20
 
 /** The "Недавние" category of the taskbar jump list. Each entry starts BranchChat with the discussion's ID. */
 export function jumpListCategories(

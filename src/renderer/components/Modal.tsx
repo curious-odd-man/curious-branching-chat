@@ -74,6 +74,7 @@ export function Modal({
     }
 
     return (
+        // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions -- the dialog keeps Tab inside (focus trap)
         <div
             ref={ref}
             className="overlay"

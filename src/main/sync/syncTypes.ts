@@ -27,7 +27,7 @@ export interface DocumentPort {
     storeBlob?(sha256: string, data: Uint8Array, type: string): Promise<void>
 }
 
-export interface OwnKeys {
+interface OwnKeys {
     sign(data: Uint8Array): Promise<Uint8Array>
     open(sealed: Uint8Array): Promise<Uint8Array | null>
 }

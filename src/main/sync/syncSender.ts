@@ -9,7 +9,8 @@ import {
     type EventType,
     type OutgoingEvent,
     type MessageAttachmentsPayload,
-    FILE_SIZE_LIMIT_MB
+    FILE_SIZE_LIMIT_MB,
+    MAX_READ_IDS_PER_EVENT
 } from '@shared/sync'
 import { sealEvent, sha256Hex } from '../crypto/envelope'
 import { fromB64 } from '../crypto/identity'
@@ -92,11 +93,11 @@ export class SyncSender {
         const recipients = (contents.sync?.members ?? [])
             .map((m) => m.participantId)
             .filter((id) => id !== this.deps.ownId)
-        for (let i = 0; i < missing.length; i += 10_000)
+        for (let i = 0; i < missing.length; i += MAX_READ_IDS_PER_EVENT)
             await this.enqueue(
                 {
                     type: 'delivery.added',
-                    payload: { messageIds: missing.slice(i, i + 10_000) },
+                    payload: { messageIds: missing.slice(i, i + MAX_READ_IDS_PER_EVENT) },
                     clock: documentClock(contents),
                     createdAt: this.deps.now()
                 },

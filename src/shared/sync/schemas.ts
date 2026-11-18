@@ -39,10 +39,10 @@ export const FILE_SIZE_LIMIT_MB = { min: 5, max: 1000, default: 30 } as const
 /** FR-265: "Наибольший размер вложения", in MB. */
 export const ATTACHMENT_LIMIT_MB = { min: 1, max: 1000, default: 100 } as const
 
-export const uuidSchema = z
+const uuidSchema = z
     .string()
     .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, 'invalid id')
-export const sha256HexSchema = z.string().regex(/^[0-9a-f]{64}$/, 'invalid sha256')
+const sha256HexSchema = z.string().regex(/^[0-9a-f]{64}$/, 'invalid sha256')
 const isoUtc = z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, 'timestamp must be ISO-8601 UTC (…Z)')
@@ -52,7 +52,7 @@ const docId = z.string().min(1).max(200)
 
 // --- Payloads (section 7) ---------------------------------------------------------------------------------------
 
-export const partEntrySchema = z
+const partEntrySchema = z
     .object({
         partId: uuidSchema,
         kind: z.enum(['content', 'image']),
@@ -67,7 +67,7 @@ export const partEntrySchema = z
     })
 export type PartEntry = z.infer<typeof partEntrySchema>
 
-export const messageSentPayloadSchema = z
+const messageSentPayloadSchema = z
     .object({
         message: z
             .object({
@@ -127,9 +127,9 @@ export const messageSentPayloadSchema = z
     })
 export type MessageSentPayload = z.infer<typeof messageSentPayloadSchema>
 
-export const messagePartPayloadSchema = z.object({ messageId: docId, partId: uuidSchema }).strict()
+const messagePartPayloadSchema = z.object({ messageId: docId, partId: uuidSchema }).strict()
 
-export const branchCreatedPayloadSchema = z
+const branchCreatedPayloadSchema = z
     .object({
         thread: z
             .object({
@@ -146,26 +146,26 @@ export const branchCreatedPayloadSchema = z
     })
     .strict()
 
-export const branchStatusSetPayloadSchema = z
+const branchStatusSetPayloadSchema = z
     .object({ threadId: docId, status: z.enum(['open', 'closed']) })
     .strict()
 
-export const branchTitleSetPayloadSchema = z.object({ threadId: docId, title: z.string() }).strict()
+const branchTitleSetPayloadSchema = z.object({ threadId: docId, title: z.string() }).strict()
 
-export const readStateAddedPayloadSchema = z
+const readStateAddedPayloadSchema = z
     .object({ messageIds: z.array(docId).min(1).max(MAX_READ_IDS_PER_EVENT) })
     .strict()
 
 const memberWithoutHistory = rosterMemberSchema.omit({ previousKeys: true }).strict()
 
 /** `delivery.added` (sync-protocol.md 7.11, D-40): messages that the sender has now received. */
-export const deliveryAddedPayloadSchema = z
+const deliveryAddedPayloadSchema = z
     .object({ messageIds: z.array(docId).min(1).max(MAX_READ_IDS_PER_EVENT) })
     .strict()
 
-export const memberAddedPayloadSchema = z.object({ member: memberWithoutHistory }).strict()
+const memberAddedPayloadSchema = z.object({ member: memberWithoutHistory }).strict()
 
-export const memberKeysReplacedPayloadSchema = z
+const memberKeysReplacedPayloadSchema = z
     .object({
         participantId: docId,
         signingPublicKey: publicKeySchema,
@@ -174,13 +174,13 @@ export const memberKeysReplacedPayloadSchema = z
     })
     .strict()
 
-export const profileUpdatedPayloadSchema = z.object({ displayName: z.string().min(1) }).strict()
+const profileUpdatedPayloadSchema = z.object({ displayName: z.string().min(1) }).strict()
 
-export const receiptDeliveredPayloadSchema = z
+const receiptDeliveredPayloadSchema = z
     .object({ ids: z.array(uuidSchema).min(1).max(MAX_RECEIPT_IDS) })
     .strict()
 
-export const invitationPartEntrySchema = z
+const invitationPartEntrySchema = z
     .object({
         partId: uuidSchema,
         index: wholeNumber,
@@ -189,7 +189,7 @@ export const invitationPartEntrySchema = z
     })
     .strict()
 
-export const invitationPayloadSchema = z
+const invitationPayloadSchema = z
     .object({
         invitationId: uuidSchema,
         minProtocolVersion: z.number().int().positive(),
@@ -208,23 +208,23 @@ export const invitationPayloadSchema = z
             ctx.addIssue({ code: 'custom', message: 'part sizes do not add up to snapshotSize' })
     })
 
-export const invitationPartPayloadSchema = z
+const invitationPartPayloadSchema = z
     .object({ invitationId: uuidSchema, partId: uuidSchema })
     .strict()
 
 /** `reaction.set` (section 7.13, FR-233): the last change of a person wins for each emoji. */
-export const reactionSetPayloadSchema = z
+const reactionSetPayloadSchema = z
     .object({ messageId: docId, emoji: reactionEmojiSchema, on: z.boolean() })
     .strict()
 
 /** `member.limits.set` (section 7.14, FR-268): the file size limit of the sender; the newest event wins. */
-export const memberLimitsSetPayloadSchema = z
+const memberLimitsSetPayloadSchema = z
     .object({
         maxFileMb: z.number().int().min(FILE_SIZE_LIMIT_MB.min).max(FILE_SIZE_LIMIT_MB.max)
     })
     .strict()
 
-export const attachmentPartEntrySchema = z
+const attachmentPartEntrySchema = z
     .object({
         partId: uuidSchema,
         index: wholeNumber,
@@ -232,14 +232,12 @@ export const attachmentPartEntrySchema = z
         sha256: sha256HexSchema
     })
     .strict()
-export type AttachmentPartEntry = z.infer<typeof attachmentPartEntrySchema>
-
 /**
  * `message.attachments` (section 7.15, FR-261): the files of an own message, sent right after its `message.sent`.
  * The bytes follow in `attachment.part` events (an app without attachment support checks every `message.part` against the images of
  * `message.sent`, so attachment parts have their own type).
  */
-export const messageAttachmentsPayloadSchema = z
+const messageAttachmentsPayloadSchema = z
     .object({
         messageId: docId,
         attachments: z
@@ -272,9 +270,7 @@ export const messageAttachmentsPayloadSchema = z
     })
 export type MessageAttachmentsPayload = z.infer<typeof messageAttachmentsPayloadSchema>
 
-export const attachmentPartPayloadSchema = z
-    .object({ messageId: docId, partId: uuidSchema })
-    .strict()
+const attachmentPartPayloadSchema = z.object({ messageId: docId, partId: uuidSchema }).strict()
 
 // --- Envelope (section 5) ---------------------------------------------------------------------------------------
 
@@ -312,7 +308,7 @@ export const PART_EVENT_TYPES: readonly EventType[] = [
 export type EventPayload<T extends EventType> = z.infer<(typeof PAYLOAD_SCHEMAS)[T]>
 
 /** Fields common to all envelopes, before the type-specific payload is checked. */
-export const envelopeBaseSchema = z
+const envelopeBaseSchema = z
     .object({
         protocolVersion: z.number().int().positive(),
         eventId: uuidSchema,

@@ -17,10 +17,10 @@ const isoUtc = z
 const id = z.string().min(1)
 
 /** Lamport clock (FR-152): a whole number from 0. */
-export const clockSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+const clockSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 
 /** Clock and participant of the last change of a last-writer-wins value (FR-153). */
-export const changeStampSchema = z.object({ clock: clockSchema, by: id }).passthrough()
+const changeStampSchema = z.object({ clock: clockSchema, by: id }).passthrough()
 export type ChangeStamp = z.infer<typeof changeStampSchema>
 
 /** Objects use passthrough so unknown optional fields survive a load/save cycle (FR-015). */
@@ -33,9 +33,9 @@ export const manifestSchema = z
         generator: z.object({ name: z.string(), version: z.string() }).passthrough().optional()
     })
     .passthrough()
-export type Manifest = z.infer<typeof manifestSchema>
+type Manifest = z.infer<typeof manifestSchema>
 
-export const participantSchema = z
+const participantSchema = z
     .object({ participantId: id, displayName: z.string().min(1) })
     .passthrough()
 export type Participant = z.infer<typeof participantSchema>
@@ -49,7 +49,7 @@ export const reactionEmojiSchema = z.enum(REACTION_EMOJI)
  * One reaction of one person (FR-231, FR-233). `on: false` is a removed reaction: it stays, so a later merge or event
  * with an older clock cannot bring it back (last change of the person wins for each emoji, as for statuses).
  */
-export const reactionSchema = z
+const reactionSchema = z
     .object({ emoji: reactionEmojiSchema, by: id, on: z.boolean(), clock: clockSchema })
     .passthrough()
 export type Reaction = z.infer<typeof reactionSchema>
@@ -78,7 +78,7 @@ export const attachmentSchema = z
 export type Attachment = z.infer<typeof attachmentSchema>
 export const MAX_ATTACHMENTS_PER_MESSAGE = 50
 
-export const messageSchema = z
+const messageSchema = z
     .object({
         messageId: id,
         threadId: id,
@@ -99,10 +99,10 @@ export const messageSchema = z
     .passthrough()
 export type Message = z.infer<typeof messageSchema>
 
-export const threadStatusSchema = z.enum(['open', 'closed'])
+const threadStatusSchema = z.enum(['open', 'closed'])
 export type ThreadStatus = z.infer<typeof threadStatusSchema>
 
-export const threadSchema = z
+const threadSchema = z
     .object({
         threadId: id,
         parentThreadId: id.optional(),
@@ -126,9 +126,9 @@ export const threadSchema = z
 export type Thread = z.infer<typeof threadSchema>
 
 export const IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
-export const ASSET_PATH_PATTERN = /^assets\/images\/[0-9a-f]{64}\.(png|jpg|gif|webp)$/
+const ASSET_PATH_PATTERN = /^assets\/images\/[0-9a-f]{64}\.(png|jpg|gif|webp)$/
 
-export const assetSchema = z
+const assetSchema = z
     .object({
         assetId: id,
         path: z.string().regex(ASSET_PATH_PATTERN, 'invalid asset path'),

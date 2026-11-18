@@ -1,7 +1,5 @@
 import { DISCUSSION_EXTENSION } from '@shared/types/constants'
 
-export { DISCUSSION_EXTENSION }
-
 /**
  * Extracts discussion file paths from a process command line (first launch, or the `second-instance` event).
  * Windows passes the double-clicked file as a plain argument. Flags (--something) and the executable are ignored.

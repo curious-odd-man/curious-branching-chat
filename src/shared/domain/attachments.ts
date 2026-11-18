@@ -10,7 +10,7 @@ import { texts } from '../i18n'
 /** File attachments (FR-261 to FR-268a): names, warned types, icons. */
 
 /** FR-267: types that can run code. "Открыть" warns for them; nothing is blocked. Part of the app, not a setting. */
-export const RISKY_EXTENSIONS = [
+const RISKY_EXTENSIONS = [
     'exe',
     'bat',
     'cmd',

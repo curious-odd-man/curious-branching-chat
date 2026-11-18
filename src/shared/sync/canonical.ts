@@ -67,10 +67,6 @@ export function canonicalJson(value: unknown): string {
     return out.join('')
 }
 
-export function canonicalJsonBytes(value: unknown): Uint8Array {
-    return new TextEncoder().encode(canonicalJson(value))
-}
-
 /** True if the text is exactly the canonical form of what it parses to. */
 export function isCanonicalJson(text: string): boolean {
     try {

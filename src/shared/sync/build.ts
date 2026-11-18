@@ -1,6 +1,7 @@
 import type { DocumentContents, Message, Thread } from '../validation/schemas'
 import { documentClock, type DocumentEventType } from './apply'
 import type { EventPayload, EventType, MessageSentPayload } from './schemas'
+import { MAX_READ_IDS_PER_EVENT } from './schemas'
 
 /**
  * An event that this member sends, before the sync service adds envelope fields, parts, and encryption. A union over
@@ -17,7 +18,7 @@ export type OutgoingEvent<T extends EventType = EventType> = {
 export type LocalEvent = OutgoingEvent<DocumentEventType>
 
 /** `message.sent` before parts are planned: the content is inline; `parts` is filled in by the sync service. */
-export function messageSentDraft(message: Message, contents: DocumentContents): MessageSentPayload {
+function messageSentDraft(message: Message, contents: DocumentContents): MessageSentPayload {
     const assets = new Map(contents.discussion.assets.map((a) => [a.assetId, a]))
     return {
         message: {
@@ -154,22 +155,22 @@ export function eventsFromChange(
 
     const wasRead = new Set(before.readState[localId] ?? [])
     const added = (after.readState[localId] ?? []).filter((id) => !wasRead.has(id))
-    for (let i = 0; i < added.length; i += 10_000)
+    for (let i = 0; i < added.length; i += MAX_READ_IDS_PER_EVENT)
         events.push({
             type: 'readstate.added',
             clock: documentClock(after),
             createdAt: now,
-            payload: { messageIds: added.slice(i, i + 10_000) }
+            payload: { messageIds: added.slice(i, i + MAX_READ_IDS_PER_EVENT) }
         })
 
     const wasDelivered = new Set(before.delivery?.[localId] ?? [])
     const delivered = (after.delivery?.[localId] ?? []).filter((id) => !wasDelivered.has(id))
-    for (let i = 0; i < delivered.length; i += 10_000)
+    for (let i = 0; i < delivered.length; i += MAX_READ_IDS_PER_EVENT)
         events.push({
             type: 'delivery.added',
             clock: documentClock(after),
             createdAt: now,
-            payload: { messageIds: delivered.slice(i, i + 10_000) }
+            payload: { messageIds: delivered.slice(i, i + MAX_READ_IDS_PER_EVENT) }
         })
 
     const oldMember = before.sync?.members.find((m) => m.participantId === localId)

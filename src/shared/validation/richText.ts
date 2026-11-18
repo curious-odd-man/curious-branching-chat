@@ -10,7 +10,7 @@ import { z } from 'zod'
  * Changing this subset requires a schemaVersion change.
  */
 
-export const ALLOWED_LINK_PROTOCOLS = ['http:', 'https:', 'mailto:'] as const
+const ALLOWED_LINK_PROTOCOLS = ['http:', 'https:', 'mailto:'] as const
 
 const colorSchema = z
     .string()
@@ -27,7 +27,7 @@ export function isAllowedLinkHref(href: string): boolean {
 
 const linkHrefSchema = z.string().refine(isAllowedLinkHref, 'link protocol not allowed')
 
-export const markSchema = z.discriminatedUnion('type', [
+const markSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('bold') }).strict(),
     z.object({ type: z.literal('italic') }).strict(),
     z.object({ type: z.literal('underline') }).strict(),
@@ -65,24 +65,27 @@ const textNode = z
     .object({
         type: z.literal('text'),
         text: z.string().min(1),
-        marks: z.array(markSchema).optional()
+        marks: z.array(markSchema).exactOptional()
     })
     .strict()
 const hardBreak = z.object({ type: z.literal('hardBreak') }).strict()
 const image = z
     .object({
         type: z.literal('image'),
-        attrs: z.object({ assetId: z.string().min(1), alt: z.string().optional() }).strict()
+        attrs: z.object({ assetId: z.string().min(1), alt: z.string().exactOptional() }).strict()
     })
     .strict()
 
-export const richNodeSchema: z.ZodType<RichNode> = z.lazy(() =>
+const richNodeSchema: z.ZodType<RichNode> = z.lazy(() =>
     z.union([
         textNode,
         hardBreak,
         image,
         z
-            .object({ type: z.literal('paragraph'), content: z.array(richNodeSchema).optional() })
+            .object({
+                type: z.literal('paragraph'),
+                content: z.array(richNodeSchema).exactOptional()
+            })
             .strict(),
         z
             .object({
@@ -90,7 +93,7 @@ export const richNodeSchema: z.ZodType<RichNode> = z.lazy(() =>
                 attrs: z
                     .object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]) })
                     .strict(),
-                content: z.array(richNodeSchema).optional()
+                content: z.array(richNodeSchema).exactOptional()
             })
             .strict(),
         z.object({ type: z.literal('bulletList'), content: z.array(richNodeSchema) }).strict(),
@@ -103,7 +106,7 @@ export const richDocSchema: z.ZodType<RichDoc> = z
     .object({ type: z.literal('doc'), content: z.array(richNodeSchema) })
     .strict()
 
-export type TextNode = Extract<RichNode, { type: 'text' }>
+type TextNode = Extract<RichNode, { type: 'text' }>
 
 export interface TextRun {
     node: TextNode

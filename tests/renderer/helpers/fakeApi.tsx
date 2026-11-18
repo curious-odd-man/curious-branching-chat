@@ -6,7 +6,7 @@ import type { SettingsView } from '@shared/types/ipc'
 import { ApiProvider } from '../../../src/renderer/api'
 
 /** A fake of the API of the main process: every call answers `{ ok: true, data: null }` unless it is set. */
-export type FakeApi = BranchChatApi & {
+type FakeApi = BranchChatApi & {
     [K in keyof BranchChatApi]: BranchChatApi[K] extends (...args: infer A) => infer R
         ? Mock<(...args: A) => R>
         : BranchChatApi[K]

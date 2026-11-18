@@ -2,7 +2,7 @@ import type { Message, Participant } from '../validation/schemas'
 import { compareText } from '../i18n'
 
 /** State of one copy of an own message in the outbox (FR-169). */
-export type CopyState = 'pending' | 'written' | 'delivered'
+type CopyState = 'pending' | 'written' | 'delivered'
 
 /**
  * The mark of a message (D-41, FR-122, FR-169). The same rule applies to own messages and to messages of others.
@@ -16,7 +16,7 @@ export type CopyState = 'pending' | 'written' | 'delivered'
 export type MessageMarkState = 'pending' | 'written' | 'delivered' | 'read-some' | 'read-all'
 
 /** State of one member for one message. `unread` is used only in a normal discussion. */
-export type MemberMarkState = 'read' | 'delivered' | 'written' | 'pending' | 'unread'
+type MemberMarkState = 'read' | 'delivered' | 'written' | 'pending' | 'unread'
 
 export interface MessageMark {
     state: MessageMarkState

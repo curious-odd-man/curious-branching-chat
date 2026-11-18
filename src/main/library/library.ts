@@ -348,12 +348,12 @@ export class LibraryService {
 }
 
 /** The ZIP entry of an attachment's bytes (schema version 3). */
-export function attachmentEntry(sha256: string): string {
+function attachmentEntry(sha256: string): string {
     return `attachments/${sha256}`
 }
 
 /** Each attachment of the discussion once (by hash, FR-266). */
-export function attachmentsOf(contents: DocumentContents): Attachment[] {
+function attachmentsOf(contents: DocumentContents): Attachment[] {
     const out = new Map<string, Attachment>()
     for (const t of contents.discussion.threads)
         for (const m of t.messages)
@@ -361,7 +361,7 @@ export function attachmentsOf(contents: DocumentContents): Attachment[] {
     return [...out.values()]
 }
 
-export function withoutSync(contents: DocumentContents): DocumentContents {
+function withoutSync(contents: DocumentContents): DocumentContents {
     const { sync: _sync, delivery: _delivery, ...plain } = contents
     return plain
 }

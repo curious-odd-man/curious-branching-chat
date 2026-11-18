@@ -95,6 +95,7 @@ export function ReactionBar({
                     ☺+
                 </button>
                 {open && (
+                    // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions -- arrow keys move between the emoji buttons
                     <div
                         ref={pickerRef}
                         className="reaction-picker"

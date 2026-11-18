@@ -3,7 +3,8 @@ import {
     eventsFromChange,
     withLocalDisplayName,
     type LoadingMessage,
-    type NewMemberKeys
+    type NewMemberKeys,
+    STABLE_FILE_SECONDS
 } from '@shared/sync'
 import type { DocumentContents, Message, RosterMember } from '@shared/validation'
 import type { DocumentSession } from '../application/documentSession'
@@ -16,6 +17,7 @@ import { groupFingerprint } from '../crypto/identity'
 import type { DiscussionStore, LibraryService } from '../library'
 import type { RegistryEntry, SyncRegistry } from './registry'
 import { SyncState, conversationDir } from './syncState'
+import { SCAN_AFTER_STABLE_MS, SCAN_INTERVAL_MS } from '../constants'
 
 export interface SyncServiceDeps {
     userData: string
@@ -92,7 +94,7 @@ export class SyncService {
     async start(): Promise<void> {
         for (const entry of this.deps.registry.list())
             await this.open(entry).catch((err) => this.fail(entry, err))
-        const every = this.deps.scanIntervalMs ?? 5 * 60_000
+        const every = this.deps.scanIntervalMs ?? SCAN_INTERVAL_MS
         this.interval = setInterval(() => void this.scanAll(), every)
         this.interval.unref?.()
         // D-29, D-34: retry rule and cleanup every 30 minutes (and at each start, in ConversationSync.start)
@@ -205,7 +207,7 @@ export class SyncService {
     /** A watch event: scan after the stable time, and once more for files that were still growing. */
     private scanSoon(conv: Conversation): void {
         if (conv.timer) return
-        const wait = (this.deps.stableMs ?? 2000) + 500
+        const wait = (this.deps.stableMs ?? STABLE_FILE_SECONDS * 1000) + SCAN_AFTER_STABLE_MS
         conv.timer = setTimeout(() => {
             conv.timer = null
             void this.scan(conv.entry.conversationId).then(() => {

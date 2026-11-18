@@ -76,7 +76,7 @@ export function readStateAfterBranch(
     return markMessageRead(d, rs, localId, sourceMessageId)
 }
 
-export interface UnreadCounts {
+interface UnreadCounts {
     own: number
     /** Unread messages in descendant branches (drives the indicator on ancestors, FR-113). */
     descendants: number
@@ -110,7 +110,7 @@ export function unreadSummary(d: DiscussionData, rs: ReadState, localId: string)
     return { byThread, total }
 }
 
-export type ReadStatus = 'none' | 'some' | 'all' | 'no-others'
+type ReadStatus = 'none' | 'some' | 'all' | 'no-others'
 
 export interface WhoHasRead {
     state: ReadStatus

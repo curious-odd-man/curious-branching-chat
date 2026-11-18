@@ -494,7 +494,7 @@ export class DocumentSession implements DiscussionOwner {
     }
 }
 
-export function describeSaveError(err: unknown): string {
+function describeSaveError(err: unknown): string {
     if (err instanceof DocumentError) return describeError(err.code)
     if (err instanceof DomainError) return describeError(err.code)
     if (err instanceof LibraryError && err.code === 'CONFLICT') return describeError('CONFLICT')

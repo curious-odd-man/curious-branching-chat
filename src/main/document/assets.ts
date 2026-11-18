@@ -19,7 +19,7 @@ const EXTENSIONS: Record<AssetInfo['mediaType'], string> = {
 }
 
 /** Identifies the image type from its first bytes. Only PNG, JPEG, GIF and WebP are accepted (FR-116). */
-export function sniffImageType(data: Buffer): AssetInfo['mediaType'] | null {
+function sniffImageType(data: Buffer): AssetInfo['mediaType'] | null {
     if (
         data.length >= 8 &&
         data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
@@ -40,7 +40,7 @@ export function sniffImageType(data: Buffer): AssetInfo['mediaType'] | null {
     return null
 }
 
-export function sha256Hex(data: Buffer): string {
+function sha256Hex(data: Buffer): string {
     return createHash('sha256').update(data).digest('hex')
 }
 

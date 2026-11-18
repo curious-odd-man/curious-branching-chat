@@ -2,7 +2,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import yazl from 'yazl'
-import { randomUUID } from 'node:crypto'
 import { appendMessage, createBranch, type Author, type DomainContext } from '@shared/domain'
 import type { DocumentContents, RichDoc, RichNode } from '@shared/types'
 import { newDocumentContents } from '../../src/main/document/factory'
@@ -143,5 +142,3 @@ export function patchName(buf: Buffer, from: string, to: string): Buffer {
         Buffer.from(to).copy(out, i)
     return out
 }
-
-export const uuid = (): string => randomUUID()

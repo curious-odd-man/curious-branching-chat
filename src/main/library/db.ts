@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
  * small, so the main process is blocked only briefly.
  */
 
-export type SqlValue = string | number | bigint | null | Uint8Array
+type SqlValue = string | number | bigint | null | Uint8Array
 export type Row = Record<string, SqlValue>
 
 export interface Statement {

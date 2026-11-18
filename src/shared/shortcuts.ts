@@ -88,7 +88,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
     { id: 'close', group: 'dialogs', keys: ['Esc'] }
 ]
 
-export function shortcut(id: ShortcutId): Shortcut {
+function shortcut(id: ShortcutId): Shortcut {
     const found = SHORTCUTS.find((s) => s.id === id)
     if (!found) throw new Error(`unknown shortcut ${id}`)
     return found

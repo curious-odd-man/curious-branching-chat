@@ -1,4 +1,4 @@
-import type { Texts } from './index'
+import type { Texts } from './texts'
 
 const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many)
 

@@ -265,7 +265,7 @@ export interface AssociationInfo {
 }
 
 /** Result of the folder test (design 12.3, step 5). */
-export type FolderTestView =
+type FolderTestView =
     { ok: true } | { ok: false; step: 'root' | 'write' | 'read' | 'delete'; code: string }
 
 export interface SharedFolderChoice {
@@ -353,7 +353,7 @@ export interface DocumentView {
     syncStatus: SyncStatusView | null
 }
 
-export type CopyStateView = 'pending' | 'written' | 'delivered'
+type CopyStateView = 'pending' | 'written' | 'delivered'
 
 export interface SyncStatusView {
     folder: 'ok' | 'missing' | 'no-permission'
@@ -382,7 +382,7 @@ export interface DocumentStatus {
 export type IpcResult<T> =
     { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 
-export type OpenStatus = 'opened' | 'focused' | 'cancelled' | 'failed'
+type OpenStatus = 'opened' | 'focused' | 'cancelled' | 'failed'
 export interface OpenOutcome {
     status: OpenStatus
     /** Set when status is 'failed'. The user has already been told (dialog); this is for the caller. */
@@ -422,7 +422,7 @@ export interface UpdateInfoView {
     hasReleasePage: boolean
 }
 
-export type UpdatePhase =
+type UpdatePhase =
     'idle' | 'checking' | 'up-to-date' | 'available' | 'downloading' | 'ready' | 'error'
 
 export interface UpdateView {

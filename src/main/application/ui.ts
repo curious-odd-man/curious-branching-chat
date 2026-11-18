@@ -2,7 +2,7 @@ import { app, dialog, type BrowserWindow, type MessageBoxOptions } from 'electro
 import { join } from 'node:path'
 import { texts } from '@shared/i18n'
 
-export interface CloseProblems {
+interface CloseProblems {
     unsentDraft: boolean
     saveFailed: boolean
 }

@@ -86,14 +86,6 @@ export function touch(ctx: DomainContext, d: DiscussionData): DiscussionData {
     return { ...d, updatedAt: ctx.now() }
 }
 
-export function setDiscussionTitle(
-    ctx: DomainContext,
-    d: DiscussionData,
-    title: string
-): DiscussionData {
-    return touch(ctx, { ...d, title })
-}
-
 /** Registers an embedded asset. Assets are identified by their SHA-256, so identical images are stored once. */
 export interface NewAsset {
     path: string

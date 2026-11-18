@@ -8,7 +8,7 @@ import { schemaVersionOf } from './schema'
 import { blobHashesOf, toRollbackJournal } from './db'
 
 /** Backups kept in each place (FR-207). */
-export const BACKUPS_KEPT = 7
+const BACKUPS_KEPT = 7
 export const APP_BACKUP_DIR = 'backups'
 /** The sub-folder in the folder that the person chose. */
 export const FOLDER_BACKUP_DIR = 'BranchChat backups'

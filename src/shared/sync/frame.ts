@@ -6,8 +6,8 @@
 
 import { MAX_ENVELOPE_BYTES } from './schemas'
 
-export const FRAME_MAGIC = new Uint8Array([0x42, 0x43, 0x45, 0x31]) // "BCE1"
-export const SIGNATURE_BYTES = 64
+const FRAME_MAGIC = new Uint8Array([0x42, 0x43, 0x45, 0x31]) // "BCE1"
+const SIGNATURE_BYTES = 64
 
 /** Context strings that are prefixed (with one zero byte) to signed data (sections 4 and 6). */
 export const SIGN_CONTEXT = {

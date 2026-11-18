@@ -9,6 +9,7 @@ import { MAX_ATTACHMENTS_PER_MESSAGE, type Attachment, type Message } from '@sha
 import type { LibraryService } from '../library'
 import { AppError } from './errors'
 import type { Ui } from './ui'
+import { OPENED_COPY_MAX_AGE_MS } from '../constants'
 
 /**
  * File attachments in the main process (FR-261 to FR-267): files are stored in the library when they are attached
@@ -58,7 +59,7 @@ const TYPES: Record<string, string> = {
     mov: 'video/quicktime'
 }
 
-export function typeOf(name: string): string {
+function typeOf(name: string): string {
     return TYPES[extensionOf(name)] ?? ''
 }
 
@@ -199,7 +200,7 @@ export class AttachmentService {
         for (const name of await fs.readdir(this.deps.openDir).catch(() => [] as string[])) {
             const dir = join(this.deps.openDir, name)
             const stat = await fs.stat(dir).catch(() => null)
-            if (stat && now - stat.mtimeMs > 7 * 24 * 60 * 60_000)
+            if (stat && now - stat.mtimeMs > OPENED_COPY_MAX_AGE_MS)
                 await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined)
         }
     }

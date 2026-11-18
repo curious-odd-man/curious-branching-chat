@@ -123,6 +123,7 @@ export function BranchMap({
                         const own = unread.byThread.get(t.threadId)?.own ?? 0
                         const current = t.threadId === currentThreadId
                         return (
+                            // eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the keys are handled by the tree (roving focus, onKeyDown of the list)
                             <li
                                 key={t.threadId}
                                 ref={(el) => {

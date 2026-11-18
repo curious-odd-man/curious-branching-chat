@@ -51,7 +51,7 @@ const settingsSchema = z
     .passthrough()
 type Settings = z.infer<typeof settingsSchema>
 
-export const DEFAULT_RECENT_FILES_LIMIT = 10
+const DEFAULT_RECENT_FILES_LIMIT = 10
 
 function clampLimit(mb: number | undefined): number {
     if (mb === undefined || !Number.isInteger(mb)) return FILE_SIZE_LIMIT_MB.default

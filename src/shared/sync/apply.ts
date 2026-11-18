@@ -43,19 +43,6 @@ export type DocumentEventType =
     | 'reaction.set'
     | 'message.attachments'
 
-export const DOCUMENT_EVENT_TYPES: readonly DocumentEventType[] = [
-    'reaction.set',
-    'message.attachments',
-    'message.sent',
-    'branch.created',
-    'branch.status.set',
-    'branch.title.set',
-    'readstate.added',
-    'delivery.added',
-    'member.added',
-    'profile.updated'
-]
-
 export type ApplyResult =
     | {
           status: 'applied'
@@ -77,7 +64,7 @@ const EXTENSIONS: Record<AssetInfo['mediaType'], string> = {
     'image/webp': 'webp'
 }
 
-export function assetPath(assetId: string, mediaType: AssetInfo['mediaType']): string {
+function assetPath(assetId: string, mediaType: AssetInfo['mediaType']): string {
     return `assets/images/${assetId}.${EXTENSIONS[mediaType]}`
 }
 
@@ -89,11 +76,6 @@ export function documentClock(contents: DocumentContents): number {
         if (c > max) max = c
     }
     return max
-}
-
-/** Clock for the next local change in a synchronized discussion (sync-protocol.md section 8). */
-export function nextDocumentClock(contents: DocumentContents): number {
-    return documentClock(contents) + 1
 }
 
 function nameClockOf(member: RosterMember): number {

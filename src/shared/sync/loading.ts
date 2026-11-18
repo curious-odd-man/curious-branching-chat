@@ -5,7 +5,7 @@ import { PART_SIZE, type MessageSentPayload, type PartEntry } from './schemas'
  * A message whose header has arrived but some parts have not (D-30, D-37). It lives in the local sync state, not in
  * the discussion file, until all parts are present.
  */
-export interface LoadingImage {
+interface LoadingImage {
     assetId: string
     partsTotal: number
     partsReceived: number

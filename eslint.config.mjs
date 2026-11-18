@@ -1,4 +1,5 @@
 import js from '@eslint/js'
+import jsxA11y from 'eslint-plugin-jsx-a11y-x'
 import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 
@@ -71,6 +72,16 @@ export default tseslint.config(
         rules: {
             'react-hooks/rules-of-hooks': 'error',
             'react-hooks/exhaustive-deps': 'error'
+        }
+    },
+    // accessibility of the JSX (code review T-3, NFR-003, NFR-206)
+    {
+        files: ['src/renderer/**/*.tsx'],
+        plugins: { 'jsx-a11y-x': jsxA11y },
+        rules: {
+            ...jsxA11y.configs.recommended.rules,
+            // Dialogs put the focus inside on open (WAI-ARIA dialog pattern), so Escape and Tab work at once.
+            'jsx-a11y-x/no-autofocus': 'off'
         }
     },
     {

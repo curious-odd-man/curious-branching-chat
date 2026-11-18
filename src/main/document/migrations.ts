@@ -45,11 +45,11 @@ export function migrate1to2(raw: RawDocument): RawDocument {
 
 /** migrations[n] upgrades a document from schema version n to n + 1. Version 1 is the first version. */
 /** Version 2 -> 3: reactions and attachments are new optional fields; the data does not change. */
-export function migrate2to3(raw: RawDocument): RawDocument {
+function migrate2to3(raw: RawDocument): RawDocument {
     return raw
 }
 
-export const migrations: Record<number, (raw: RawDocument) => RawDocument> = {
+const migrations: Record<number, (raw: RawDocument) => RawDocument> = {
     1: migrate1to2,
     2: migrate2to3
 }

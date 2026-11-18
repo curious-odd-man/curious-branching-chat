@@ -17,7 +17,7 @@ export const publicKeySchema = z.string().regex(/^[A-Za-z0-9+/]{43}=$/, 'invalid
 /** 32 upper-case hex characters (sync-protocol.md section 4.1). */
 export const fingerprintSchema = z.string().regex(/^[0-9A-F]{32}$/, 'invalid fingerprint')
 
-export const previousKeySchema = z
+const previousKeySchema = z
     .object({
         signingPublicKey: publicKeySchema,
         encryptionPublicKey: publicKeySchema,
@@ -25,8 +25,6 @@ export const previousKeySchema = z
         replacedAt: isoUtc
     })
     .passthrough()
-export type PreviousKey = z.infer<typeof previousKeySchema>
-
 export const rosterMemberSchema = z
     .object({
         participantId: z.string().min(1),

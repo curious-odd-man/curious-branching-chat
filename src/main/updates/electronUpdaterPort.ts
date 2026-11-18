@@ -1,5 +1,4 @@
 import { CancellationToken, NsisUpdater, type UpdateInfo } from 'electron-updater'
-import { app } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { parseFeedRepo, releasePageUrl } from './feedRepo'
@@ -112,5 +111,3 @@ export class ElectronUpdaterPort implements UpdaterPort {
         return this.repo ? releasePageUrl(this.repo, version) : null
     }
 }
-
-export const isPackagedApp = (): boolean => app.isPackaged
