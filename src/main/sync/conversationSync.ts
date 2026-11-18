@@ -1,177 +1,47 @@
 import {
-    INCOMPLETE_FILE_GRACE_MINUTES,
-    MAX_RECEIPT_IDS,
-    STABLE_FILE_SECONDS,
     SYNC_PROTOCOL_VERSION,
-    applyAll,
     documentClock,
     normalizeSynced,
-    addOwnDelivery,
-    missingOwnDelivery,
     withReplacedKeys,
     type NewMemberKeys,
-    isComplete,
     loadingMessage,
     partRanges,
-    type Envelope,
-    type EventType,
     type LoadingMessage,
     type LocalEvent,
-    type OutgoingEvent,
-    type MessageSentPayload,
-    type MessageAttachmentsPayload,
-    type VerifiedEvent,
     FILE_SIZE_LIMIT_MB
 } from '@shared/sync'
-import {
-    compareMessages,
-    type DocumentContents,
-    type Message,
-    type RichDoc,
-    type RosterMember
-} from '@shared/validation'
-import { openEvent, sealEvent, sha256Hex, type OpenedEvent } from '../crypto/envelope'
+import type { DocumentContents, RichDoc, RosterMember } from '@shared/validation'
+import { sha256Hex } from '../crypto/envelope'
 import { fromB64 } from '../crypto/identity'
-import { PartsError, joinContent, joinImage, planMessageParts } from '../crypto/parts'
-import type { FolderTransport, SharedEntry, SharedFolder } from '../transport/folderTransport'
-import type { OutboxItem, OutboxKind, SyncState } from './syncState'
+import { joinContent } from '../crypto/parts'
+import type { SharedFolder } from '../transport/folderTransport'
+import type { OutboxItem, SyncState } from './syncState'
+import {
+    type ConversationSyncDeps,
+    type SyncHealth,
+    type CopyState,
+    type MessageDelivery,
+    type MaintenanceReport,
+    type ScanReport,
+    EXTENSION
+} from './syncTypes'
+import { SyncCore } from './syncCore'
 
-/** What the sync service needs from the discussion: the open window's session, or the file (design section 10). */
-export interface DocumentPort {
-    read(): Promise<DocumentContents>
-    /**
-     * Applies a change in the same write queue as local changes. `images` are image bytes to write into the file
-     * (assets that the change registers). Returning null means "no change".
-     */
-    update(
-        change: (contents: DocumentContents) => {
-            contents: DocumentContents
-            images: Array<{ assetId: string; data: Uint8Array }>
-        } | null
-    ): Promise<void>
-    /** Bytes of an image of the discussion (for sending it as parts). */
-    imageBytes(assetId: string): Promise<Uint8Array | null>
-    /** Bytes of an attachment (by hash), for sending it as parts. */
-    blobBytes?(sha256: string): Promise<Uint8Array | null>
-    /** True if the bytes of an attachment are here. */
-    hasBlob?(sha256: string): Promise<boolean>
-    /** Stores the checked bytes of an attachment of another member. */
-    storeBlob?(sha256: string, data: Uint8Array, type: string): Promise<void>
-}
-
-export interface OwnKeys {
-    sign(data: Uint8Array): Promise<Uint8Array>
-    open(sealed: Uint8Array): Promise<Uint8Array | null>
-}
-
-export interface ConversationSyncDeps {
-    conversationId: string
-    ownId: string
-    transport: FolderTransport
-    state: SyncState
-    keys: OwnKeys
-    document: DocumentPort
-    now: () => string
-    newId: () => string
-    maxFileBytes: () => number
-    appVersion: string
-    /** Wait before a file counts as stable (sync-protocol.md 9.6); 0 in tests. */
-    stableMs?: number
-    /** Called when the loading messages or the sync status change (for the window). */
-    onChange?: () => void
-    /**
-     * Messages of other members that a scan added to the discussion (complete, with all parts), in the order of
-     * the discussion (D-33, D-38). Not called for the history of an invitation.
-     */
-    onNewMessages?: (messages: Message[], contents: DocumentContents) => void
-    /** Bytes of attachments of others arrived (the window shows them). */
-    onAttachments?: () => void
-    log?: (message: string) => void
-}
-
-/** Folder state for the status line (D-35, FR-172). */
-export type FolderHealth = 'ok' | 'missing' | 'no-permission'
-
-export interface SyncHealth {
-    folder: FolderHealth
-    /** Files in the own inbox that could not be used (damaged, not from a member, too large). */
-    quarantined: number
-    /** Files that need a newer version of the application (sync-protocol.md section 10). */
-    needsUpdate: boolean
-    /** D-32: new keys of other members that wait for this member's decision (or that it rejected). */
-    keyRequests: Array<{
-        participantId: string
-        fingerprint: string
-        state: 'pending' | 'rejected'
-    }>
-    /** D-32: after a re-invitation, the members from whom nothing opened yet (null: not re-invited). */
-    rejoinHeardFrom: string[] | null
-    lastScanAt: string | null
-}
-
-export type CopyState = 'pending' | 'written' | 'delivered'
-
-/** Delivery of one own message (D-09, FR-169): per recipient and for all recipients together. */
-export interface MessageDelivery {
-    state: CopyState
-    members: Record<string, CopyState>
-}
-
-/** The retry rule and age-based cleanup (D-29, D-34). */
-export const RETRY_INTERVAL_MS = 30 * 60_000
-export const RECEIPT_MAX_AGE_MS = 7 * 24 * 60 * 60_000
-export const UNCONFIRMED_MAX_AGE_MS = 30 * 24 * 60 * 60_000
-
-export interface MaintenanceReport {
-    rewritten: number
-    receiptsDeleted: number
-    abandoned: number
-}
-
-export interface ScanReport {
-    applied: number
-    receipts: number
-    held: number
-    quarantined: number
-    needsUpdate: number
-}
-
-const EXTENSION: Record<OutboxKind, string> = {
-    event: 'bcmsg',
-    part: 'bcpart',
-    receipt: 'bcrcpt',
-    invitation: 'bcinv',
-    'invitation.part': 'bcpart'
-}
-
-const DOCUMENT_TYPES = new Set<EventType>([
-    'reaction.set',
-    'message.attachments',
-    'message.sent',
-    'branch.created',
-    'branch.status.set',
-    'branch.title.set',
-    'readstate.added',
-    'delivery.added',
-    'member.added',
-    'profile.updated'
-])
+export * from './syncTypes'
 
 /**
  * Sync of one conversation (design sections 13 to 18, sync-protocol.md section 9): outbox, inbox processing,
- * receipts, cleanup. One operation at a time; the state is saved after each operation.
+ * receipts, cleanup. One operation at a time; the state is saved after each operation. The work is done by the units
+ * of `SyncCore` (sending, inbox reading, event processing, attachment loading); this class keeps the order of
+ * operations and the public interface.
  */
 export class ConversationSync {
     private chain: Promise<unknown> = Promise.resolve()
-    /** First sight of a file: size, time, and when it was seen (sync-protocol.md 9.6). */
-    private seen = new Map<string, { size: number; mtimeMs: number; at: number }>()
-    private readonly stableMs: number
-    private folder: FolderHealth = 'ok'
-    /** IDs of messages of others that the running scan applied (for notifications). */
-    private arrived = new Set<string>()
+
+    private readonly core: SyncCore
 
     constructor(private readonly deps: ConversationSyncDeps) {
-        this.stableMs = deps.stableMs ?? STABLE_FILE_SECONDS * 1000
+        this.core = new SyncCore(deps)
     }
 
     private get state(): SyncState {
@@ -179,7 +49,7 @@ export class ConversationSync {
     }
 
     private inbox(participantId: string): SharedFolder {
-        return { kind: 'inbox', participantId }
+        return this.core.inbox(participantId)
     }
 
     private serial<T>(fn: () => Promise<T>): Promise<T> {
@@ -193,10 +63,10 @@ export class ConversationSync {
         return this.serial(async () => {
             await this.deps.transport.cleanStaging()
             await this.deps.transport.ensureLayout(this.deps.conversationId, this.deps.ownId)
-            await this.flushUnlocked()
-            await this.deliverUnlocked()
-            await this.maintainUnlocked()
-            await this.announceLimitsUnlocked()
+            await this.core.sender.flushUnlocked()
+            await this.core.sender.deliverUnlocked()
+            await this.core.sender.maintainUnlocked()
+            await this.core.sender.announceLimitsUnlocked()
             await this.state.save()
         })
     }
@@ -204,45 +74,9 @@ export class ConversationSync {
     /** FR-268: tells the other members the own file size limit (after a change of the setting). */
     announceLimits(): Promise<void> {
         return this.serial(async () => {
-            await this.announceLimitsUnlocked()
+            await this.core.sender.announceLimitsUnlocked()
             await this.state.save()
         })
-    }
-
-    private ownLimitMb(): number {
-        const mb = Math.round(this.deps.maxFileBytes() / (1024 * 1024))
-        return Math.min(FILE_SIZE_LIMIT_MB.max, Math.max(FILE_SIZE_LIMIT_MB.min, mb))
-    }
-
-    /**
-     * FR-268: each other member learns the own limit with `member.limits.set`: after a change, after joining, and for
-     * a new member. A member that has not got a value counts with the default (30 MB), so the default is not sent:
-     * a discussion where nobody changed the setting gets no new event type (older versions ask for an update).
-     */
-    private async announceLimitsUnlocked(): Promise<void> {
-        const s = this.state.data
-        const contents = await this.deps.document.read()
-        const mb = this.ownLimitMb()
-        const targets = (contents.sync?.members ?? [])
-            .map((m) => m.participantId)
-            .filter(
-                (id) =>
-                    id !== this.deps.ownId &&
-                    (s.limitsSent[id] ?? FILE_SIZE_LIMIT_MB.default) !== mb
-            )
-        if (targets.length === 0) return
-        await this.enqueue(
-            {
-                type: 'member.limits.set',
-                payload: { maxFileMb: mb },
-                clock: documentClock(contents),
-                createdAt: this.deps.now()
-            },
-            targets
-        )
-        for (const id of targets) this.state.limitSent(id, mb)
-        await this.state.save()
-        await this.flushUnlocked()
     }
 
     /**
@@ -264,38 +98,6 @@ export class ConversationSync {
         return out
     }
 
-    /**
-     * D-41: every message of another author that is in the own copy counts as received by this member; the other
-     * members learn it from `delivery.added`. Covers new messages, the history of an invitation, and recovery.
-     * The event is stored (and the state saved) before the document changes: after a crash between the two steps,
-     * the next scan sends the same IDs again, which does no harm.
-     */
-    private async deliverUnlocked(): Promise<void> {
-        const contents = await this.deps.document.read()
-        const missing = missingOwnDelivery(contents, this.deps.ownId)
-        if (missing.length === 0) return
-        const recipients = (contents.sync?.members ?? [])
-            .map((m) => m.participantId)
-            .filter((id) => id !== this.deps.ownId)
-        for (let i = 0; i < missing.length; i += 10_000)
-            await this.enqueue(
-                {
-                    type: 'delivery.added',
-                    payload: { messageIds: missing.slice(i, i + 10_000) },
-                    clock: documentClock(contents),
-                    createdAt: this.deps.now()
-                },
-                recipients
-            )
-        await this.state.save()
-        await this.deps.document.update((c) => {
-            const next = addOwnDelivery(c, this.deps.ownId, missing)
-            return next === c ? null : { contents: next, images: [] }
-        })
-        await this.flushUnlocked()
-        await this.state.save()
-    }
-
     // --- outgoing ---------------------------------------------------------------------------------------------
 
     /**
@@ -307,160 +109,11 @@ export class ConversationSync {
             const recipients = (after.sync?.members ?? [])
                 .map((m) => m.participantId)
                 .filter((id) => id !== this.deps.ownId)
-            for (const e of events) await this.enqueue(e, recipients)
+            for (const e of events) await this.core.sender.enqueue(e, recipients)
             await this.state.save()
-            await this.flushUnlocked()
+            await this.core.sender.flushUnlocked()
             await this.state.save()
         })
-    }
-
-    private envelope(
-        type: EventType,
-        recipientId: string,
-        eventId: string,
-        senderSeq: number,
-        clock: number,
-        createdAt: string,
-        payload: unknown,
-        payloadSha256?: string
-    ): Envelope {
-        return {
-            protocolVersion: SYNC_PROTOCOL_VERSION,
-            eventId,
-            type,
-            conversationId: this.deps.conversationId,
-            senderId: this.deps.ownId,
-            recipientId,
-            senderSeq,
-            clock,
-            createdAt,
-            payload,
-            ...(payloadSha256 ? { payloadSha256 } : {})
-        } as Envelope
-    }
-
-    private async enqueue(e: OutgoingEvent, recipients: readonly string[]): Promise<void> {
-        if (recipients.length === 0) return
-        const eventId = this.deps.newId()
-        let payload: unknown = e.payload
-        const parts: Array<{ partId: string; sha256: string; file: string }> = []
-        if (e.type === 'message.sent') {
-            const draft = e.payload
-            const bytes = new Map<string, Uint8Array>()
-            for (const image of draft.images) {
-                const data = await this.deps.document.imageBytes(image.assetId)
-                if (!data) throw new Error(`image ${image.assetId} is not available`)
-                bytes.set(image.assetId, data)
-            }
-            const planned = planMessageParts(draft, bytes, this.deps.newId)
-            payload = planned.payload
-            for (const p of planned.parts) {
-                parts.push({
-                    partId: p.entry.partId,
-                    sha256: p.entry.sha256,
-                    file: await this.state.storeOutPart(p.entry.partId, p.data)
-                })
-            }
-        }
-        // FR-261: the files of a message travel as `attachment.part` events (as images do as `message.part`)
-        const attachmentParts: Array<{ partId: string; sha256: string; file: string }> = []
-        if (e.type === 'message.attachments') {
-            const draft = e.payload
-            const attachments: MessageAttachmentsPayload['attachments'] = []
-            for (const a of draft.attachments) {
-                const data =
-                    a.size === 0 ? new Uint8Array() : await this.deps.document.blobBytes?.(a.sha256)
-                if (!data || data.length !== a.size)
-                    throw new Error(`attachment ${a.sha256} is not available`)
-                const entries: MessageAttachmentsPayload['attachments'][number]['parts'] = []
-                for (const r of a.size === 0 ? [] : partRanges(a.size)) {
-                    const bytes = data.subarray(r.start, r.end)
-                    const partId = this.deps.newId()
-                    const sha256 = sha256Hex(bytes)
-                    entries.push({ partId, index: r.index, size: bytes.length, sha256 })
-                    attachmentParts.push({
-                        partId,
-                        sha256,
-                        file: await this.state.storeOutPart(partId, bytes)
-                    })
-                }
-                attachments.push({ ...a, parts: entries })
-            }
-            payload = { messageId: draft.messageId, attachments }
-        }
-        const seq = this.state.nextSenderSeq()
-        const messageId =
-            e.type === 'message.sent'
-                ? e.payload.message.messageId
-                : e.type === 'message.attachments'
-                  ? e.payload.messageId
-                  : undefined
-        for (const r of recipients)
-            this.state.queue({
-                id: eventId,
-                kind: 'event',
-                recipientId: r,
-                fileName: `${eventId}.${EXTENSION.event}`,
-                envelope: this.envelope(e.type, r, eventId, seq, e.clock, e.createdAt, payload),
-                ...(messageId ? { messageId } : {}),
-                writtenAt: null,
-                deliveredAt: null,
-                lastWriteAt: null
-            })
-        // parts are written after their header, so a reader usually knows the message before its parts
-        for (const p of parts) {
-            const partSeq = this.state.nextSenderSeq()
-            const partEventId = this.deps.newId()
-            for (const r of recipients)
-                this.state.queue({
-                    id: p.partId,
-                    kind: 'part',
-                    recipientId: r,
-                    fileName: `${p.partId}.${EXTENSION.part}`,
-                    envelope: this.envelope(
-                        'message.part',
-                        r,
-                        partEventId,
-                        partSeq,
-                        e.clock,
-                        e.createdAt,
-                        { messageId, partId: p.partId },
-                        p.sha256
-                    ),
-                    payloadFile: p.file,
-                    ...(messageId ? { messageId } : {}),
-                    writtenAt: null,
-                    deliveredAt: null,
-                    lastWriteAt: null
-                })
-        }
-        // attachment parts do not count for the delivery mark of the message: a member with a smaller limit gets
-        // the message but not the file (FR-268a)
-        for (const p of attachmentParts) {
-            const partSeq = this.state.nextSenderSeq()
-            const partEventId = this.deps.newId()
-            for (const r of recipients)
-                this.state.queue({
-                    id: p.partId,
-                    kind: 'part',
-                    recipientId: r,
-                    fileName: `${p.partId}.${EXTENSION.part}`,
-                    envelope: this.envelope(
-                        'attachment.part',
-                        r,
-                        partEventId,
-                        partSeq,
-                        e.clock,
-                        e.createdAt,
-                        { messageId, partId: p.partId },
-                        p.sha256
-                    ),
-                    payloadFile: p.file,
-                    writtenAt: null,
-                    deliveredAt: null,
-                    lastWriteAt: null
-                })
-        }
     }
 
     /**
@@ -485,7 +138,7 @@ export class ConversationSync {
                 .filter((id) => id !== this.deps.ownId)
             const createdAt = this.deps.now()
             for (const m of fresh)
-                await this.enqueue(
+                await this.core.sender.enqueue(
                     {
                         type: 'member.added',
                         payload: { member: { ...m, addedBy: this.deps.ownId } },
@@ -518,8 +171,8 @@ export class ConversationSync {
                 after = next
                 return { contents: next, images: [] }
             })
-            await this.flushUnlocked()
-            await this.announceLimitsUnlocked()
+            await this.core.sender.flushUnlocked()
+            await this.core.sender.announceLimitsUnlocked()
             await this.state.save()
             this.deps.onChange?.()
             return after
@@ -541,7 +194,7 @@ export class ConversationSync {
                 .map((m) => m.participantId)
                 .filter((id) => id !== this.deps.ownId && id !== participantId)
             const createdAt = this.deps.now()
-            await this.enqueue(
+            await this.core.sender.enqueue(
                 {
                     type: 'member.keys.replaced',
                     payload: { participantId, ...keys },
@@ -552,7 +205,7 @@ export class ConversationSync {
             )
             await this.state.save()
             const after = await this.useKeys(participantId, keys, createdAt)
-            await this.flushUnlocked()
+            await this.core.sender.flushUnlocked()
             await this.state.save()
             this.deps.onChange?.()
             return after
@@ -578,9 +231,9 @@ export class ConversationSync {
             if (!item.writtenAt || item.deliveredAt || item.abandonedAt) continue
             // the person cannot open the copy sealed with the old key: write it again with the new one
             try {
-                await this.writeItem(item, key)
+                await this.core.sender.writeItem(item, key)
             } catch (err) {
-                this.noteWriteError(err)
+                this.core.sender.noteWriteError(err)
             }
         }
         return after ?? (await this.deps.document.read())
@@ -669,7 +322,7 @@ export class ConversationSync {
                 kind: 'invitation',
                 recipientId,
                 fileName: `${invitationId}.${EXTENSION.invitation}`,
-                envelope: this.envelope(
+                envelope: this.core.sender.envelope(
                     'invitation',
                     recipientId,
                     invitationId,
@@ -702,7 +355,7 @@ export class ConversationSync {
                     kind: 'invitation.part',
                     recipientId,
                     fileName: `${p.partId}.${EXTENSION['invitation.part']}`,
-                    envelope: this.envelope(
+                    envelope: this.core.sender.envelope(
                         'invitation.part',
                         recipientId,
                         this.deps.newId(),
@@ -720,7 +373,7 @@ export class ConversationSync {
                 })
             }
             await this.state.save()
-            await this.flushUnlocked()
+            await this.core.sender.flushUnlocked()
             await this.state.save()
             return invitationId
         })
@@ -745,7 +398,7 @@ export class ConversationSync {
         inboxId: string = this.deps.ownId
     ): Promise<void> {
         return this.serial(async () => {
-            await this.sendReceipts(new Map([[inviterId, new Set(ids)]]))
+            await this.core.sender.sendReceipts(new Map([[inviterId, new Set(ids)]]))
             for (const name of fileNames) {
                 const r = await this.deps.transport.delete(this.inbox(inboxId), name)
                 // a file left in another inbox (a re-invitation) is not this inbox's business
@@ -758,37 +411,9 @@ export class ConversationSync {
     /** Writes every copy that is not written yet. A failed write is retried at the next flush with the same ID. */
     flush(): Promise<void> {
         return this.serial(async () => {
-            await this.flushUnlocked()
+            await this.core.sender.flushUnlocked()
             await this.state.save()
         })
-    }
-
-    private async flushUnlocked(): Promise<void> {
-        const contents = await this.deps.document.read()
-        const keyOf = new Map(
-            (contents.sync?.members ?? []).map((m) => [
-                m.participantId,
-                fromB64(m.encryptionPublicKey)
-            ])
-        )
-        for (const item of this.state.data.outbox) {
-            if (item.writtenAt) continue
-            const key = keyOf.get(item.memberId ?? item.recipientId)
-            if (!key) continue
-            try {
-                await this.writeItem(item, key)
-            } catch (err) {
-                this.noteWriteError(err)
-                this.deps.log?.(`write of ${item.fileName} failed: ${(err as Error).message}`)
-            }
-        }
-    }
-
-    /** A write that the folder refused: no permission, or the folder is gone (D-35). */
-    private noteWriteError(err: unknown): void {
-        const code = (err as NodeJS.ErrnoException).code
-        if (code === 'EACCES' || code === 'EPERM') this.folder = 'no-permission'
-        else if (code === 'ENOENT' || code === 'ROOT_MISSING') this.folder = 'missing'
     }
 
     /**
@@ -800,718 +425,18 @@ export class ConversationSync {
      */
     maintain(): Promise<MaintenanceReport> {
         return this.serial(async () => {
-            const r = await this.maintainUnlocked()
+            const r = await this.core.sender.maintainUnlocked()
             await this.state.save()
             this.deps.onChange?.()
             return r
         })
     }
 
-    private async maintainUnlocked(): Promise<MaintenanceReport> {
-        const report: MaintenanceReport = { rewritten: 0, receiptsDeleted: 0, abandoned: 0 }
-        const s = this.state.data
-        const nowMs = Date.parse(this.deps.now())
-        const contents = await this.deps.document.read()
-        const keyOf = new Map(
-            (contents.sync?.members ?? []).map((m) => [
-                m.participantId,
-                fromB64(m.encryptionPublicKey)
-            ])
-        )
-        for (const item of s.outbox) {
-            if (!item.writtenAt || item.deliveredAt || item.abandonedAt) continue
-            if (nowMs - Date.parse(item.writtenAt) >= UNCONFIRMED_MAX_AGE_MS) {
-                const r = await this.deps.transport.delete(
-                    this.inbox(item.recipientId),
-                    item.fileName
-                )
-                if (r === 'failed') continue // try again at the next maintenance
-                item.abandonedAt = this.deps.now()
-                report.abandoned++
-                continue
-            }
-            const activity = s.peers[item.memberId ?? item.recipientId]?.lastActivityAt
-            const lastWrite = item.lastWriteAt ?? item.writtenAt
-            if (!activity || Date.parse(activity) <= Date.parse(lastWrite)) continue
-            const key = keyOf.get(item.memberId ?? item.recipientId)
-            if (!key) continue
-            try {
-                await this.writeItem(item, key)
-                report.rewritten++
-            } catch (err) {
-                this.noteWriteError(err)
-            }
-        }
-        await this.dropDeliveredParts()
-
-        const keep: typeof s.ownReceipts = []
-        for (const r of s.ownReceipts) {
-            if (nowMs - Date.parse(r.writtenAt) < RECEIPT_MAX_AGE_MS) {
-                keep.push(r)
-                continue
-            }
-            const result = await this.deps.transport.delete(this.inbox(r.recipientId), r.fileName)
-            if (result === 'failed') keep.push(r)
-            else report.receiptsDeleted++
-        }
-        this.state.setOwnReceipts(keep)
-        return report
-    }
-
-    private async writeItem(item: OutboxItem, recipientKey: Uint8Array): Promise<void> {
-        let payload: Uint8Array = new Uint8Array()
-        if (item.payloadFile) {
-            const data = await this.state.readOutPart(item.payloadFile)
-            if (!data) throw new Error('part bytes are missing')
-            payload = data
-        }
-        const sealed = await sealEvent(
-            item.envelope,
-            payload,
-            (d) => this.deps.keys.sign(d),
-            recipientKey
-        )
-        await this.deps.transport.publish(this.inbox(item.recipientId), item.fileName, sealed)
-        this.state.written(item, this.deps.now())
-        if (this.folder !== 'ok') this.folder = 'ok'
-    }
-
     // --- incoming ---------------------------------------------------------------------------------------------
 
     /** Reads the own inbox once (design section 15). Watch events and timers only call this. */
     scan(): Promise<ScanReport> {
-        return this.serial(() => this.scanUnlocked())
-    }
-
-    private async scanUnlocked(): Promise<ScanReport> {
-        const report: ScanReport = {
-            applied: 0,
-            receipts: 0,
-            held: 0,
-            quarantined: 0,
-            needsUpdate: 0
-        }
-        const s = this.state.data
-        if (!(await this.deps.transport.rootExists())) {
-            // Drive for Desktop is closed, the drive letter changed, or the folder was removed (D-35)
-            this.folder = 'missing'
-            this.deps.onChange?.()
-            return report
-        }
-        if (this.folder === 'missing') this.folder = 'ok'
-        const entries = await this.deps.transport.list(this.inbox(this.deps.ownId))
-        const present = new Set(entries.map((e) => e.name))
-        // forget files that are gone (deleted by the sync product, or cleaned up)
-        this.state.forgetMissingFiles(present)
-        for (const name of [...this.seen.keys()]) if (!present.has(name)) this.seen.delete(name)
-
-        const confirm = new Map<string, Set<string>>() // senderId -> IDs for the receipt
-        const toDelete: SharedEntry[] = []
-        const nowMs = Date.parse(this.deps.now())
-
-        const limit = this.deps.maxFileBytes()
-        // headers before parts, so a part finds its attachment in the same scan
-        const ordered = [...entries].sort(
-            (a, b) => Number(a.extension === 'bcpart') - Number(b.extension === 'bcpart')
-        )
-        for (const entry of ordered) {
-            const deferred = s.deferred[entry.name]
-            if (deferred !== undefined && deferred > limit) continue // FR-268a: until the limit is raised
-            if (s.keptFiles.includes(entry.name) || s.held[entry.name]) continue
-            if (s.quarantine.some((q) => q.name === entry.name)) continue
-            if (entry.extension === 'bcinv' || entry.extension === 'bckey') continue // the join wizard reads these
-            const update = s.needsUpdate.find((n) => n.name === entry.name)
-            if (update && update.appVersion === this.deps.appVersion) continue
-            if (!this.isStable(entry, nowMs)) continue
-            await this.processFile(entry, nowMs, report, confirm, toDelete)
-        }
-
-        // events that waited for a dependency may apply now
-        report.applied += await this.drainPending(confirm, toDelete)
-        await this.completeLoading(confirm, toDelete, report)
-        await this.completeAttachments()
-
-        await this.deliverUnlocked()
-        report.receipts += await this.sendReceipts(confirm)
-        for (const entry of toDelete) {
-            const r = await this.deps.transport.delete(entry.folder, entry.name)
-            // D-19: if the sync product refuses, remember the file as processed and ignore it from now on
-            if (r === 'failed') this.state.keepFile(entry.name)
-        }
-        this.state.scanned(this.deps.now())
-        report.held = Object.keys(s.held).length
-        await this.announceLimitsUnlocked() // a new member (member.added) gets the own limit
-        await this.state.save()
-        this.deps.onChange?.()
-        await this.reportArrived()
-        return report
-    }
-
-    private noteArrived(event: VerifiedEvent): void {
-        if (event.type !== 'message.sent' || event.senderId === this.deps.ownId) return
-        this.arrived.add((event.payload as MessageSentPayload).message.messageId)
-    }
-
-    private async reportArrived(): Promise<void> {
-        if (this.arrived.size === 0) return
-        const ids = this.arrived
-        this.arrived = new Set()
-        if (!this.deps.onNewMessages) return
-        const contents = await this.deps.document.read()
-        const messages = contents.discussion.threads
-            .flatMap((t) => t.messages)
-            .filter((m) => ids.has(m.messageId) && m.authorId !== this.deps.ownId)
-            .sort(compareMessages)
-        if (messages.length > 0) this.deps.onNewMessages(messages, contents)
-    }
-
-    private isStable(entry: SharedEntry, nowMs: number): boolean {
-        if (this.stableMs === 0) return true
-        const prev = this.seen.get(entry.name)
-        if (!prev || prev.size !== entry.size || prev.mtimeMs !== entry.mtimeMs) {
-            this.seen.set(entry.name, { size: entry.size, mtimeMs: entry.mtimeMs, at: nowMs })
-            return false
-        }
-        return nowMs - prev.at >= this.stableMs
-    }
-
-    private quarantine(entry: SharedEntry, reason: string, report: ScanReport): void {
-        this.state.quarantine(entry.name, reason, this.deps.now())
-        report.quarantined++
-        this.deps.log?.(`quarantined ${entry.name}: ${reason}`)
-    }
-
-    private notOpened(entry: SharedEntry, nowMs: number, reason: string, report: ScanReport): void {
-        const s = this.state.data
-        const f = s.failures[entry.name]
-        if (!f || f.size !== entry.size || f.mtimeMs !== entry.mtimeMs) {
-            this.state.noteFailure(entry.name, {
-                size: entry.size,
-                mtimeMs: entry.mtimeMs,
-                since: this.deps.now()
-            })
-            return
-        }
-        // section 9.6: only a file that stays the same and still fails for the grace time is quarantined
-        if (
-            (reason === 'unopened' || reason === 'bad-signature') &&
-            nowMs - Date.parse(f.since) >= INCOMPLETE_FILE_GRACE_MINUTES * 60_000
-        )
-            this.quarantine(
-                entry,
-                reason === 'bad-signature' ? 'signature is not valid' : 'does not open',
-                report
-            )
-    }
-
-    private async processFile(
-        entry: SharedEntry,
-        nowMs: number,
-        report: ScanReport,
-        confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[]
-    ): Promise<void> {
-        let bytes: Uint8Array
-        try {
-            bytes = await this.deps.transport.read(
-                entry.folder,
-                entry.name,
-                this.deps.maxFileBytes()
-            )
-        } catch (err) {
-            const code = (err as { code?: string }).code
-            if (code === 'TOO_LARGE') this.quarantine(entry, 'larger than the limit', report)
-            return // otherwise: not readable right now; next scan
-        }
-        const contents = await this.deps.document.read()
-        const opened: OpenedEvent = await openEvent(bytes, {
-            open: (sealed) => this.deps.keys.open(sealed),
-            conversationId: this.deps.conversationId,
-            recipientId: this.deps.ownId,
-            signingKeysOf: (senderId) => {
-                const m = contents.sync?.members.find((x) => x.participantId === senderId)
-                if (!m || senderId === this.deps.ownId) return null
-                return [
-                    m.signingPublicKey,
-                    ...(m.previousKeys ?? []).map((k) => k.signingPublicKey)
-                ].map(fromB64)
-            }
-        })
-        if (opened.status === 'unopened') return this.notOpened(entry, nowMs, 'unopened', report)
-        // a member whose `member.added` has not arrived yet: try again later, never quarantine
-        if (opened.status === 'unknown-sender')
-            return this.notOpened(entry, nowMs, 'unknown-sender', report)
-        if (opened.status === 'invalid') {
-            // D-32: a member with new keys that this member has not accepted (yet): the file waits, and while a
-            // request exists it is never quarantined; without one, it waits for the grace time (the request can come
-            // later than the person's first files)
-            if (opened.senderId && opened.reason === 'signature is not valid') {
-                if (this.state.data.keyRequests.some((r) => r.participantId === opened.senderId))
-                    return
-                return this.notOpened(entry, nowMs, 'bad-signature', report)
-            }
-            return this.quarantine(entry, opened.reason, report)
-        }
-        this.state.clearFailure(entry.name)
-        if (opened.status === 'needs-update') {
-            this.markNeedsUpdate(entry, report)
-            return
-        }
-
-        const env = opened.envelope
-        this.state.peerSeen(env.senderId, this.deps.now())
-        // D-32: an event that opened with the new key shows that its sender accepted it
-        if (this.state.heardAfterRejoin(env.senderId)) this.deps.onChange?.()
-
-        if (env.type === 'receipt.delivered') {
-            await this.applyReceipt(env as Envelope<'receipt.delivered'>)
-            toDelete.push(entry)
-            return
-        }
-        if (env.type === 'invitation' || env.type === 'invitation.part') {
-            toDelete.push(entry) // a late copy of the invitation that this member already imported
-            return
-        }
-        // replay check (section 9.1)
-        const seqs = (this.state.data.seqs[env.senderId] ??= {})
-        const usedBy = seqs[String(env.senderSeq)]
-        if (usedBy !== undefined && usedBy !== env.eventId)
-            return this.quarantine(entry, 'sequence number used twice', report)
-        seqs[String(env.senderSeq)] = env.eventId
-
-        const isPart = env.type === 'message.part' || env.type === 'attachment.part'
-        const receiptId = isPart ? (env.payload as { partId: string }).partId : env.eventId
-        const key = isPart ? `part:${env.senderId}:${receiptId}` : `${env.senderId}:${env.eventId}`
-        if (this.state.isProcessed(key)) {
-            this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
-            return
-        }
-
-        if (env.type === 'member.keys.replaced') {
-            await this.keyRequest(env as Envelope<'member.keys.replaced'>)
-            this.state.markProcessed(key)
-            this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
-            this.deps.onChange?.()
-            return
-        }
-
-        if (env.type === 'member.limits.set') {
-            const p = env.payload as { maxFileMb: number }
-            this.state.recordPeerLimit(env.senderId, p.maxFileMb, env.senderSeq)
-            this.state.markProcessed(key)
-            this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
-            return
-        }
-
-        if (env.type === 'attachment.part') {
-            const load = this.state.data.attachmentLoads.find(
-                (l) => l.senderId === env.senderId && l.parts.some((x) => x.partId === receiptId)
-            )
-            if (!load) {
-                // the list of files has not arrived yet: the part waits in the inbox (no receipt)
-                return
-            }
-            const part = load.parts.find((x) => x.partId === receiptId)!
-            if (part.sha256 !== env.payloadSha256 || part.size !== opened.payload.length)
-                return this.quarantine(entry, 'part does not match its attachment', report)
-            if (!load.done && load.size > this.deps.maxFileBytes()) {
-                // FR-268a: larger than this member's limit; read when the limit is raised (until the sender gives up)
-                this.state.defer(entry.name, load.size)
-                return
-            }
-            this.state.undefer(entry.name)
-            if (!load.done) await this.state.storeInPart(env.senderId, receiptId, opened.payload)
-            this.state.markProcessed(key)
-            this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
-            return
-        }
-
-        if (env.type === 'message.part') {
-            await this.state.storeInPart(env.senderId, receiptId, opened.payload)
-            this.state.markProcessed(key)
-            this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
-            return
-        }
-
-        if (!DOCUMENT_TYPES.has(env.type))
-            return this.quarantine(entry, `unexpected ${env.type}`, report)
-
-        const event: VerifiedEvent = {
-            eventId: env.eventId,
-            type: env.type,
-            senderId: env.senderId,
-            clock: env.clock,
-            createdAt: env.createdAt,
-            payload: env.payload
-        }
-        this.state.hold(entry.name, { key, senderId: env.senderId, receiptId })
-
-        if (event.type === 'message.attachments') await this.noteAttachments(event)
-
-        if (
-            event.type === 'message.sent' &&
-            (event.payload as MessageSentPayload).parts.length > 0
-        ) {
-            const payload = event.payload as MessageSentPayload
-            this.state.startLoading(payload.message.messageId, {
-                eventId: event.eventId,
-                senderId: event.senderId,
-                clock: event.clock,
-                createdAt: event.createdAt,
-                payload
-            })
-            return // completeLoading applies it when all parts are present
-        }
-        this.state.addPending(event)
-    }
-
-    /** The files of a message of another member start loading (their parts may come in any order). */
-    private async noteAttachments(event: VerifiedEvent): Promise<void> {
-        const p = event.payload as MessageAttachmentsPayload
-        for (const a of p.attachments) {
-            const have = (await this.deps.document.hasBlob?.(a.sha256)) ?? false
-            this.state.addAttachmentLoad({
-                senderId: event.senderId,
-                messageId: p.messageId,
-                sha256: a.sha256,
-                size: a.size,
-                type: a.type,
-                parts: a.parts.map((x) => ({ ...x })),
-                done: have,
-                at: this.deps.now()
-            })
-        }
-    }
-
-    /** Attachments whose parts are all here: joined, checked against size and hash, and stored (FR-266). */
-    private async completeAttachments(): Promise<void> {
-        const s = this.state.data
-        let stored = false
-        for (const load of s.attachmentLoads) {
-            if (load.done) continue
-            if (!load.parts.every((p) => this.state.hasInPart(load.senderId, p.partId))) continue
-            const chunks: Uint8Array[] = []
-            for (const p of [...load.parts].sort((a, b) => a.index - b.index)) {
-                const data = await this.state.readInPart(load.senderId, p.partId)
-                if (data) chunks.push(data)
-            }
-            const data = Buffer.concat(chunks)
-            this.state.finishAttachmentLoad(load)
-            if (data.length === load.size && sha256Hex(data) === load.sha256) {
-                await this.deps.document.storeBlob?.(load.sha256, data, load.type)
-                stored = true
-            } else
-                this.deps.log?.(
-                    `attachment ${load.sha256} of ${load.messageId}: bytes do not match`
-                )
-            await this.state.dropInParts(
-                load.senderId,
-                load.parts.map((p) => p.partId)
-            )
-        }
-        // a finished load is kept for 31 days, so late copies of its parts are confirmed (D-34: 30 days)
-        const nowMs = Date.parse(this.deps.now())
-        this.state.forgetAttachmentLoads(nowMs, UNCONFIRMED_MAX_AGE_MS + 24 * 60 * 60_000)
-        if (stored) this.deps.onAttachments?.()
-    }
-
-    /** D-32: another member re-invited a person with new keys; this member decides (status line). */
-    private async keyRequest(env: Envelope<'member.keys.replaced'>): Promise<void> {
-        const p = env.payload
-        const s = this.state.data
-        if (p.participantId === this.deps.ownId || p.participantId === env.senderId) return
-        // the request is only kept while this copy has the person with other keys
-        const contents = await this.deps.document.read()
-        const member = contents.sync?.members.find((m) => m.participantId === p.participantId)
-        if (!member || member.fingerprint === p.fingerprint) return
-        const earlier = s.keyRequests.find((r) => r.participantId === p.participantId)
-        if (earlier && Date.parse(earlier.createdAt) >= Date.parse(env.createdAt)) return
-        this.state.putKeyRequest({
-            participantId: p.participantId,
-            signingPublicKey: p.signingPublicKey,
-            encryptionPublicKey: p.encryptionPublicKey,
-            fingerprint: p.fingerprint,
-            requestedBy: env.senderId,
-            createdAt: env.createdAt,
-            state: 'pending'
-        })
-    }
-
-    private markNeedsUpdate(entry: SharedEntry, report: ScanReport): void {
-        this.state.noteNeedsUpdate(entry.name, this.deps.appVersion)
-        report.needsUpdate++
-    }
-
-    private addConfirm(confirm: Map<string, Set<string>>, senderId: string, id: string): void {
-        const set = confirm.get(senderId) ?? new Set<string>()
-        set.add(id)
-        confirm.set(senderId, set)
-    }
-
-    /** Applies everything in the pending queue that can be applied now (section 9.3). */
-    private async drainPending(
-        confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[]
-    ): Promise<number> {
-        const s = this.state.data
-        if (s.pending.length === 0) return 0
-        // image bytes of complete messages that wait for a dependency are kept in the parts store
-        const stored = new Map<string, { data: Uint8Array; senderId: string }>()
-        for (const e of s.pending) {
-            if (e.type !== 'message.sent') continue
-            for (const image of (e.payload as MessageSentPayload).images) {
-                const data = await this.state.readInPart(e.senderId, imageFile(image.assetId))
-                if (data)
-                    stored.set(`${e.eventId}:${image.assetId}`, { data, senderId: e.senderId })
-            }
-        }
-        let applied = 0
-        const finished: string[] = []
-        const rejected: Array<{ key: string; reason: string }> = []
-        const usedImages: Array<{ senderId: string; assetId: string }> = []
-        await this.deps.document.update((contents) => {
-            const r = applyAll(contents, s.pending)
-            finished.push(...[...r.applied.map((a) => a.event), ...r.duplicates].map(eventKey))
-            rejected.push(...r.rejected.map((x) => ({ key: eventKey(x.event), reason: x.reason })))
-            applied = r.applied.length
-            for (const a of r.applied) this.noteArrived(a.event)
-            this.state.setPending(r.pending)
-            if (r.applied.length === 0) return null
-            const images: Array<{ assetId: string; data: Uint8Array }> = []
-            for (const a of r.applied)
-                for (const id of a.newAssetIds) {
-                    const found = stored.get(`${a.event.eventId}:${id}`)
-                    if (!found) continue
-                    images.push({ assetId: id, data: found.data })
-                    usedImages.push({ senderId: found.senderId, assetId: id })
-                }
-            return { contents: r.contents, images }
-        })
-        this.finishHeld(finished, confirm, toDelete)
-        this.rejectHeld(rejected)
-        for (const u of usedImages) await this.state.dropInParts(u.senderId, [imageFile(u.assetId)])
-        return applied
-    }
-
-    /** Held files of events that break a rule go to the local quarantine; no receipt is sent for them. */
-    private rejectHeld(rejected: ReadonlyArray<{ key: string; reason: string }>): void {
-        for (const { key, reason } of rejected) {
-            this.deps.log?.(`rejected ${key}: ${reason}`)
-            for (const [name, h] of Object.entries(this.state.data.held)) {
-                if (h.key !== key) continue
-                this.state.quarantine(name, reason, this.deps.now())
-            }
-        }
-    }
-
-    /** Releases held files of processed events: confirm them and delete them. */
-    private finishHeld(
-        keys: string[],
-        confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[]
-    ): void {
-        const done = new Set(keys)
-        for (const [name, h] of Object.entries(this.state.data.held)) {
-            if (!done.has(h.key)) continue
-            this.state.markProcessed(h.key)
-            this.addConfirm(confirm, h.senderId, h.receiptId)
-            toDelete.push({
-                folder: this.inbox(this.deps.ownId),
-                name,
-                id: h.receiptId,
-                extension: 'bcmsg',
-                size: 0,
-                mtimeMs: 0
-            })
-            this.state.release(name)
-        }
-    }
-
-    /** Messages whose parts are all present: join, check, and apply them (D-30). */
-    private async completeLoading(
-        confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[],
-        report: ScanReport
-    ): Promise<void> {
-        const s = this.state.data
-        for (const [messageId, l] of Object.entries(s.loading)) {
-            const received = this.partsOf(l.senderId, l.payload)
-            if (!isComplete(l.payload, received)) continue
-            const parts = new Map<string, Uint8Array>()
-            for (const p of l.payload.parts) {
-                const data = await this.state.readInPart(l.senderId, p.partId)
-                if (data) parts.set(p.partId, data)
-            }
-            const key = eventKey({ senderId: l.senderId, eventId: l.eventId } as VerifiedEvent)
-            let content: RichDoc
-            const images: Array<{ assetId: string; data: Uint8Array }> = []
-            try {
-                content = l.payload.message.content ?? joinContent(l.payload, parts)
-                for (const image of l.payload.images)
-                    images.push({
-                        assetId: image.assetId,
-                        data: joinImage(l.payload, image.assetId, parts)
-                    })
-            } catch (err) {
-                if (!(err instanceof PartsError)) throw err
-                this.deps.log?.(`message ${messageId}: ${err.message}`)
-                this.state.stopLoading(messageId)
-                for (const [name, h] of Object.entries(s.held))
-                    if (h.key === key) {
-                        this.state.quarantine(name, err.message, this.deps.now())
-                        report.quarantined++
-                    }
-                await this.state.dropInParts(
-                    l.senderId,
-                    l.payload.parts.map((p) => p.partId)
-                )
-                continue
-            }
-            const event: VerifiedEvent = {
-                eventId: l.eventId,
-                type: 'message.sent',
-                senderId: l.senderId,
-                clock: l.clock,
-                createdAt: l.createdAt,
-                payload: { ...l.payload, message: { ...l.payload.message, content } }
-            }
-            this.state.stopLoading(messageId)
-            await this.state.dropInParts(
-                l.senderId,
-                l.payload.parts.map((p) => p.partId)
-            )
-            await this.applyComplete(event, images, confirm, toDelete, report)
-        }
-    }
-
-    private async applyComplete(
-        event: VerifiedEvent,
-        images: Array<{ assetId: string; data: Uint8Array }>,
-        confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[],
-        report: ScanReport
-    ): Promise<void> {
-        let status = ''
-        let reason = ''
-        await this.deps.document.update((contents) => {
-            const r = applyAll(contents, [event])
-            if (r.applied.length > 0) {
-                status = 'applied'
-                this.noteArrived(event)
-                const wanted = new Set(r.applied[0]!.newAssetIds)
-                return { contents: r.contents, images: images.filter((i) => wanted.has(i.assetId)) }
-            }
-            status =
-                r.duplicates.length > 0
-                    ? 'duplicate'
-                    : r.rejected.length > 0
-                      ? 'rejected'
-                      : 'pending'
-            reason = r.rejected[0]?.reason ?? ''
-            return null
-        })
-        if (status === 'pending') {
-            // complete, but its thread (or another dependency) has not arrived: it waits like any other event, and
-            // its image bytes wait in the parts store until it is applied (drainPending)
-            this.state.addPending(event)
-            for (const i of images)
-                await this.state.storeInPart(event.senderId, imageFile(i.assetId), i.data)
-            return
-        }
-        if (status === 'rejected') {
-            this.rejectHeld([{ key: eventKey(event), reason }])
-            report.quarantined++
-            return
-        }
-        if (status === 'applied') report.applied++
-        this.finishHeld([eventKey(event)], confirm, toDelete)
-    }
-
-    private async applyReceipt(env: Envelope<'receipt.delivered'>): Promise<void> {
-        const ids = new Set(env.payload.ids)
-        const now = this.deps.now()
-        for (const item of this.state.data.outbox) {
-            if (
-                (item.memberId ?? item.recipientId) !== env.senderId ||
-                !ids.has(item.id) ||
-                item.deliveredAt
-            )
-                continue
-            this.state.delivered(item, now)
-            // D-19: the sender deletes its own files after the receipt
-            await this.deps.transport.delete(this.inbox(item.recipientId), item.fileName)
-        }
-        await this.dropDeliveredParts()
-        this.deps.onChange?.()
-    }
-
-    private async dropDeliveredParts(): Promise<void> {
-        const s = this.state.data
-        const byFile = new Map<string, boolean>()
-        for (const item of s.outbox) {
-            if (!item.payloadFile) continue
-            byFile.set(
-                item.payloadFile,
-                (byFile.get(item.payloadFile) ?? true) && item.deliveredAt !== null
-            )
-        }
-        for (const [file, allDelivered] of byFile)
-            if (allDelivered) await this.state.dropOutPart(file)
-    }
-
-    private async sendReceipts(confirm: Map<string, Set<string>>): Promise<number> {
-        if (confirm.size === 0) return 0
-        const contents = await this.deps.document.read()
-        const keyOf = new Map(
-            (contents.sync?.members ?? []).map((m) => [
-                m.participantId,
-                fromB64(m.encryptionPublicKey)
-            ])
-        )
-        let count = 0
-        for (const [senderId, idSet] of confirm) {
-            const key = keyOf.get(senderId)
-            if (!key) continue
-            const ids = [...idSet]
-            for (let i = 0; i < ids.length; i += MAX_RECEIPT_IDS) {
-                const receiptId = this.deps.newId()
-                const env = this.envelope(
-                    'receipt.delivered',
-                    senderId,
-                    receiptId,
-                    0,
-                    documentClock(contents),
-                    this.deps.now(),
-                    { ids: ids.slice(i, i + MAX_RECEIPT_IDS) }
-                )
-                const fileName = `${receiptId}.${EXTENSION.receipt}`
-                try {
-                    const sealed = await sealEvent(
-                        env,
-                        new Uint8Array(),
-                        (d) => this.deps.keys.sign(d),
-                        key
-                    )
-                    await this.deps.transport.publish(this.inbox(senderId), fileName, sealed)
-                    this.state.addOwnReceipt({
-                        recipientId: senderId,
-                        fileName,
-                        writtenAt: this.deps.now()
-                    })
-                    count++
-                } catch (err) {
-                    this.noteWriteError(err)
-                    // the sender writes the copy again later (D-29) and this member confirms it then
-                    this.deps.log?.(`receipt to ${senderId} failed: ${(err as Error).message}`)
-                }
-            }
-        }
-        return count
+        return this.serial(() => this.core.reader.scanUnlocked())
     }
 
     // --- views ------------------------------------------------------------------------------------------------
@@ -1521,7 +446,7 @@ export class ConversationSync {
         return this.serial(async () => {
             const out: LoadingMessage[] = []
             for (const l of Object.values(this.state.data.loading)) {
-                const received = this.partsOf(l.senderId, l.payload)
+                const received = this.core.events.partsOf(l.senderId, l.payload)
                 let content: RichDoc | null = l.payload.message.content ?? null
                 if (!content) {
                     const contentParts = l.payload.parts.filter((p) => p.kind === 'content')
@@ -1542,15 +467,6 @@ export class ConversationSync {
             }
             return out
         })
-    }
-
-    /** IDs of the parts of a message that this member has received from the message's sender. */
-    private partsOf(senderId: string, payload: MessageSentPayload): Set<string> {
-        return new Set(
-            payload.parts
-                .filter((p) => this.state.hasInPart(senderId, p.partId))
-                .map((p) => p.partId)
-        )
     }
 
     /**
@@ -1587,7 +503,7 @@ export class ConversationSync {
 
     health(): SyncHealth {
         return {
-            folder: this.folder,
+            folder: this.core.folder,
             quarantined: this.state.data.quarantine.length,
             needsUpdate: this.needsUpdate,
             lastScanAt: this.state.data.lastScanAt,
@@ -1605,7 +521,3 @@ export class ConversationSync {
         return this.state.data.needsUpdate.some((n) => n.appVersion === this.deps.appVersion)
     }
 }
-
-const eventKey = (e: VerifiedEvent): string => `${e.senderId}:${e.eventId}`
-/** File in the parts store for the bytes of a complete image that waits (no ':' in Windows file names). */
-const imageFile = (assetId: string): string => `image-${assetId}`
