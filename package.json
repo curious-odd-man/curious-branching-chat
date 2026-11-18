@@ -60,7 +60,7 @@
     "@tiptap/extension-document": "^3.32.2",
     "@tiptap/extension-hard-break": "^3.32.2",
     "@tiptap/extension-heading": "^3.32.2",
-    "@tiptap/extension-italic": "^3.32.2",
+    "@tiptap/extension-italic": "^3.34.0",
     "@tiptap/extension-link": "^3.32.2",
     "@tiptap/extension-list": "^3.32.2",
     "@tiptap/extension-paragraph": "^3.32.2",
