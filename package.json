@@ -55,7 +55,7 @@
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.25",
-    "@tiptap/core": "^3.32.2",
+    "@tiptap/core": "^3.34.0",
     "@tiptap/extension-bold": "^3.32.2",
     "@tiptap/extension-document": "^3.32.2",
     "@tiptap/extension-hard-break": "^3.32.2",
