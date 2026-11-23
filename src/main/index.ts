@@ -52,6 +52,7 @@ import {
     UPDATE_CHECK_INTERVAL_MS,
     UPDATE_FIRST_CHECK_MS
 } from './constants'
+import { devUserData } from './dev/devUserData'
 
 // A closed console pipe must not end the app (EPIPE from a log line).
 guardConsoleStreams()
@@ -71,6 +72,12 @@ if (__E2E_HOOKS__) {
         app.commandLine.appendSwitch('disable-renderer-backgrounding')
     }
 }
+
+// Development (`npm run dev`, not packaged): never the profile of the installed app. In development Electron takes the
+// app name from package.json ("branchchat"); Windows ignores the case of folder names, so without this the dev build
+// would use the library, keys and shared conversations of the installed BranchChat, and its single-instance lock.
+// BRANCHCHAT_USER_DATA can give another folder. A packaged build ignores both.
+if (!app.isPackaged && !__E2E_HOOKS__) app.setPath('userData', devUserData())
 
 // Windows groups the taskbar button and notifications under this ID; it matches the installer's appId.
 if (process.platform === 'win32') app.setAppUserModelId('app.branchchat.desktop')

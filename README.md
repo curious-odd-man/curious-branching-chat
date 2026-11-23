@@ -22,6 +22,11 @@ Also there: [security review](docs/02-done/security-review.md), [performance res
 | `npm run typecheck` | TypeScript for main/shared and renderer/shared                                               |
 | `npm run package`   | Build the unsigned per-user installer `dist/BranchChat-Setup.exe`                            |
 
+`npm run dev` never uses the data of the installed app: its profile (library, keys, settings, shared conversations)
+is `%APPDATA%\BranchChat-dev`. To use another folder, set `BRANCHCHAT_USER_DATA` (PowerShell:
+`$env:BRANCHCHAT_USER_DATA="D:\bc-dev"; npm run dev`). In development the app does not change the file association or
+the start with Windows; these work only in the installed app.
+
 On Linux as root, run the e2e tests with `BRANCHCHAT_NO_SANDBOX=1 xvfb-run -a npm run test:e2e`.
 
 The e2e test windows open outside the visible screen, have no taskbar button, and never take the focus, so you can
