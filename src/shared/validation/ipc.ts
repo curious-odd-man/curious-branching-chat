@@ -132,9 +132,12 @@ export const setFileSizeLimitSchema = z
     .object({ mb: z.number().int().min(FILE_SIZE_LIMIT_MB.min).max(FILE_SIZE_LIMIT_MB.max) })
     .strict()
 export const zoomChangeSchema = z.object({ direction: z.enum(['in', 'out', 'reset']) }).strict()
+export const setArchivedSchema = z
+    .object({ id: z.string().min(1).max(200), archived: z.boolean() })
+    .strict()
 export const setSidebarSchema = z
     .object({
-        hidden: z.boolean().optional(),
+        collapsed: z.boolean().optional(),
         width: z.number().int().min(180).max(480).optional(),
         sort: z.enum(['activity', 'name']).optional()
     })

@@ -12,6 +12,8 @@ export interface AppState {
     readNotice: { retry: () => void } | null
     /** FR-019: the action that waits for the name of the person. */
     askName: { run: () => void } | null
+    /** The discussion whose deletion the person is asked to confirm. */
+    deleting: string | null
     /** Each new value opens that part of the discussion screen (Ctrl+G, Ctrl+F, Ctrl+Shift+M). */
     requests: { jump: number; find: number; branchMap: number }
 }
@@ -27,6 +29,7 @@ export type AppAction =
     | { type: 'readNotice'; retry: (() => void) | null }
     | { type: 'askName'; run: (() => void) | null }
     | { type: 'request'; part: keyof AppState['requests'] }
+    | { type: 'delete'; id: string | null }
 
 export const INITIAL_APP_STATE: AppState = {
     open: new Set(),
@@ -34,6 +37,7 @@ export const INITIAL_APP_STATE: AppState = {
     migration: null,
     readNotice: null,
     askName: null,
+    deleting: null,
     requests: { jump: 0, find: 0, branchMap: 0 }
 }
 
@@ -59,6 +63,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             return { ...state, readNotice: action.retry ? { retry: action.retry } : null }
         case 'askName':
             return { ...state, askName: action.run ? { run: action.run } : null }
+        case 'delete':
+            return { ...state, deleting: action.id }
         case 'request':
             return {
                 ...state,

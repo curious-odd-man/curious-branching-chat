@@ -7,7 +7,7 @@ import { findMessage, findThread } from './discussion'
  * A participant's own messages are implicitly read and are never listed.
  */
 
-function readSet(rs: ReadState, participantId: string): Set<string> {
+export function readSet(rs: ReadState, participantId: string): Set<string> {
     return new Set(rs[participantId] ?? [])
 }
 

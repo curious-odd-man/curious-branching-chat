@@ -109,11 +109,7 @@ test('attachments: attach, send without text, save a copy, open; the draft keeps
     apps.splice(apps.indexOf(first.t), 1)
 
     const { t, win } = await start(userData)
-    await win
-        .getByTestId('discussion-item')
-        .filter({ hasText: 'Файлы' })
-        .getByTestId('discussion-open')
-        .click()
+    await win.getByTestId('sidebar-open').filter({ hasText: 'Файлы' }).click()
     await expect(win.getByTestId('draft-file')).toHaveAttribute('data-name', 'план работ.txt')
     await win.getByTestId('send').click()
     const att = win.getByTestId('attachment')

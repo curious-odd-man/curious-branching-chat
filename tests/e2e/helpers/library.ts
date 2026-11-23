@@ -15,9 +15,20 @@ export async function newDiscussion(
     win: Page,
     title = 'Обсуждение',
     name = 'Анна',
-    start: () => Promise<void> = () => win.getByTestId('launcher-new').click()
+    start?: () => Promise<void>
 ): Promise<void> {
-    await start()
+    if (start) await start()
+    else {
+        // the start screen of an empty library, else the "+" menu of the list of discussions
+        const launcher = win.getByTestId('launcher-new')
+        const add = win.getByTestId('sidebar-add')
+        await expect(launcher.or(add).first()).toBeVisible()
+        if (await launcher.isVisible()) await launcher.click()
+        else {
+            await add.first().click()
+            await win.getByTestId('menu-add-local').click()
+        }
+    }
     const namePrompt = win.getByTestId('name-input')
     const titlePrompt = win.getByTestId('new-title-input')
     await expect(namePrompt.or(titlePrompt)).toBeVisible()

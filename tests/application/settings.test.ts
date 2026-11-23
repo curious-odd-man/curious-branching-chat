@@ -44,7 +44,8 @@ describe('SettingsStore', () => {
                 backupFolder: null,
                 attachmentLimitMb: 100,
                 language: 'ru',
-                sidebar: { hidden: false, width: 260, sort: 'activity' }
+                archived: [],
+                sidebar: { collapsed: false, width: 260, sort: 'activity' }
             })
             expect(await a.setDisplayName('  Анна  ')).toEqual({
                 participantId: 'id-1',
@@ -63,7 +64,8 @@ describe('SettingsStore', () => {
                 backupFolder: null,
                 attachmentLimitMb: 100,
                 language: 'ru',
-                sidebar: { hidden: false, width: 260, sort: 'activity' }
+                archived: [],
+                sidebar: { collapsed: false, width: 260, sort: 'activity' }
             })
 
             const b = new SettingsStore(dir, () => `id-${++n}`) // e.g. next application start
@@ -85,7 +87,8 @@ describe('SettingsStore', () => {
                 backupFolder: null,
                 attachmentLimitMb: 100,
                 language: 'ru',
-                sidebar: { hidden: false, width: 260, sort: 'activity' }
+                archived: [],
+                sidebar: { collapsed: false, width: 260, sort: 'activity' }
             })
         })
     })
@@ -195,7 +198,8 @@ describe('background settings', () => {
                 backupFolder: null,
                 attachmentLimitMb: 100,
                 language: 'ru',
-                sidebar: { hidden: false, width: 260, sort: 'activity' }
+                archived: [],
+                sidebar: { collapsed: false, width: 260, sort: 'activity' }
             })
         })
     })
@@ -230,6 +234,29 @@ describe('background settings', () => {
             await s.load()
             expect(await s.takeTrayNotice()).toBe(true)
             expect(await s.takeTrayNotice()).toBe(false)
+        })
+    })
+})
+
+describe('list of discussions in the settings (2026-11-23)', () => {
+    it('archives and restores a discussion; the old "hidden" setting becomes "collapsed"', async () => {
+        await withTempDir(async (dir) => {
+            await fs.writeFile(
+                join(dir, 'settings.json'),
+                JSON.stringify({ participantId: 'p-1', sidebar: { hidden: true, width: 300 } })
+            )
+            const s = new SettingsStore(dir, () => 'unused')
+            await s.load()
+            expect(s.get().sidebar).toEqual({ collapsed: true, width: 300, sort: 'activity' })
+            expect((await s.setArchived('d1', true)).archived).toEqual(['d1'])
+            expect((await s.setArchived('d2', true)).archived).toEqual(['d1', 'd2'])
+            expect((await s.setArchived('d1', true)).archived).toEqual(['d2', 'd1'])
+            expect((await s.setArchived('d2', false)).archived).toEqual(['d1'])
+            expect((await s.setSidebar({ collapsed: false })).sidebar.collapsed).toBe(false)
+            const again = new SettingsStore(dir, () => 'unused')
+            await again.load()
+            expect(again.get().archived).toEqual(['d1'])
+            expect(again.get().sidebar.collapsed).toBe(false)
         })
     })
 })

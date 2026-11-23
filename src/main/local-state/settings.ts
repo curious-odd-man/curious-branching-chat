@@ -34,7 +34,10 @@ const settingsSchema = z
         /** FR-222, FR-223: the discussion list of the windows. */
         sidebar: z
             .object({
+                /** Earlier name of `collapsed` (the list could only be hidden then). */
                 hidden: z.boolean().optional(),
+                /** The list shows small icons only. */
+                collapsed: z.boolean().optional(),
                 width: z.number().optional(),
                 sort: z.enum(['activity', 'name']).optional()
             })
@@ -46,7 +49,9 @@ const settingsSchema = z
         /** FR-265: the largest file that can be attached, in MB. */
         attachmentLimitMb: z.number().int().optional(),
         /** FR-292: the language of the interface; absent: Russian. */
-        language: z.string().optional()
+        language: z.string().optional(),
+        /** Archived discussions: shown at the end of the list only (they keep their data and sync). */
+        archived: z.array(z.string().min(1)).optional()
     })
     .passthrough()
 type Settings = z.infer<typeof settingsSchema>
@@ -123,18 +128,28 @@ export class SettingsStore {
             backupFolder: this.data.backupFolder ?? null,
             attachmentLimitMb: clampAttachmentLimit(this.data.attachmentLimitMb),
             language: isLanguage(this.data.language) ? this.data.language : 'ru',
+            archived: [...(this.data.archived ?? [])],
             sidebar: {
-                hidden: this.data.sidebar?.hidden ?? false,
+                collapsed: this.data.sidebar?.collapsed ?? this.data.sidebar?.hidden ?? false,
                 width: Math.min(480, Math.max(180, Math.round(this.data.sidebar?.width ?? 260))),
                 sort: this.data.sidebar?.sort ?? 'activity'
             }
         }
     }
 
-    /** FR-222, FR-223: the discussion list (hidden, width, sort). */
+    /** FR-222, FR-223: the discussion list (collapsed, width, sort). */
     async setSidebar(change: Partial<SidebarSettings>): Promise<SettingsView> {
         if (!this.data) throw new Error('SettingsStore.load() has not been called')
         this.data = { ...this.data, sidebar: { ...this.get().sidebar, ...change } }
+        await this.persist()
+        return this.get()
+    }
+
+    /** Archives a discussion, or takes it out of the archive. */
+    async setArchived(id: string, archived: boolean): Promise<SettingsView> {
+        if (!this.data) throw new Error('SettingsStore.load() has not been called')
+        const rest = (this.data.archived ?? []).filter((x) => x !== id)
+        this.data = { ...this.data, archived: archived ? [...rest, id] : rest }
         await this.persist()
         return this.get()
     }

@@ -126,6 +126,16 @@ export class LibraryService {
         this.changed()
     }
 
+    /** Deletes a discussion and everything that belongs to it in the library (drafts, read marks, search index). */
+    remove(id: string): void {
+        if (this.stores.get(id)?.hasOwner)
+            throw new LibraryError('CONFLICT', 'The discussion is open.')
+        this.lib.repo.remove(id)
+        this.stores.get(id)?.invalidate()
+        this.stores.delete(id)
+        this.changed()
+    }
+
     /**
      * Gives a discussion a new ID (the copy keeps its content, without the member list): used when a synchronized
      * discussion must take the ID of a normal copy that is already in the library. Returns the new ID.

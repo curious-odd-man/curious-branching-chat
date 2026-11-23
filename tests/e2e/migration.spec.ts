@@ -177,7 +177,7 @@ test('a profile of the earlier storage: the files are offered once, imported wit
         dialog.getByTestId('migration-result').filter({ hasText: 'Планы' })
     ).toHaveAttribute('data-status', 'imported')
     await dialog.getByTestId('migration-done').click()
-    await expect(again.win.getByTestId('discussion-item')).toHaveCount(2)
+    await expect(again.win.getByTestId('sidebar-item')).toHaveCount(2)
     expect((await fs.readFile(sharedFile)).equals(before)).toBe(true) // the original is not changed
     expect(libraryList(annaData).find((d) => d.title === 'Планы')).toMatchObject({
         id: conversationId,
@@ -185,7 +185,7 @@ test('a profile of the earlier storage: the files are offered once, imported wit
     })
 
     // the image came along
-    await again.win.getByTestId('discussion-open').filter({ hasText: 'Рецепты' }).click()
+    await again.win.getByTestId('sidebar-open').filter({ hasText: 'Рецепты' }).click()
     await expect(again.win.getByTestId('message-image')).toBeVisible()
     await expect
         .poll(() =>
@@ -212,6 +212,6 @@ test('a profile of the earlier storage: the files are offered once, imported wit
     await again.t.close()
     apps.splice(apps.indexOf(again.t), 1)
     const third = await start(annaData)
-    await expect(third.win.getByTestId('launcher-new')).toBeVisible()
+    await expect(third.win.getByTestId('sidebar-item')).toHaveCount(2)
     await expect(third.win.getByTestId('migration-dialog')).toHaveCount(0)
 })

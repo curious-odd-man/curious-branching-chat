@@ -6,6 +6,9 @@ import { useApi } from './api'
 import { appReducer, INITIAL_APP_STATE, menuAction, type SimpleDialog } from './appState'
 import { useActiveThread, useFocusRequests, useZoomInput, type Navigation } from './appHooks'
 import { ErrorBanner, UpdateBanner } from './components/AppBanners'
+import { DeleteDialog } from './components/DeleteDialog'
+import type { AddKind } from './components/DiscussionSidebar'
+import { texts } from '@shared/i18n'
 import { Launcher } from './components/Launcher'
 import { NamePrompt } from './components/NamePrompt'
 import { TitlePrompt } from './components/TitlePrompt'
@@ -218,69 +221,92 @@ export function App(): React.JSX.Element {
         }
     }
 
+    const addDiscussion = (kind: AddKind): void => {
+        if (kind === 'local') startNew()
+        else if (kind === 'import') openDialog()
+        else dispatch({ type: 'wizard', mode: kind === 'shared' ? 'new' : 'join' })
+    }
+    const deleting = state.deleting ? discussions?.find((d) => d.id === state.deleting) : undefined
+
     const { wizard, requests } = state
     return (
         <div className="root" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
             <ErrorBanner error={error} onClose={() => setError(null)} />
             <UpdateBanner update={update} />
-            {view === undefined ? null : view === null ? (
+            {view === undefined || discussions === null ? null : view === null &&
+              discussions.length === 0 ? (
                 <Launcher
                     version={version}
-                    discussions={discussions ?? []}
                     onNew={startNew}
+                    onNewShared={() => addDiscussion('shared')}
+                    onJoin={() => addDiscussion('join')}
                     onImport={openDialog}
-                    onOpenDiscussion={(id) => void api.openDiscussion(id).then(report)}
                 />
             ) : (
                 <div className="layout">
                     {settings && (
                         <DiscussionSidebar
-                            discussions={discussions ?? []}
-                            currentId={view.documentId}
+                            discussions={discussions}
+                            currentId={view?.documentId ?? null}
                             settings={settings.sidebar}
+                            archived={settings.archived}
                             onChange={sidebarChange}
                             onOpen={(id) => void api.openDiscussion(id).then(report)}
                             onSearchAll={() => open('searchAll')}
                             onOpenInNewWindow={(id) =>
                                 void api.openDiscussionInNewWindow(id).then(report)
                             }
+                            onAdd={addDiscussion}
+                            onArchive={(id, archived) =>
+                                void api.setArchived(id, archived).then((r) => {
+                                    if (r.ok) setSettings(r.data)
+                                    else report(r)
+                                })
+                            }
+                            onDelete={(id) => dispatch({ type: 'delete', id })}
                         />
                     )}
-                    <DiscussionScreen
-                        // a new screen per discussion; the branch and the scroll position come back (FR-224)
-                        key={view.documentId}
-                        view={view}
-                        threadId={activeThreadId ?? ''}
-                        {...(nav?.focus && nav.threadId === activeThreadId
-                            ? { focusMessageId: nav.focus }
-                            : {})}
-                        onSelectThread={selectThread}
-                        onSend={send}
-                        onToggleReaction={toggleReaction}
-                        onAttachment={attachmentAction}
-                        receiveLimitMb={settings?.fileSizeLimitMb ?? FILE_SIZE_LIMIT_MB.default}
-                        onOpenSettings={openSettings}
-                        onMarkMessageRead={markMessageRead}
-                        onMarkThreadRead={markThreadRead}
-                        onMarkAllRead={markAllRead}
-                        onReply={reply}
-                        onSetStatus={(threadId, status) =>
-                            void api.setBranchStatus(threadId, status).then(report)
-                        }
-                        onSetTitle={(threadId, title) =>
-                            void api.setBranchTitle(threadId, title).then(report)
-                        }
-                        onRetrySave={() => void api.retrySave().then(report)}
-                        onInvite={() => dispatch({ type: 'wizard', mode: 'invite' })}
-                        jumpRequest={requests.jump}
-                        findRequest={requests.find}
-                        branchMapRequest={requests.branchMap}
-                        highlightWords={highlightWords}
-                        onHighlight={setHighlightWords}
-                        onReinvite={(target) =>
-                            dispatch({ type: 'wizard', mode: 'reinvite', target })
-                        }
-                    />
+                    {view === null ? (
+                        <main className="choose-hint" data-testid="choose-hint">
+                            <p>{texts().sidebar.choose}</p>
+                        </main>
+                    ) : (
+                        <DiscussionScreen
+                            // a new screen per discussion; the branch and the scroll position come back (FR-224)
+                            key={view.documentId}
+                            view={view}
+                            threadId={activeThreadId ?? ''}
+                            {...(nav?.focus && nav.threadId === activeThreadId
+                                ? { focusMessageId: nav.focus }
+                                : {})}
+                            onSelectThread={selectThread}
+                            onSend={send}
+                            onToggleReaction={toggleReaction}
+                            onAttachment={attachmentAction}
+                            receiveLimitMb={settings?.fileSizeLimitMb ?? FILE_SIZE_LIMIT_MB.default}
+                            onOpenSettings={openSettings}
+                            onMarkMessageRead={markMessageRead}
+                            onMarkThreadRead={markThreadRead}
+                            onMarkAllRead={markAllRead}
+                            onReply={reply}
+                            onSetStatus={(threadId, status) =>
+                                void api.setBranchStatus(threadId, status).then(report)
+                            }
+                            onSetTitle={(threadId, title) =>
+                                void api.setBranchTitle(threadId, title).then(report)
+                            }
+                            onRetrySave={() => void api.retrySave().then(report)}
+                            onInvite={() => dispatch({ type: 'wizard', mode: 'invite' })}
+                            jumpRequest={requests.jump}
+                            findRequest={requests.find}
+                            branchMapRequest={requests.branchMap}
+                            highlightWords={highlightWords}
+                            onHighlight={setHighlightWords}
+                            onReinvite={(target) =>
+                                dispatch({ type: 'wizard', mode: 'reinvite', target })
+                            }
+                        />
+                    )}
                 </div>
             )}
             {update?.dialogOpen && <UpdateDialog view={update} />}
@@ -335,6 +361,12 @@ export function App(): React.JSX.Element {
                 <MigrationDialog
                     candidates={state.migration}
                     onClose={() => dispatch({ type: 'migration', candidates: null })}
+                />
+            )}
+            {deleting && (
+                <DeleteDialog
+                    discussion={deleting}
+                    onClose={() => dispatch({ type: 'delete', id: null })}
                 />
             )}
             {state.readNotice && (

@@ -7,6 +7,7 @@ import { useApi } from '../../api'
 import { formatTimestamp } from '../../i18n/format'
 import { RosterDialog, type ReinviteTarget } from '../wizard/SharedWizard'
 import { JumpToDateDialog } from './JumpToDateDialog'
+import { StatsLine } from './StatsLine'
 
 interface Props {
     view: DocumentView
@@ -157,6 +158,7 @@ export function DiscussionHeader({
                     </button>
                 </span>
             )}
+            <StatsLine view={view} />
         </header>
     )
 }

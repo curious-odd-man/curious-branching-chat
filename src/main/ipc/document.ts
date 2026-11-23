@@ -27,6 +27,9 @@ export function registerDocumentHandlers(ctx: IpcContext): void {
         controller.openDiscussion(p.id, entry, { newWindow: true })
     )
     handle(IPC.documentExport, noPayloadSchema, (entry) => controller.exportDiscussion(entry))
+    handle(IPC.documentDelete, openDiscussionSchema, (_entry, p) =>
+        controller.deleteDiscussion(p.id)
+    )
     handle(IPC.documentGetState, noPayloadSchema, (entry) =>
         entry ? controller.viewOf(entry) : null
     )

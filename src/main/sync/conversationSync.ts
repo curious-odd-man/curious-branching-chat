@@ -52,6 +52,11 @@ export class ConversationSync {
         return this.core.inbox(participantId)
     }
 
+    /** Waits until the running operation is finished (no new one starts by itself after `stop` of the service). */
+    async idle(): Promise<void> {
+        await this.chain
+    }
+
     private serial<T>(fn: () => Promise<T>): Promise<T> {
         const next = this.chain.then(fn, fn)
         this.chain = next.catch(() => undefined)

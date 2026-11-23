@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { cleanup, launchApp, tempDir, type TestApp } from './helpers/app'
 import { simple, writeDiscussionFile } from './helpers/craft'
 
-// ADR-003: the start screen lists the discussions of the library, most recently used first; the File
-// menu and the jump list show the newest ones; the last discussion opens at startup.
+// ADR-003: the window lists the discussions of the library; the start screen is only for an empty library. The File
+// menu and the jump list show the most recently used ones; the last discussion opens at startup.
 
 const apps: TestApp[] = []
 const dirs: string[] = []
@@ -60,7 +60,7 @@ async function seed(userData: string, files: string[]): Promise<void> {
     apps.splice(apps.indexOf(t), 1)
 }
 const listed = (win: Page): Promise<string[]> =>
-    win.getByTestId('discussion-open').locator('.recent-name').allInnerTexts()
+    win.getByTestId('sidebar-open').locator('.sidebar-title').allInnerTexts()
 const menuLabels = (t: TestApp): Promise<string[]> =>
     t.app.evaluate(({ Menu }) => {
         const file = Menu.getApplicationMenu()!.items[0]!
@@ -68,24 +68,26 @@ const menuLabels = (t: TestApp): Promise<string[]> =>
         return recent.submenu!.items.map((i) => i.label || i.type)
     })
 
-test('the start screen lists the discussions, last used first, with the newest message', async () => {
+test('with discussions in the library, the window lists them all and asks to choose one (no start screen)', async () => {
     const dir = await folder('bc-recent-')
     const files = [await discussion(dir, 'Первое'), await discussion(dir, 'Второе')]
-    const userData = await profile({ openLastFileOnStartup: false })
+    const userData = await profile({ openLastFileOnStartup: false, sidebar: { sort: 'name' } })
     await seed(userData, files)
     const { win } = await start(userData)
     await expect.poll(() => listed(win)).toEqual(['Второе', 'Первое'])
-    await expect(win.getByTestId('discussion-item').first()).toContainText('1 сообщение')
+    await expect(win.getByTestId('choose-hint')).toBeVisible()
+    await expect(win.getByTestId('launcher')).toHaveCount(0)
 })
 
 test('a click in the list opens the discussion; opening one puts it on top', async () => {
     const dir = await folder('bc-recent-')
     const files = [await discussion(dir, 'Старое'), await discussion(dir, 'Новое')]
-    const userData = await profile({ openLastFileOnStartup: false })
+    const userData = await profile({ openLastFileOnStartup: false, sidebar: { sort: 'name' } })
     await seed(userData, files)
     const { t, win } = await start(userData)
     await expect.poll(() => listed(win)).toEqual(['Новое', 'Старое'])
-    await win.getByTestId('discussion-open').filter({ hasText: 'Старое' }).click()
+    await expect.poll(() => menuLabels(t)).toEqual(['Новое', 'Старое'])
+    await win.getByTestId('sidebar-open').filter({ hasText: 'Старое' }).click()
     await expect(win.getByTestId('message').filter({ hasText: 'Текст «Старое»' })).toHaveCount(1)
     await expect.poll(() => menuLabels(t)).toEqual(['Старое', 'Новое'])
 })
@@ -103,19 +105,22 @@ test('startup: the most recent discussion opens by itself (default)', async () =
     )
 })
 
-test('startup: nothing opens when the option is off or the library is empty', async () => {
+test('startup: nothing opens when the option is off; an empty library shows the start screen', async () => {
     const dir = await folder('bc-recent-')
     const off = await profile({ openLastFileOnStartup: false })
     await seed(off, [await discussion(dir, 'Есть')])
     const first = await start(off)
-    await expect(first.win.getByTestId('launcher-new')).toBeVisible()
-    await expect(first.win.getByTestId('discussion-item')).toHaveCount(1)
+    await expect(first.win.getByTestId('choose-hint')).toBeVisible()
+    await expect(first.win.getByTestId('sidebar-item')).toHaveCount(1)
+    await expect(first.win.getByTestId('composer')).toHaveCount(0)
     await first.t.close()
     apps.pop()
 
+    // the start screen offers the four ways to begin
     const empty = await start(await profile())
-    await expect(empty.win.getByTestId('launcher-new')).toBeVisible()
-    await expect(empty.win.getByTestId('discussion-list')).toHaveCount(0)
+    for (const id of ['launcher-new', 'launcher-new-shared', 'launcher-join', 'launcher-open'])
+        await expect(empty.win.getByTestId(id)).toBeVisible()
+    await expect(empty.win.getByTestId('sidebar')).toHaveCount(0)
 })
 
 test('startup: a file given on the command line wins; the last discussion is not opened as well', async () => {
@@ -154,7 +159,7 @@ test('Settings: the startup option and the number of recent discussions are save
     const userData = await profile({ openLastFileOnStartup: false })
     await seed(userData, files)
     const { t, win } = await start(userData)
-    await expect(win.getByTestId('discussion-item')).toHaveCount(4)
+    await expect(win.getByTestId('sidebar-item')).toHaveCount(4)
 
     await t.app.evaluate(({ Menu }) => {
         Menu.getApplicationMenu()!
@@ -174,7 +179,7 @@ test('Settings: the startup option and the number of recent discussions are save
     await win.getByTestId('settings-open-last').check()
     await expect.poll(async () => (await saved())['openLastFileOnStartup']).toBe(true)
 
-    // a lower number shortens the File menu; the start screen still lists every discussion
+    // a lower number shortens the File menu; the window still lists every discussion
     const limit = win.getByTestId('settings-recent-limit')
     await limit.fill('2')
     await limit.press('Enter')
@@ -195,5 +200,5 @@ test('Settings: the startup option and the number of recent discussions are save
     await limit.press('Enter')
     await expect.poll(() => menuLabels(t)).toEqual(['Список пуст'])
     await win.keyboard.press('Escape')
-    await expect(win.getByTestId('discussion-item')).toHaveCount(4)
+    await expect(win.getByTestId('sidebar-item')).toHaveCount(4)
 })

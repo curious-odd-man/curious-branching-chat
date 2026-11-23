@@ -99,7 +99,7 @@ async function threeDiscussions(): Promise<{ t: TestApp; win: Page; userData: st
 const sidebarItem = (win: Page, title: string) =>
     win.getByTestId('sidebar-item').filter({ hasText: title })
 
-test('the list in the window: unread counts, switching in place, the branch kept, filter, sort, hide (FR-221 to FR-224)', async () => {
+test('the list in the window: unread counts, switching in place, the branch kept, filter, sort, collapse (FR-221 to FR-224)', async () => {
     const { t, win, userData } = await threeDiscussions()
     await expect(win.locator('h1')).toHaveText('Гамма')
     await expect(win.getByTestId('sidebar-item')).toHaveCount(3)
@@ -126,7 +126,7 @@ test('the list in the window: unread counts, switching in place, the branch kept
     await win.getByTestId('sidebar-sort').selectOption('name')
     await expect(win.getByTestId('sidebar-item').first()).toContainText('Альфа')
 
-    // hide; the state and the width stay after a restart (FR-223)
+    // collapse to icons; the state and the width stay after a restart (FR-223)
     const handle = win.getByTestId('sidebar-resize')
     const box = (await handle.boundingBox())!
     await win.mouse.move(box.x + box.width / 2, box.y + 50)
@@ -142,10 +142,16 @@ test('the list in the window: unread counts, switching in place, the branch kept
         .toBeGreaterThan(300)
     await win.getByTestId('sidebar-hide').click()
     await expect(win.getByTestId('sidebar')).toHaveCount(0)
+    await expect(win.getByTestId('rail-item')).toHaveCount(3)
+    await expect(win.locator('[data-testid=rail-item][title="Альфа"]')).toHaveAttribute(
+        'aria-current',
+        'true'
+    )
     await t.close()
     apps.pop()
     const again = await start(userData)
-    await again.win.getByTestId('discussion-open').filter({ hasText: 'Бета' }).click()
+    await again.win.locator('[data-testid=rail-item][title="Бета"]').click()
+    await expect(again.win.locator('h1')).toHaveText('Бета')
     await expect(again.win.getByTestId('sidebar-show')).toBeVisible()
     await again.win.getByTestId('sidebar-show').click()
     await expect(again.win.getByTestId('sidebar')).toBeVisible()

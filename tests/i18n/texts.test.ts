@@ -50,7 +50,7 @@ describe('texts in Russian and English (FR-291, NFR-205)', () => {
         expect(locale()).toBe('en-GB')
         expect(describeError('NOT_FOUND')).toBe('File not found.')
         expect(describeError('NO_SUCH_CODE')).toBe('An unexpected error occurred.')
-        expect(texts().launcher.lastMessage('today', 1)).toBe('1 message, the last one today')
+        expect(texts().stats.messages(1)).toBe('Messages: 1')
         expect(texts().attachments.size(1536 * 1024)).toBe('1.5 MB')
     })
 })

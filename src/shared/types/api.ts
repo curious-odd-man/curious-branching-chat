@@ -81,6 +81,8 @@ export interface BranchChatApi {
     openAt(id: string, threadId: string, messageId: string): Promise<IpcResult<OpenOutcome>>
     /** "Открыть в новом окне" (FR-225). */
     openDiscussionInNewWindow(id: string): Promise<IpcResult<OpenOutcome>>
+    /** Deletes a discussion from this computer; a synchronized one is left (the others keep it). */
+    deleteDiscussion(id: string): Promise<IpcResult<void>>
     /** "Экспортировать…" (FR-204); false if the person cancelled. */
     exportDiscussion(): Promise<IpcResult<boolean>>
     getDocumentState(): Promise<IpcResult<DocumentView | null>>
@@ -149,6 +151,8 @@ export interface BranchChatApi {
     setTextSize(percent: number): Promise<IpcResult<SettingsView>>
     /** FR-222, FR-223: the discussion list (hidden, width, sort). */
     setSidebar(change: Partial<SidebarSettings>): Promise<IpcResult<SettingsView>>
+    /** Archives a discussion, or takes it out of the archive. */
+    setArchived(id: string, archived: boolean): Promise<IpcResult<SettingsView>>
     /** FR-301: one step of the text size (keys and Ctrl+mouse wheel in the page). */
     zoom(direction: 'in' | 'out' | 'reset'): Promise<IpcResult<null>>
     /** The message this window must show (a click on a notification), once. */

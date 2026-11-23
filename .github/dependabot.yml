@@ -7,10 +7,20 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     groups:
+      # The TipTap packages require the same version of each other (exact peer versions): one pull request for all.
+      tiptap:
+        patterns: ['@tiptap/*']
       # one pull request for the tools of the build and the tests
       dev-tools:
         dependency-type: development
         update-types: [minor, patch]
+    ignore:
+      # @types/node follows the Node of Electron (Node 24 in Electron 45): changed by hand with Electron
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # a new Electron major version is a change of its own, with the full test run
+      - dependency-name: electron
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:

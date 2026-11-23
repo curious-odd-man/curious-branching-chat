@@ -94,25 +94,26 @@ test('asks for the name once, before the first message or new discussion (FR-019
     expect(settings.participantId).toMatch(/[0-9a-f-]{36}/)
 })
 
-test('cancelling the name of a new discussion creates nothing; the start screen lists the discussions', async () => {
+test('cancelling the name of a new discussion creates nothing; the window lists the discussions', async () => {
     const { t, win } = await start()
     await createDiscussion(win, 'Первое') // sets the name
     await t.close()
     await turnOffReopenLast(t.userData) // otherwise the second start reopens the discussion just created
     const again = await start({ userData: t.userData })
-    await expect(again.win.getByTestId('discussion-item')).toHaveCount(1)
-    await expect(again.win.getByTestId('discussion-item')).toContainText('Первое')
-    await expect(again.win.getByTestId('discussion-item')).toContainText('нет сообщений')
-    await again.win.getByTestId('launcher-new').click()
+    await expect(again.win.getByTestId('sidebar-item')).toHaveCount(1)
+    await expect(again.win.getByTestId('sidebar-item')).toContainText('Первое')
+    await expect(again.win.getByTestId('sidebar-item')).toContainText('нет сообщений')
+    await again.win.getByTestId('sidebar-add').click()
+    await again.win.getByTestId('menu-add-local').click()
     await expect(again.win.getByTestId('name-input')).toHaveCount(0) // the name is known
     await again.win.getByTestId('new-title-input').press('Escape')
     await expect(again.win.getByTestId('new-title-input')).toHaveCount(0)
-    await expect(again.win.getByTestId('launcher-new')).toBeVisible()
+    await expect(again.win.getByTestId('choose-hint')).toBeVisible()
     expect(libraryList(t.userData)).toHaveLength(1)
     expect((await again.t.dialogs()).filter((d) => d.kind === 'save')).toHaveLength(0)
 
     // a click in the list opens the discussion
-    await again.win.getByTestId('discussion-open').click()
+    await again.win.getByTestId('sidebar-open').click()
     await expect(again.win.locator('h1')).toHaveText('Первое')
 })
 

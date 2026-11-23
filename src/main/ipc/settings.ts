@@ -8,6 +8,7 @@ import {
     setNameSchema,
     setOpenLastSchema,
     setRecentLimitSchema,
+    setArchivedSchema,
     setSidebarSchema,
     setTextSizeSchema
 } from '@shared/validation'
@@ -44,6 +45,11 @@ export function registerSettingsHandlers(ctx: IpcContext): void {
             ? shared.background.setFlag(p.flag, p.enabled)
             : settings.setFlag(p.flag, p.enabled)
     )
+    handle(IPC.settingsSetArchived, setArchivedSchema, async (_e, p) => {
+        const updated = await settings.setArchived(p.id, p.archived)
+        controller.broadcast(IPC.settingsChanged, updated)
+        return updated
+    })
     handle(IPC.settingsSetSidebar, setSidebarSchema, async (_e, p) => {
         // only the values that were sent (a missing value must not overwrite the stored one)
         const change = Object.fromEntries(

@@ -13,6 +13,7 @@ export const IPC = {
     documentOpenId: 'document:open-id',
     documentOpenIdNewWindow: 'document:open-id-new-window',
     documentExport: 'document:export',
+    documentDelete: 'document:delete',
     documentGetState: 'document:get-state',
     documentAppendMessage: 'document:append-message',
     documentRetrySave: 'document:retry-save',
@@ -32,6 +33,7 @@ export const IPC = {
     settingsSetFileSizeLimit: 'settings:set-file-size-limit',
     settingsSetBackgroundFlag: 'settings:set-background-flag',
     settingsSetSidebar: 'settings:set-sidebar',
+    settingsSetArchived: 'settings:set-archived',
     settingsSetTextSize: 'settings:set-text-size',
     zoomChange: 'zoom:change',
     focusTake: 'focus:take',
@@ -140,6 +142,8 @@ export interface SettingsView {
     attachmentLimitMb: number
     /** FR-292: the language of the interface (the one that runs now may differ until a restart, FR-293). */
     language: Language
+    /** IDs of the archived discussions: at the end of the list, in their own group. */
+    archived: string[]
 }
 
 /** FR-261: the result of adding files to a draft; refused files are named with the reason. */
@@ -162,7 +166,8 @@ export interface SmallLimit {
 }
 
 export interface SidebarSettings {
-    hidden: boolean
+    /** The list shows small icons only. */
+    collapsed: boolean
     /** Width in pixels (180 to 480). */
     width: number
     sort: 'activity' | 'name'

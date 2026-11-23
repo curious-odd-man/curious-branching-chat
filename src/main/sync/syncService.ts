@@ -1,3 +1,4 @@
+import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import {
     eventsFromChange,
@@ -330,6 +331,28 @@ export class SyncService {
     }
 
     /** Starts the sync of a discussion again (D-32: the own ID and keys changed with a re-invitation). */
+    /**
+     * The person deleted a synchronized discussion: this computer leaves the conversation. The sync stops, the
+     * registry forgets it, and the local sync state is removed. The files in the shared folder stay; the other
+     * members keep the discussion.
+     */
+    async leave(conversationId: string): Promise<void> {
+        await this.opening.get(conversationId)?.catch(() => undefined)
+        const conv = this.conversations.get(conversationId)
+        if (conv) {
+            this.conversations.delete(conversationId)
+            if (conv.timer) clearTimeout(conv.timer)
+            await conv.stopWatch?.()
+            if (conv.session) await this.detach(conv.session)
+            await conv.sync.idle()
+        }
+        if (this.deps.registry.get(conversationId)) await this.deps.registry.remove(conversationId)
+        await fs.rm(conversationDir(this.syncRoot, conversationId), {
+            recursive: true,
+            force: true
+        })
+    }
+
     async restart(entry: RegistryEntry): Promise<void> {
         const conv = this.conversations.get(entry.conversationId)
         if (conv) {

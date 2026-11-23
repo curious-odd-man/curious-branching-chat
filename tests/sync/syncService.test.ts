@@ -224,4 +224,24 @@ describe('sync service with document sessions and the library (design section 10
             await b.sync.stop()
         })
     })
+
+    it('leaving a discussion stops the sync here and keeps it for the other member', async () => {
+        await withTempDir(async (dir) => {
+            const { a, b } = await profiles(dir)
+            const stateDir = join(a.dir, 'sync', a.file)
+            expect((await fs.stat(stateDir)).isDirectory()).toBe(true)
+            await a.sync.leave(a.file)
+            await expect(fs.stat(stateDir)).rejects.toThrow()
+            a.lib.remove(a.file)
+            expect(a.registry.get(a.file)).toBeUndefined()
+            expect(a.sync.statusList().map((s) => s.conversationId)).not.toContain(a.file)
+            expect(a.lib.has(a.file)).toBe(false)
+            expect(b.lib.has(b.file)).toBe(true)
+            // a scan of all does not bring it back
+            await a.sync.scanAll()
+            expect(a.lib.has(a.file)).toBe(false)
+            await a.sync.stop()
+            await b.sync.stop()
+        })
+    })
 })

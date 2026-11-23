@@ -77,6 +77,8 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
             'draftsFlushed',
             'openDiscussion',
             'openDiscussionInNewWindow',
+            'deleteDiscussion',
+            'setArchived',
             'searchDiscussion',
             'searchAll',
             'openAt',

@@ -44,12 +44,18 @@ button:disabled {
 }
 .launcher {
     margin: auto;
-    max-width: 32rem;
+    max-width: 34rem;
     padding: 2rem;
     text-align: center;
 }
 .launcher .buttons {
     justify-content: center;
+}
+.launcher-actions {
+    flex-direction: column;
+    align-items: stretch;
+    max-width: 26rem;
+    margin: 1rem auto;
 }
 .hint {
     opacity: 0.7;
@@ -62,10 +68,20 @@ button:disabled {
 }
 .discussion-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: 1rem;
+    gap: 0.4rem 1rem;
     padding: 0.6rem 1rem;
     border-bottom: 1px solid var(--border);
+}
+.discussion-stats {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 1.2rem;
+    margin: 0;
+    font-size: 0.82rem;
+    color: GrayText;
 }
 .discussion-header h1 {
     margin: 0;
@@ -1166,24 +1182,163 @@ mark.quote {
 }
 .sidebar-head {
     display: flex;
-    gap: 0.3rem;
-    padding: 0.4rem;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem;
     border-bottom: 1px solid var(--border);
 }
-.sidebar-head input {
+/* the filter has its own row, so it is wide enough to read (item 4 of 2026-11-23) */
+.sidebar-filter {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 1rem;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+.sidebar-tools {
+    display: flex;
+    gap: 0.3rem;
+    align-items: center;
+}
+.sidebar-tools select {
     flex: 1;
     min-width: 0;
 }
-.sidebar-head select {
-    max-width: 6.5rem;
-}
-.sidebar-head button,
-.sidebar-show {
+.sidebar-tools button,
+.sidebar-show,
+.sidebar-add {
     padding: 0.2rem 0.5rem;
 }
-.sidebar-show {
-    align-self: flex-start;
-    margin: 0.4rem;
+.sidebar-group-toggle {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 0.5rem 0.4rem 0.2rem;
+    color: GrayText;
+    font-weight: 600;
+}
+.sidebar-item[data-archived] {
+    opacity: 0.75;
+}
+
+/* The collapsed list: one round icon per discussion. */
+.sidebar-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    flex: 0 0 auto;
+    width: 3.4rem;
+    min-height: 0;
+    padding: 0.4rem 0;
+    border-right: 1px solid var(--border);
+}
+.rail-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+}
+.rail-entry.archived {
+    opacity: 0.6;
+}
+.rail-divider {
+    width: 1.8rem;
+    border-top: 1px solid var(--border);
+    margin: 0.2rem 0;
+}
+.rail-item {
+    position: relative;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background: transparent;
+    padding: 1px;
+}
+.rail-item.current {
+    border-color: Highlight;
+}
+.rail-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+.rail-shared {
+    position: absolute;
+    left: -4px;
+    bottom: -4px;
+    font-size: 0.7rem;
+}
+.rail-unread {
+    position: absolute;
+    right: -6px;
+    top: -4px;
+    min-width: 1.1rem;
+    padding: 0 0.2rem;
+    border-radius: 0.6rem;
+    background: #c62828;
+    color: #fff;
+    font-size: 0.7rem;
+    line-height: 1.1rem;
+    text-align: center;
+}
+
+/* A menu of the page (the list of discussions). */
+.context-menu {
+    position: fixed;
+    z-index: 50;
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem 0;
+    min-width: 14rem;
+    background: Canvas;
+    color: CanvasText;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgb(0 0 0 / 22%);
+}
+.context-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 0.35rem 0.9rem;
+}
+.context-menu button:hover,
+.context-menu button:focus-visible {
+    background: var(--soft);
+}
+.context-menu button.danger {
+    color: #c62828;
+}
+.context-menu-separator {
+    border-top: 1px solid var(--border);
+    margin: 0.25rem 0;
+}
+
+/* The right side when no discussion is chosen. */
+.choose-hint {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    color: GrayText;
+    text-align: center;
 }
 .sidebar-list {
     list-style: none;
@@ -1288,7 +1443,11 @@ mark.quote {
 }
 .search-row input {
     flex: 1;
-    min-width: 0;
+    min-width: 12rem;
+    font-size: 1rem;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
 }
 .search-row button {
     padding: 0.2rem 0.6rem;

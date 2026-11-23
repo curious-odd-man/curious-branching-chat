@@ -387,6 +387,27 @@ export class AppController {
         return { status: 'opened' }
     }
 
+    /**
+     * Deletes a discussion from this computer (the person confirmed it in the window). A window that shows it shows the
+     * list of discussions then. A synchronized discussion is left first: the other members keep it.
+     */
+    async deleteDiscussion(documentId: string): Promise<void> {
+        for (const entry of this.entries.values()) {
+            const session = entry.session
+            if (session?.documentId !== documentId) continue
+            entry.session = null
+            await this.deps.sync?.detach(session)
+            await session.close()
+            this.push(entry)
+        }
+        if (this.deps.registry?.get(documentId)) await this.deps.sync?.leave(documentId)
+        this.deps.library.remove(documentId)
+        if (this.deps.settings.get().archived.includes(documentId)) {
+            const updated = await this.deps.settings.setArchived(documentId, false)
+            this.broadcast(IPC.settingsChanged, updated)
+        }
+    }
+
     /** "Экспортировать…": the discussion as a `.branchchat` file, without the member list (FR-204, FR-167). */
     async exportDiscussion(from: WindowEntry | undefined): Promise<boolean> {
         const session = from?.session

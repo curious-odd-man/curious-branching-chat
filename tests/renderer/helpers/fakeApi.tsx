@@ -78,7 +78,8 @@ export const SETTINGS: SettingsView = {
     startWithWindows: false,
     startWithWindowsSettled: true,
     textSize: 100,
-    sidebar: { hidden: false, width: 260, sort: 'activity' },
+    sidebar: { collapsed: false, width: 260, sort: 'activity' },
+    archived: [],
     backupFolder: null,
     attachmentLimitMb: 100,
     language: 'ru'

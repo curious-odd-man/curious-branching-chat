@@ -19,13 +19,13 @@ export const en: Texts = {
     },
     launcher: {
         newDiscussion: 'New discussion',
+        newShared: 'New shared discussion…',
+        joinShared: 'Join a shared discussion…',
+        empty: 'There are no discussions yet. Create a discussion on this computer, create a shared discussion, or join a shared discussion by invitation.',
         openDiscussion: 'Import file…',
         dropHint: 'Or drag a .branchchat file into this window.',
-        recentHeading: 'Discussions',
         shared: 'shared',
-        noMessages: 'no messages',
-        lastMessage: (date, count) =>
-            `${count} ${plural(count, 'message', 'messages')}, the last one ${date}`
+        noMessages: 'no messages'
     },
     migration: {
         title: 'Move discussions into the library',
@@ -136,13 +136,42 @@ export const en: Texts = {
         sort: 'Order',
         byActivity: 'Newest messages first',
         byName: 'By name',
-        hide: 'Hide the discussion list',
-        show: 'Show the discussion list',
+        hide: 'Collapse the discussion list',
+        show: 'Expand the discussion list',
+        add: 'Add a discussion',
+        menu: 'Actions of the discussion list',
+        open: 'Open',
+        archive: 'Archive',
+        restore: 'Restore from the archive',
+        remove: 'Delete…',
+        archived: 'Archive',
+        unread: (n) => `unread: ${n}`,
+        choose: 'Select a discussion in the list on the left. To add a discussion, use the "+" button or right-click the list.',
         shared: 'Shared discussion',
         draft: 'Has an unsent draft',
         newWindow: 'Open in a new window',
         nothing: 'Nothing found',
         resize: 'Width of the discussion list'
+    },
+    deleteDiscussion: {
+        title: (name) => `Delete the discussion "${name}"?`,
+        local: 'The discussion, all its branches, drafts and read marks are deleted from this computer. You cannot undo this. To keep a copy, export the discussion to a file first (File > Export…).',
+        shared: 'You leave the shared discussion: the sync stops, and the discussion is deleted from this computer. The other members keep it. Your files in the shared folder stay. To come back, you need a new invitation.',
+        confirm: 'Delete',
+        cancel: 'Cancel'
+    },
+    stats: {
+        label: 'Discussion statistics',
+        messages: (n) => `Messages: ${n}`,
+        open: (n) => `in open branches: ${n}`,
+        closed: (n) => `in closed: ${n}`,
+        read: (n) => `Read: ${n}`,
+        unread: (n) => `unread: ${n}`,
+        delivered: (n) => `Delivered: ${n}`,
+        waiting: (n) => `waiting: ${n}`,
+        loading: (n) => `loading: ${n}`,
+        text: (size) => `Text: ${size}`,
+        files: (size) => `Files: ${size}`
     },
     newDiscussion: {
         title: 'New discussion',
