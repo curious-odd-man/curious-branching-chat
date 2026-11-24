@@ -75,6 +75,8 @@ export interface SyncHealth {
     /** D-32: after a re-invitation, the members from whom nothing opened yet (null: not re-invited). */
     rejoinHeardFrom: string[] | null
     lastScanAt: string | null
+    /** D-43: members who do not pick up the own files (7 days without activity). */
+    waitingFor: WaitingMember[]
 }
 
 export type CopyState = 'pending' | 'written' | 'delivered'
@@ -87,13 +89,31 @@ export interface MessageDelivery {
 
 /** The retry rule and age-based cleanup (D-29, D-34). */
 export const RETRY_INTERVAL_MS = 30 * 60_000
+/**
+ * A receipt without the list of files it confirms (earlier versions, re-invitations) is deleted after this time, once
+ * its recipient was active after it was written (D-43).
+ */
 export const RECEIPT_MAX_AGE_MS = 7 * 24 * 60 * 60_000
+/** Attachment loads are kept this long, so late copies of their parts are still confirmed. */
 export const UNCONFIRMED_MAX_AGE_MS = 30 * 24 * 60 * 60_000
+/**
+ * D-43: a member with own files waiting for it and no activity for this time is shown in the status line; the person
+ * decides whether to delete those files. Nothing is deleted by time.
+ */
+export const INACTIVE_MEMBER_MS = 7 * 24 * 60 * 60_000
 
 export interface MaintenanceReport {
     rewritten: number
     receiptsDeleted: number
-    abandoned: number
+}
+
+/** D-43: own files that wait for a member who shows no activity (status line). */
+export interface WaitingMember {
+    participantId: string
+    /** Own files in the inbox of that member: unconfirmed copies and receipts. */
+    files: number
+    /** The last activity of the member, or the oldest waiting file if the member never showed activity. */
+    since: string
 }
 
 export interface ScanReport {

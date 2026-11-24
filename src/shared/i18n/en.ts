@@ -364,7 +364,15 @@ export const en: Texts = {
         keysReject: 'Reject',
         keysAcceptLater: 'Accept after all',
         notAccepted: (names) =>
-            `These members have not accepted your new keys yet: ${names}. Messages between you are not delivered yet. Ask them to compare the fingerprint.`
+            `These members have not accepted your new keys yet: ${names}. Messages between you are not delivered yet. Ask them to compare the fingerprint.`,
+        waiting: (name, since, files) =>
+            `No activity from ${name} since ${since}. Your files for this member in the shared folder: ${files}.`,
+        dropFiles: (name) => `Delete my files for ${name}…`,
+        dropTitle: (name) => `Delete your files for ${name}?`,
+        dropText: (name) =>
+            `Your files for ${name} that were not received yet (messages and receipts) are deleted from the shared folder. ${name} does not get these messages. The discussion does not change for you. The files of this member in your folder stay: only the member who wrote a file deletes it.`,
+        dropConfirm: 'Delete',
+        dropCancel: 'Cancel'
     },
     loadingMessage: {
         progress: (parts, total, mb, totalMb) =>

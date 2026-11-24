@@ -59,6 +59,15 @@ export interface AttachmentLoad {
     at: string
 }
 
+/** A receipt that this member wrote into the inbox of another member. */
+export interface OwnReceipt {
+    recipientId: string
+    fileName: string
+    writtenAt: string
+    /** File names in the own inbox that it confirms; absent for receipts of earlier versions (D-43). */
+    covers?: string[]
+}
+
 export interface StateData {
     version: 1
     conversationId: string
@@ -90,8 +99,11 @@ export interface StateData {
     /** Files that did not open yet (section 9.6). */
     failures: Record<string, { size: number; mtimeMs: number; since: string }>
     peers: Record<string, { lastActivityAt: string }>
-    /** Receipt files written by this member into other inboxes (cleanup after 7 days, D-34). */
-    ownReceipts: Array<{ recipientId: string; fileName: string; writtenAt: string }>
+    /**
+     * Receipt files written by this member into other inboxes. `covers`: the files in the own inbox that the receipt
+     * confirms; when all are gone, their writer has read the receipt, and it is deleted (D-43).
+     */
+    ownReceipts: OwnReceipt[]
     lastScanAt: string | null
     /** D-15, D-32: new keys of a member that another member sent; this member accepts or rejects them. */
     keyRequests: KeyRequest[]
@@ -366,7 +378,7 @@ export class SyncState {
         delete this.data.loading[messageId]
     }
 
-    addOwnReceipt(receipt: { recipientId: string; fileName: string; writtenAt: string }): void {
+    addOwnReceipt(receipt: OwnReceipt): void {
         this.data.ownReceipts.push(receipt)
     }
 

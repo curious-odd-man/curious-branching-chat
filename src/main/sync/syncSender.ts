@@ -17,9 +17,10 @@ import { fromB64 } from '../crypto/identity'
 import { planMessageParts } from '../crypto/parts'
 import type { OutboxItem } from './syncState'
 import {
+    INACTIVE_MEMBER_MS,
     RECEIPT_MAX_AGE_MS,
-    UNCONFIRMED_MAX_AGE_MS,
     type MaintenanceReport,
+    type WaitingMember,
     EXTENSION
 } from './syncTypes'
 import type { SharedFolder } from '../transport/folderTransport'
@@ -290,7 +291,7 @@ export class SyncSender {
     }
 
     async maintainUnlocked(): Promise<MaintenanceReport> {
-        const report: MaintenanceReport = { rewritten: 0, receiptsDeleted: 0, abandoned: 0 }
+        const report: MaintenanceReport = { rewritten: 0, receiptsDeleted: 0 }
         const s = this.state.data
         const nowMs = Date.parse(this.deps.now())
         const contents = await this.deps.document.read()
@@ -300,19 +301,8 @@ export class SyncSender {
                 fromB64(m.encryptionPublicKey)
             ])
         )
-        const tooOld = s.outbox.filter(
-            (item) =>
-                item.writtenAt &&
-                !item.deliveredAt &&
-                !item.abandonedAt &&
-                nowMs - Date.parse(item.writtenAt) >= UNCONFIRMED_MAX_AGE_MS
-        )
-        const abandoned = await this.deleteOwn(tooOld.map((i) => [i.recipientId, i.fileName]))
-        for (const item of tooOld) {
-            if (abandoned.get(item.fileName) === 'failed') continue // try again at the next maintenance
-            item.abandonedAt = this.deps.now()
-            report.abandoned++
-        }
+        // D-43: unconfirmed own files are not deleted by time; a member who does not pick them up is shown in the
+        // status line, and the person decides (dropFilesFor)
         for (const item of s.outbox) {
             if (!item.writtenAt || item.deliveredAt || item.abandonedAt) continue
             const activity = s.peers[item.memberId ?? item.recipientId]?.lastActivityAt
@@ -329,9 +319,17 @@ export class SyncSender {
         }
         await this.dropDeliveredParts()
 
-        const old = s.ownReceipts.filter(
-            (r) => nowMs - Date.parse(r.writtenAt) >= RECEIPT_MAX_AGE_MS
-        )
+        // receipts with `covers` are deleted when the files they confirm are gone (scan); the others after 7 days,
+        // once their recipient was active after the receipt (so it has scanned)
+        const old = s.ownReceipts.filter((r) => {
+            if (r.covers?.length) return false
+            const activity = s.peers[r.recipientId]?.lastActivityAt
+            return (
+                nowMs - Date.parse(r.writtenAt) >= RECEIPT_MAX_AGE_MS &&
+                activity !== undefined &&
+                Date.parse(activity) > Date.parse(r.writtenAt)
+            )
+        })
         const removed = await this.deleteOwn(old.map((r) => [r.recipientId, r.fileName]))
         const keep: typeof s.ownReceipts = []
         for (const r of s.ownReceipts) {
@@ -405,6 +403,84 @@ export class SyncSender {
         return result
     }
 
+    /**
+     * D-43: receipts whose confirmed files are all gone from the own inbox: their writer has read them. `present` is
+     * the list of the own inbox now.
+     */
+    async dropReadReceipts(present: ReadonlySet<string>): Promise<void> {
+        const read = this.state.data.ownReceipts.filter(
+            (r) => r.covers?.length && r.covers.every((n) => !present.has(n))
+        )
+        if (read.length === 0) return
+        const result = await this.deleteOwn(read.map((r) => [r.recipientId, r.fileName]))
+        this.state.setOwnReceipts(
+            this.state.data.ownReceipts.filter(
+                (r) => !read.includes(r) || result.get(r.fileName) === 'failed'
+            )
+        )
+    }
+
+    /** D-43: the members who have own files waiting (unconfirmed copies, receipts) and no activity for 7 days. */
+    waitingMembers(): WaitingMember[] {
+        const s = this.state.data
+        const nowMs = Date.parse(this.deps.now())
+        const byMember = new Map<string, { files: number; oldest: string }>()
+        const add = (id: string, at: string): void => {
+            const m = byMember.get(id)
+            if (!m) byMember.set(id, { files: 1, oldest: at })
+            else {
+                m.files += 1
+                if (at < m.oldest) m.oldest = at
+            }
+        }
+        for (const item of s.outbox)
+            if (item.writtenAt && !item.deliveredAt && !item.abandonedAt)
+                add(item.memberId ?? item.recipientId, item.writtenAt)
+        for (const r of s.ownReceipts) add(r.recipientId, r.writtenAt)
+        const out: WaitingMember[] = []
+        for (const [participantId, m] of byMember) {
+            const since = s.peers[participantId]?.lastActivityAt ?? m.oldest
+            if (nowMs - Date.parse(since) >= INACTIVE_MEMBER_MS)
+                out.push({ participantId, files: m.files, since })
+        }
+        return out.sort((a, b) => a.participantId.localeCompare(b.participantId))
+    }
+
+    /**
+     * D-43: the person approved: delete all own files in the inbox of a member (unconfirmed copies are given up,
+     * receipts are removed). The files of that member in the own inbox stay; only their writer deletes them.
+     */
+    async dropFilesFor(memberId: string): Promise<number> {
+        const s = this.state.data
+        const items = s.outbox.filter(
+            (i) =>
+                (i.memberId ?? i.recipientId) === memberId &&
+                i.writtenAt &&
+                !i.deliveredAt &&
+                !i.abandonedAt
+        )
+        const receipts = s.ownReceipts.filter((r) => r.recipientId === memberId)
+        const result = await this.deleteOwn([
+            ...items.map((i) => [i.recipientId, i.fileName] as const),
+            ...receipts.map((r) => [r.recipientId, r.fileName] as const)
+        ])
+        let dropped = 0
+        for (const item of items) {
+            if (result.get(item.fileName) === 'failed') continue
+            item.abandonedAt = this.deps.now()
+            dropped++
+        }
+        this.state.setOwnReceipts(
+            s.ownReceipts.filter((r) => {
+                if (r.recipientId !== memberId || result.get(r.fileName) === 'failed') return true
+                dropped++
+                return false
+            })
+        )
+        await this.dropDeliveredParts()
+        return dropped
+    }
+
     async dropDeliveredParts(): Promise<void> {
         const s = this.state.data
         const byFile = new Map<string, boolean>()
@@ -419,7 +495,14 @@ export class SyncSender {
             if (allDelivered) await this.state.dropOutPart(file)
     }
 
-    async sendReceipts(confirm: Map<string, Set<string>>): Promise<number> {
+    /**
+     * Writes receipts. `coversOf` gives the files in the own inbox that confirm an ID; the receipt records them, so it
+     * is deleted when they are gone (D-43).
+     */
+    async sendReceipts(
+        confirm: Map<string, Set<string>>,
+        coversOf: (senderId: string, id: string) => readonly string[] = () => []
+    ): Promise<number> {
         if (confirm.size === 0) return 0
         const contents = await this.deps.document.read()
         const keyOf = new Map(
@@ -453,10 +536,18 @@ export class SyncSender {
                         key
                     )
                     await this.deps.transport.publish(this.inbox(senderId), fileName, sealed)
+                    const covers = [
+                        ...new Set(
+                            ids
+                                .slice(i, i + MAX_RECEIPT_IDS)
+                                .flatMap((id) => coversOf(senderId, id))
+                        )
+                    ]
                     this.state.addOwnReceipt({
                         recipientId: senderId,
                         fileName,
-                        writtenAt: this.deps.now()
+                        writtenAt: this.deps.now(),
+                        ...(covers.length > 0 ? { covers } : {})
                     })
                     count++
                 } catch (err) {

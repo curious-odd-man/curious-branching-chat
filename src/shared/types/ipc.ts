@@ -88,6 +88,7 @@ export const IPC = {
     sharedCreate: 'shared:create',
     sharedInvite: 'shared:invite',
     sharedReinvite: 'shared:reinvite',
+    syncDropFilesFor: 'sync:drop-files-for',
     syncDecideKeys: 'sync:decide-keys',
     sharedRoster: 'shared:roster',
     joinFind: 'join:find',
@@ -376,6 +377,8 @@ export interface SyncStatusView {
     }>
     /** D-32: this member was re-invited; these members have not accepted the new keys yet (names). */
     notAccepted: string[]
+    /** D-43: members without activity for 7 days who have own files waiting; the person can delete those files. */
+    waitingFor: Array<{ participantId: string; displayName: string; files: number; since: string }>
 }
 
 /** The part of a DocumentView that changes when a save finishes. */

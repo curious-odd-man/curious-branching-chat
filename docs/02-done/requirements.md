@@ -567,8 +567,9 @@ format is in `sync-protocol.md`. The release column says in which release the re
   message details show per member: not yet received, received, or read.
 - **FR-170.** An unconfirmed copy is written again at start and every 30 minutes, but only if the recipient has shown
   activity since the last write (D-29).
-- **FR-171.** Old files in the shared folder are cleaned up: receipts after 7 days, unconfirmed own files after 30
-  days (D-19, D-34).
+- **FR-171.** Old files in the shared folder are cleaned up: a receipt when the files it confirms are gone. Nothing is
+  deleted by time: a member without activity for 7 days who has own files waiting is shown in the status line, and
+  the person can delete those own files (D-19, D-34, D-43; changed on 2026-11-24).
 - **FR-172.** Sync problems (folder missing, no permission, invalid files, an update needed, key change requests) are
   shown in a status line in the window and in the tray menu. They do not raise Windows notifications (D-35).
 

@@ -7,7 +7,8 @@ const healthy = {
     needsUpdate: false,
     lastScanAt: null,
     keyRequests: [],
-    rejoinHeardFrom: null
+    rejoinHeardFrom: null,
+    waitingFor: []
 }
 const d = (name: string, extra: Partial<TrayDiscussion> = {}): TrayDiscussion => ({
     conversationId: `c-${name}`,

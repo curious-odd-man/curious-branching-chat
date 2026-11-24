@@ -52,6 +52,8 @@ export interface BranchChatApi {
     reinviteMember(participantId: string, key: string): Promise<IpcResult<null>>
     /** D-32: accept or reject the new keys of a member (status line). */
     decideKeys(participantId: string, accept: boolean): Promise<IpcResult<null>>
+    /** D-43: deletes the own files that wait for a member without activity (the person approved). */
+    dropFilesFor(participantId: string): Promise<IpcResult<null>>
     getRoster(): Promise<IpcResult<RosterView | null>>
     findInvitation(root: string): Promise<IpcResult<InvitationView>>
     importInvitation(root: string, invitationId: string): Promise<IpcResult<boolean>>

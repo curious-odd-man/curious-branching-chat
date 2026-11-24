@@ -375,7 +375,15 @@ export const ru = {
         keysReject: 'Отклонить',
         keysAcceptLater: 'Всё-таки принять',
         notAccepted: (names: string): string =>
-            `Ещё не приняли ваши новые ключи: ${names}. Сообщения между вами пока не доставляются. Попросите их сверить отпечаток.`
+            `Ещё не приняли ваши новые ключи: ${names}. Сообщения между вами пока не доставляются. Попросите их сверить отпечаток.`,
+        waiting: (name: string, since: string, files: number): string =>
+            `От участника ${name} нет активности с ${since}. Ваших файлов для этого участника в общей папке: ${files}.`,
+        dropFiles: (name: string): string => `Удалить мои файлы для ${name}…`,
+        dropTitle: (name: string): string => `Удалить ваши файлы для ${name}?`,
+        dropText: (name: string): string =>
+            `Ваши файлы для ${name}, которые ещё не получены (сообщения и подтверждения), будут удалены из общей папки. ${name} не получит эти сообщения. Обсуждение у вас не изменится. Файлы этого участника в вашей папке останутся: их удаляет только тот, кто их записал.`,
+        dropConfirm: 'Удалить',
+        dropCancel: 'Отмена'
     },
     loadingMessage: {
         progress: (parts: number, total: number, mb: string, totalMb: string): string =>

@@ -18,6 +18,8 @@ import type { SyncCore } from './syncCore'
 export class InboxReader {
     /** First sight of a file: size, time, and when it was seen (sync-protocol.md 9.6). */
     private seen = new Map<string, { size: number; mtimeMs: number; at: number }>()
+    /** D-43: per `${senderId}\n${id}`, the files in the own inbox that the next receipt confirms. */
+    readonly covers = new Map<string, string[]>()
 
     private readonly stableMs: number
 
@@ -57,6 +59,9 @@ export class InboxReader {
         const present = new Set(entries.map((e) => e.name))
         // forget files that are gone (deleted by their writer, D-43, or by the sync product)
         this.state.forgetMissingFiles(present)
+        // D-43: a receipt is read when the files it confirms are gone (their writer deletes them after reading it)
+        await this.core.sender.dropReadReceipts(present)
+        this.covers.clear()
         for (const name of [...this.seen.keys()]) if (!present.has(name)) this.seen.delete(name)
 
         const confirm = new Map<string, Set<string>>() // senderId -> IDs for the receipt
@@ -87,7 +92,10 @@ export class InboxReader {
         await this.core.loader.completeAttachments()
 
         await this.core.sender.deliverUnlocked()
-        report.receipts += await this.core.sender.sendReceipts(confirm)
+        report.receipts += await this.core.sender.sendReceipts(
+            confirm,
+            (senderId, id) => this.covers.get(`${senderId}\n${id}`) ?? []
+        )
         // D-43: only the writer of a file deletes it. The files in the own inbox are written by the other members, so
         // they are only recorded as processed; the writer deletes each one after the receipt (or after 7 or 30 days).
         // On a My Drive folder, a delete by a member who does not own the file moves it to the owner's My Drive root.
@@ -219,7 +227,7 @@ export class InboxReader {
         const receiptId = isPart ? (env.payload as { partId: string }).partId : env.eventId
         const key = isPart ? `part:${env.senderId}:${receiptId}` : `${env.senderId}:${env.eventId}`
         if (this.state.isProcessed(key)) {
-            this.addConfirm(confirm, env.senderId, receiptId)
+            this.addConfirm(confirm, env.senderId, receiptId, entry.name)
             processedFiles.push(entry)
             return
         }
@@ -227,7 +235,7 @@ export class InboxReader {
         if (env.type === 'member.keys.replaced') {
             await this.keyRequest(env as Envelope<'member.keys.replaced'>)
             this.state.markProcessed(key)
-            this.addConfirm(confirm, env.senderId, receiptId)
+            this.addConfirm(confirm, env.senderId, receiptId, entry.name)
             processedFiles.push(entry)
             this.deps.onChange?.()
             return
@@ -237,7 +245,7 @@ export class InboxReader {
             const p = env.payload as { maxFileMb: number }
             this.state.recordPeerLimit(env.senderId, p.maxFileMb, env.senderSeq)
             this.state.markProcessed(key)
-            this.addConfirm(confirm, env.senderId, receiptId)
+            this.addConfirm(confirm, env.senderId, receiptId, entry.name)
             processedFiles.push(entry)
             return
         }
@@ -261,7 +269,7 @@ export class InboxReader {
             this.state.undefer(entry.name)
             if (!load.done) await this.state.storeInPart(env.senderId, receiptId, opened.payload)
             this.state.markProcessed(key)
-            this.addConfirm(confirm, env.senderId, receiptId)
+            this.addConfirm(confirm, env.senderId, receiptId, entry.name)
             processedFiles.push(entry)
             return
         }
@@ -269,7 +277,7 @@ export class InboxReader {
         if (env.type === 'message.part') {
             await this.state.storeInPart(env.senderId, receiptId, opened.payload)
             this.state.markProcessed(key)
-            this.addConfirm(confirm, env.senderId, receiptId)
+            this.addConfirm(confirm, env.senderId, receiptId, entry.name)
             processedFiles.push(entry)
             return
         }
@@ -333,9 +341,19 @@ export class InboxReader {
         report.needsUpdate++
     }
 
-    addConfirm(confirm: Map<string, Set<string>>, senderId: string, id: string): void {
+    /** Adds an ID to the next receipt; `fileName` is the file in the own inbox that it confirms (D-43). */
+    addConfirm(
+        confirm: Map<string, Set<string>>,
+        senderId: string,
+        id: string,
+        fileName?: string
+    ): void {
         const set = confirm.get(senderId) ?? new Set<string>()
         set.add(id)
         confirm.set(senderId, set)
+        if (fileName) {
+            const key = `${senderId}\n${id}`
+            this.covers.set(key, [...(this.covers.get(key) ?? []), fileName])
+        }
     }
 }

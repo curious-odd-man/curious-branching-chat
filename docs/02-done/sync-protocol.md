@@ -459,8 +459,14 @@ Only the writer of a file deletes it (D-43, changed on 2026-11-24).
 - The sender deletes its own event and part files after the receipt for them. It also deletes the conflict copies that
   the sync product made of them (`<id> (1).<ext>`). A second receipt for the same file (a delayed copy came back)
   deletes the file again.
-- The writer of a receipt deletes it after 7 days if it is still there.
-- Own files without a receipt are deleted after 30 days.
+- The writer of a receipt records which files in its own inbox the receipt confirms. When all of them are gone, the
+  sender has read the receipt (it deletes its files only after the receipt), and the writer deletes the receipt at its
+  next scan. A receipt without that list (an earlier version, or a re-invitation, whose files are in another inbox) is
+  deleted after 7 days, once its recipient was active after it was written.
+- Nothing else is deleted by time. When a member has own files waiting (unconfirmed copies or receipts) and shows no
+  activity for 7 days, the status line names the member. The person can then delete those own files ("Удалить мои
+  файлы для …"); the copies are given up. The files of that member in the own inbox stay: only their writer deletes
+  them.
 - Never delete or move a file outside the shared root.
 
 **Why (2026-11-24):** before, the owner of an inbox deleted each processed file in it. In a shared folder in a
@@ -473,10 +479,21 @@ encrypted, but they use the storage of the owner, and nothing removed them. The 
 seen then. A shared drive does not have this problem (the drive owns the files), but personal My Drive folders are a
 supported setup (D-19).
 
+**Why receipts are deleted when the confirmed files are gone (2026-11-24):** with the new rule, the inbox owner no
+longer removes receipts at once, so they waited 7 days in each inbox. The disappearance of the confirmed files is a
+direct sign that the receipt was read, so the folder now holds only files in transit.
+
+**Why nothing is deleted by time (2026-11-24):** the 30-day rule deleted unconfirmed own files also when the member
+only was away for a long time, without asking. The person who knows the member decides now.
+
 **Cost of the rule:**
 
-- Receipts stay in the inbox until their writer deletes them (7 days), and each file of a member who stops using the
-  app stays. The local list of processed files holds these names.
+- A receipt stays one or two scans longer than before: its writer deletes it when it sees that the confirmed files
+  are gone. If a confirmed file disappears for another reason (the sync product hides it for a moment), the receipt is
+  deleted before the sender has read it. This repairs itself: the sender writes the copy again after it sees activity
+  of the recipient (D-29), and the recipient confirms it again.
+- The files of a member who stops using the app stay, also that member's files in the own inbox. The person decides
+  about the own files (status line); the local list of processed files holds the other names.
 - A file that is deleted and comes back (a delayed copy of the sync product) before the inbox owner scans again stays
   recorded as processed and is not confirmed again, so nobody deletes it. This is rare; the file is encrypted and
   small.

@@ -33,6 +33,7 @@ const api: BranchChatApi = {
     inviteMembers: (keys) => invoke(IPC.sharedInvite, { keys }),
     reinviteMember: (participantId, key) => invoke(IPC.sharedReinvite, { participantId, key }),
     decideKeys: (participantId, accept) => invoke(IPC.syncDecideKeys, { participantId, accept }),
+    dropFilesFor: (participantId) => invoke(IPC.syncDropFilesFor, { participantId }),
     getRoster: () => invoke(IPC.sharedRoster),
     findInvitation: (root) => invoke(IPC.joinFind, { root }),
     importInvitation: (root, invitationId) => invoke(IPC.joinImport, { root, invitationId }),

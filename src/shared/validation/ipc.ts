@@ -108,6 +108,7 @@ export const sharedReinviteSchema = z
     })
     .strict()
 /** D-32: accept or reject the new keys of a member. */
+export const dropFilesForSchema = z.object({ participantId: z.string().min(1).max(200) }).strict()
 export const decideKeysSchema = z
     .object({ participantId: z.string().min(1).max(200), accept: z.boolean() })
     .strict()

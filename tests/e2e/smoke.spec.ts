@@ -102,6 +102,7 @@ test('starts, shows the Russian UI, and exposes only the narrow preload API', as
             'inviteMembers',
             'reinviteMember',
             'decideKeys',
+            'dropFilesFor',
             'takeFocusRequest',
             'onFocusRequest',
             'openReleasePage',

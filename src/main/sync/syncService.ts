@@ -281,7 +281,7 @@ export class SyncService {
         const members = session.current.sync?.members ?? []
         const nameOf = (id: string): string =>
             members.find((m) => m.participantId === id)?.displayName ?? id
-        const { keyRequests, rejoinHeardFrom, ...rest } = health
+        const { keyRequests, rejoinHeardFrom, waitingFor, ...rest } = health
         const syncStatus: SyncStatusView = {
             ...rest,
             folderPath: conv.entry.sharedRoot,
@@ -291,6 +291,7 @@ export class SyncService {
                 fingerprint: groupFingerprint(r.fingerprint),
                 state: r.state
             })),
+            waitingFor: waitingFor.map((w) => ({ ...w, displayName: nameOf(w.participantId) })),
             notAccepted: rejoinHeardFrom
                 ? members
                       .filter(
@@ -453,6 +454,14 @@ export class SyncService {
         if (conv.session) await conv.session.flush()
         await conv.store.idle()
         return after
+    }
+
+    /** D-43: the person approved the deletion of the own files that wait for a member without activity. */
+    async dropFilesFor(conversationId: string, participantId: string): Promise<void> {
+        const conv = this.conversations.get(conversationId)
+        if (!conv) return
+        await conv.sync.dropFilesFor(participantId)
+        await this.refreshView(conv)
     }
 
     /** D-32: the decision of this member about new keys of another member (status line). */

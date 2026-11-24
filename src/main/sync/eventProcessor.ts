@@ -111,7 +111,7 @@ export class EventProcessor {
         for (const [name, h] of Object.entries(this.state.data.held)) {
             if (!done.has(h.key)) continue
             this.state.markProcessed(h.key)
-            this.core.reader.addConfirm(confirm, h.senderId, h.receiptId)
+            this.core.reader.addConfirm(confirm, h.senderId, h.receiptId, name)
             processedFiles.push({
                 folder: this.inbox(this.deps.ownId),
                 name,

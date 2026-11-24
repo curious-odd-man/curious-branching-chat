@@ -406,9 +406,13 @@ export class ConversationSync {
         inboxId: string = this.deps.ownId
     ): Promise<void> {
         return this.serial(async () => {
-            await this.core.sender.sendReceipts(new Map([[inviterId, new Set(ids)]]))
-            // a file in another inbox (a re-invitation) is not this inbox's business
-            if (inboxId === this.deps.ownId) for (const name of fileNames) this.state.keepFile(name)
+            const own = inboxId === this.deps.ownId
+            // the receipt is deleted when the invitation files are gone (D-43); a file in another inbox (a
+            // re-invitation) is not visible to the scan, so that receipt waits for the time rule
+            await this.core.sender.sendReceipts(new Map([[inviterId, new Set(ids)]]), () =>
+                own ? fileNames : []
+            )
+            if (own) for (const name of fileNames) this.state.keepFile(name)
             await this.state.save()
         })
     }
@@ -517,8 +521,22 @@ export class ConversationSync {
                 fingerprint: r.fingerprint,
                 state: r.state
             })),
-            rejoinHeardFrom: this.state.data.rejoin?.heardFrom ?? null
+            rejoinHeardFrom: this.state.data.rejoin?.heardFrom ?? null,
+            waitingFor: this.core.sender.waitingMembers()
         }
+    }
+
+    /**
+     * D-43: the person approved the deletion of the own files that wait for a member without activity (status line).
+     * Returns how many files were deleted.
+     */
+    dropFilesFor(memberId: string): Promise<number> {
+        return this.serial(async () => {
+            const n = await this.core.sender.dropFilesFor(memberId)
+            await this.state.save()
+            this.deps.onChange?.()
+            return n
+        })
     }
 
     /** Files that wait for a newer app version (section 10). */

@@ -1093,40 +1093,82 @@ describe('delivery marks and sync health (D-09, D-29, D-34, D-35)', () => {
         })
     })
 
-    it('deletes own receipts after 7 days and own unconfirmed files after 30 days (D-34)', async () => {
+    it('a receipt is deleted as soon as the files it confirms are gone (D-43)', async () => {
         await withTempDir(async (dir) => {
-            const { members, root } = await group(dir, { failingDeletes: [anna] })
+            const { members, root, violations } = await group(dir)
             const [a, b] = members as [Member, Member, Member]
-            await say(a, 'старое')
-            await b.sync.scan() // Boris writes a receipt into Anna's inbox, which Anna cannot delete
-            await a.sync.scan()
             const annaInbox = join(root, 'inbox', 'p-anna')
-            expect((await fs.readdir(annaInbox)).filter((n) => n.endsWith('.bcrcpt'))).toHaveLength(
-                1
+            const receipts = async (): Promise<string[]> =>
+                (await fs.readdir(annaInbox)).filter((n) => n.endsWith('.bcrcpt'))
+            await say(a, 'привет')
+            const [file] = (await filesIn(join(root, 'inbox', 'p-boris'))).filter((n) =>
+                n.endsWith('.bcmsg')
             )
-            clockMs += 6 * DAY
-            expect((await b.sync.maintain()).receiptsDeleted).toBe(0)
-            clockMs += 2 * DAY
-            expect((await b.sync.maintain()).receiptsDeleted).toBe(1)
-            expect((await fs.readdir(annaInbox)).filter((n) => n.endsWith('.bcrcpt'))).toEqual([])
+            await b.sync.scan() // Boris confirms Anna's file with a receipt in her inbox
+            expect(await receipts()).toHaveLength(1)
+            expect(b.state.data.ownReceipts.map((r) => r.covers)).toEqual([[file]])
+            await a.sync.scan() // Anna reads the receipt and deletes her file
+            expect(await receipts()).toHaveLength(1)
+            await b.sync.scan() // the file is gone: Boris deletes his receipt
+            expect(await receipts()).toEqual([])
+            expect(b.state.data.ownReceipts).toEqual([])
+            expect(violations).toEqual([])
         })
     })
 
-    it('deletes own files that never got a receipt after 30 days (D-34)', async () => {
+    it('a receipt of an earlier version is deleted after 7 days, once its recipient was active (D-43)', async () => {
+        await withTempDir(async (dir) => {
+            const { members, root } = await group(dir, { failingDeletes: [anna] })
+            const [a, b] = members as [Member, Member, Member]
+            const annaInbox = join(root, 'inbox', 'p-anna')
+            const receipts = async (): Promise<string[]> =>
+                (await fs.readdir(annaInbox)).filter((n) => n.endsWith('.bcrcpt'))
+            await say(a, 'старое')
+            await b.sync.scan()
+            // as written by an earlier version: no list of the confirmed files
+            for (const r of b.state.data.ownReceipts) delete r.covers
+            await a.sync.scan() // Anna's delete fails, so her file stays
+            clockMs += 8 * DAY
+            expect((await b.sync.maintain()).receiptsDeleted).toBe(0) // no activity of Anna after the receipt
+            await say(a, 'новое')
+            await b.sync.scan() // Boris sees Anna's new file: she is active
+            expect((await b.sync.maintain()).receiptsDeleted).toBe(1)
+            // the receipt for the new file has its list; it waits for that file
+            expect(await receipts()).toHaveLength(1)
+        })
+    })
+
+    it('nothing is deleted by time; a member without activity for 7 days is shown, and the person decides (D-43)', async () => {
         await withTempDir(async (dir) => {
             const { members, root } = await group(dir)
-            const a = members[0]!
+            const [a, b] = members as [Member, Member, Member]
             await say(a, 'старое')
-            // Clara never comes online: after 30 days Anna's files in her inbox are deleted
+            // Clara never comes online; Boris does
             const claraInbox = join(root, 'inbox', 'p-clara')
-            expect((await fs.readdir(claraInbox)).length).toBeGreaterThan(0)
-            clockMs += 29 * DAY
-            expect((await a.sync.maintain()).abandoned).toBe(0)
+            const annaFiles = a.state.data.outbox
+                .filter((i) => i.recipientId === 'p-clara')
+                .map((i) => i.fileName)
+            expect(annaFiles.length).toBeGreaterThan(0)
+            clockMs += 6 * DAY
+            expect(a.sync.health().waitingFor).toEqual([])
+            await b.sync.scan()
+            await a.sync.scan()
             clockMs += 2 * DAY
-            const r = await a.sync.maintain()
-            expect(r.abandoned).toBeGreaterThan(0)
-            expect(await fs.readdir(claraInbox)).toEqual([])
-            expect((await a.sync.maintain()).abandoned).toBe(0)
+            expect(a.sync.health().waitingFor).toEqual([
+                {
+                    participantId: 'p-clara',
+                    files: annaFiles.length,
+                    since: expect.any(String) as string
+                }
+            ])
+            clockMs += 30 * DAY
+            await a.sync.maintain()
+            expect(await fs.readdir(claraInbox)).toEqual(expect.arrayContaining(annaFiles))
+            // the person approves in the status line
+            expect(await a.sync.dropFilesFor('p-clara')).toBe(annaFiles.length)
+            const left = await fs.readdir(claraInbox)
+            expect(left.filter((n) => annaFiles.includes(n))).toEqual([])
+            expect(a.sync.health().waitingFor.map((w) => w.participantId)).not.toContain('p-clara')
         })
     })
 

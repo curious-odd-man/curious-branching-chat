@@ -2,6 +2,7 @@ import { texts } from '@shared/i18n'
 import { IPC, type RosterView } from '@shared/types/ipc'
 import {
     decideKeysSchema,
+    dropFilesForSchema,
     joinImportSchema,
     noPayloadSchema,
     sharedCreateSchema,
@@ -65,6 +66,11 @@ export function registerSharedHandlers(ctx: IpcContext): void {
             key: p.key
         })
         entry?.session?.onChange()
+        return null
+    })
+    handle(IPC.syncDropFilesFor, dropFilesForSchema, async (entry, p) => {
+        const session = requireSession(entry)
+        await sync?.dropFilesFor(session.documentId, p.participantId)
         return null
     })
     handle(IPC.syncDecideKeys, decideKeysSchema, async (entry, p) => {
