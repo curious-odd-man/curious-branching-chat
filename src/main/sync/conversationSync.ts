@@ -395,7 +395,10 @@ export class ConversationSync {
         return out
     }
 
-    /** After an import: confirm the invitation to the inviter and remove its files from the own inbox. */
+    /**
+     * After an import: confirm the invitation to the inviter. Its files in the own inbox are recorded as processed;
+     * the inviter deletes them after the receipt (D-43).
+     */
     confirmInvitation(
         inviterId: string,
         ids: readonly string[],
@@ -404,11 +407,8 @@ export class ConversationSync {
     ): Promise<void> {
         return this.serial(async () => {
             await this.core.sender.sendReceipts(new Map([[inviterId, new Set(ids)]]))
-            for (const name of fileNames) {
-                const r = await this.deps.transport.delete(this.inbox(inboxId), name)
-                // a file left in another inbox (a re-invitation) is not this inbox's business
-                if (r === 'failed' && inboxId === this.deps.ownId) this.state.keepFile(name)
-            }
+            // a file in another inbox (a re-invitation) is not this inbox's business
+            if (inboxId === this.deps.ownId) for (const name of fileNames) this.state.keepFile(name)
             await this.state.save()
         })
     }

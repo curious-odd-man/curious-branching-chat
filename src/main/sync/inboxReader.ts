@@ -55,12 +55,12 @@ export class InboxReader {
         if (this.core.folder === 'missing') this.core.folder = 'ok'
         const entries = await this.deps.transport.list(this.inbox(this.deps.ownId))
         const present = new Set(entries.map((e) => e.name))
-        // forget files that are gone (deleted by the sync product, or cleaned up)
+        // forget files that are gone (deleted by their writer, D-43, or by the sync product)
         this.state.forgetMissingFiles(present)
         for (const name of [...this.seen.keys()]) if (!present.has(name)) this.seen.delete(name)
 
         const confirm = new Map<string, Set<string>>() // senderId -> IDs for the receipt
-        const toDelete: SharedEntry[] = []
+        const processedFiles: SharedEntry[] = []
         const nowMs = Date.parse(this.deps.now())
 
         const limit = this.deps.maxFileBytes()
@@ -68,30 +68,30 @@ export class InboxReader {
         const ordered = [...entries].sort(
             (a, b) => Number(a.extension === 'bcpart') - Number(b.extension === 'bcpart')
         )
+        const kept = new Set(s.keptFiles)
         for (const entry of ordered) {
             const deferred = s.deferred[entry.name]
             if (deferred !== undefined && deferred > limit) continue // FR-268a: until the limit is raised
-            if (s.keptFiles.includes(entry.name) || s.held[entry.name]) continue
+            if (kept.has(entry.name) || s.held[entry.name]) continue
             if (s.quarantine.some((q) => q.name === entry.name)) continue
             if (entry.extension === 'bcinv' || entry.extension === 'bckey') continue // the join wizard reads these
             const update = s.needsUpdate.find((n) => n.name === entry.name)
             if (update && update.appVersion === this.deps.appVersion) continue
             if (!this.isStable(entry, nowMs)) continue
-            await this.processFile(entry, nowMs, report, confirm, toDelete)
+            await this.processFile(entry, nowMs, report, confirm, processedFiles)
         }
 
         // events that waited for a dependency may apply now
-        report.applied += await this.core.events.drainPending(confirm, toDelete)
-        await this.core.events.completeLoading(confirm, toDelete, report)
+        report.applied += await this.core.events.drainPending(confirm, processedFiles)
+        await this.core.events.completeLoading(confirm, processedFiles, report)
         await this.core.loader.completeAttachments()
 
         await this.core.sender.deliverUnlocked()
         report.receipts += await this.core.sender.sendReceipts(confirm)
-        for (const entry of toDelete) {
-            const r = await this.deps.transport.delete(entry.folder, entry.name)
-            // D-19: if the sync product refuses, remember the file as processed and ignore it from now on
-            if (r === 'failed') this.state.keepFile(entry.name)
-        }
+        // D-43: only the writer of a file deletes it. The files in the own inbox are written by the other members, so
+        // they are only recorded as processed; the writer deletes each one after the receipt (or after 7 or 30 days).
+        // On a My Drive folder, a delete by a member who does not own the file moves it to the owner's My Drive root.
+        for (const entry of processedFiles) this.state.keepFile(entry.name)
         this.state.scanned(this.deps.now())
         report.held = Object.keys(s.held).length
         await this.core.sender.announceLimitsUnlocked() // a new member (member.added) gets the own limit
@@ -145,7 +145,7 @@ export class InboxReader {
         nowMs: number,
         report: ScanReport,
         confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[]
+        processedFiles: SharedEntry[]
     ): Promise<void> {
         let bytes: Uint8Array
         try {
@@ -201,11 +201,11 @@ export class InboxReader {
 
         if (env.type === 'receipt.delivered') {
             await this.core.sender.applyReceipt(env as Envelope<'receipt.delivered'>)
-            toDelete.push(entry)
+            processedFiles.push(entry)
             return
         }
         if (env.type === 'invitation' || env.type === 'invitation.part') {
-            toDelete.push(entry) // a late copy of the invitation that this member already imported
+            processedFiles.push(entry) // a late copy of the invitation that this member already imported
             return
         }
         // replay check (section 9.1)
@@ -220,7 +220,7 @@ export class InboxReader {
         const key = isPart ? `part:${env.senderId}:${receiptId}` : `${env.senderId}:${env.eventId}`
         if (this.state.isProcessed(key)) {
             this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
+            processedFiles.push(entry)
             return
         }
 
@@ -228,7 +228,7 @@ export class InboxReader {
             await this.keyRequest(env as Envelope<'member.keys.replaced'>)
             this.state.markProcessed(key)
             this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
+            processedFiles.push(entry)
             this.deps.onChange?.()
             return
         }
@@ -238,7 +238,7 @@ export class InboxReader {
             this.state.recordPeerLimit(env.senderId, p.maxFileMb, env.senderSeq)
             this.state.markProcessed(key)
             this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
+            processedFiles.push(entry)
             return
         }
 
@@ -262,7 +262,7 @@ export class InboxReader {
             if (!load.done) await this.state.storeInPart(env.senderId, receiptId, opened.payload)
             this.state.markProcessed(key)
             this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
+            processedFiles.push(entry)
             return
         }
 
@@ -270,7 +270,7 @@ export class InboxReader {
             await this.state.storeInPart(env.senderId, receiptId, opened.payload)
             this.state.markProcessed(key)
             this.addConfirm(confirm, env.senderId, receiptId)
-            toDelete.push(entry)
+            processedFiles.push(entry)
             return
         }
 

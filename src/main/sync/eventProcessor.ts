@@ -48,7 +48,7 @@ export class EventProcessor {
     /** Applies everything in the pending queue that can be applied now (section 9.3). */
     async drainPending(
         confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[]
+        processedFiles: SharedEntry[]
     ): Promise<number> {
         const s = this.state.data
         if (s.pending.length === 0) return 0
@@ -84,7 +84,7 @@ export class EventProcessor {
                 }
             return { contents: r.contents, images }
         })
-        this.finishHeld(finished, confirm, toDelete)
+        this.finishHeld(finished, confirm, processedFiles)
         this.rejectHeld(rejected)
         for (const u of usedImages) await this.state.dropInParts(u.senderId, [imageFile(u.assetId)])
         return applied
@@ -101,14 +101,18 @@ export class EventProcessor {
         }
     }
 
-    /** Releases held files of processed events: confirm them and delete them. */
-    finishHeld(keys: string[], confirm: Map<string, Set<string>>, toDelete: SharedEntry[]): void {
+    /** Releases held files of processed events: confirm them and record them as processed (D-43). */
+    finishHeld(
+        keys: string[],
+        confirm: Map<string, Set<string>>,
+        processedFiles: SharedEntry[]
+    ): void {
         const done = new Set(keys)
         for (const [name, h] of Object.entries(this.state.data.held)) {
             if (!done.has(h.key)) continue
             this.state.markProcessed(h.key)
             this.core.reader.addConfirm(confirm, h.senderId, h.receiptId)
-            toDelete.push({
+            processedFiles.push({
                 folder: this.inbox(this.deps.ownId),
                 name,
                 id: h.receiptId,
@@ -123,7 +127,7 @@ export class EventProcessor {
     /** Messages whose parts are all present: join, check, and apply them (D-30). */
     async completeLoading(
         confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[],
+        processedFiles: SharedEntry[],
         report: ScanReport
     ): Promise<void> {
         const s = this.state.data
@@ -173,7 +177,7 @@ export class EventProcessor {
                 l.senderId,
                 l.payload.parts.map((p) => p.partId)
             )
-            await this.applyComplete(event, images, confirm, toDelete, report)
+            await this.applyComplete(event, images, confirm, processedFiles, report)
         }
     }
 
@@ -181,7 +185,7 @@ export class EventProcessor {
         event: VerifiedEvent,
         images: Array<{ assetId: string; data: Uint8Array }>,
         confirm: Map<string, Set<string>>,
-        toDelete: SharedEntry[],
+        processedFiles: SharedEntry[],
         report: ScanReport
     ): Promise<void> {
         let status = ''
@@ -217,7 +221,7 @@ export class EventProcessor {
             return
         }
         if (status === 'applied') report.applied++
-        this.finishHeld([eventKey(event)], confirm, toDelete)
+        this.finishHeld([eventKey(event)], confirm, processedFiles)
     }
 
     /** IDs of the parts of a message that this member has received from the message's sender. */

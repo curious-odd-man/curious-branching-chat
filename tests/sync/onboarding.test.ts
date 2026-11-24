@@ -126,9 +126,11 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
                 inviterFingerprint: groupFingerprint((await a.onboarding.ownBundle()).fingerprint)
             })
             const fileB = await b.onboarding.importInvitation(shared, found.invitationId)
-            expect(await b.onboarding.findInvitation(shared)).toEqual({ state: 'waiting' })
+            // D-43: the invitation stays in Boris's inbox until Anna (its writer) deletes it after the receipt
+            expect(await b.onboarding.findInvitation(shared)).toMatchObject({ state: 'already' })
 
             await settle(a, b)
+            expect(await b.onboarding.findInvitation(shared)).toEqual({ state: 'waiting' })
             expect(a.sync.invitationStatus(found.conversationId)).toEqual({ 'p-boris': 'joined' })
 
             const sb = await openIn(b, fileB, makeCtx('b'))
@@ -137,13 +139,14 @@ describe('onboarding (design 12.3 to 12.5, FR-158, FR-162)', () => {
             await sb.flush()
             await settle(b, a)
             expect(texts(saved(a, fileA))).toEqual(['Я с вами'])
-            // nothing is left in the shared folder except the marker and the two key files
+            // nothing is left in the shared folder except the marker, the two key files, and the receipts, which
+            // their writers delete after 7 days (D-43)
             const left = (await fs.readdir(shared, { recursive: true, withFileTypes: true }))
                 .filter((e) => e.isFile())
                 .map((e) => e.name)
-            expect(left.filter((n) => !n.endsWith('.bckey')).sort()).toEqual([
-                'branchchat-sync.json'
-            ])
+            expect(
+                left.filter((n) => !n.endsWith('.bckey') && !n.endsWith('.bcrcpt')).sort()
+            ).toEqual(['branchchat-sync.json'])
             await a.sync.stop()
             await b.sync.stop()
         })

@@ -1,6 +1,6 @@
 # Design: Encrypted Synchronized BranchChat Discussions over a Shared Folder
 
-**Status:** Ready for implementation, revision 9 (all questions Q-01 to Q-39 answered)  
+**Status:** Ready for implementation, revision 10 (all questions Q-01 to Q-39 answered; D-43 added after release)  
 **Platform:** Windows 10 and Windows 11 (same as the MVP)  
 **Transport model:** A shared local folder that a sync product (for example Google Drive for Desktop) keeps in sync  
 **Backend:** None  
@@ -152,7 +152,7 @@ The application refuses to load or save a file that breaks these rules:
 | C14 | Remote messages always apply                       | Closed branch refuses messages           | Accept; branch stays closed (D-07)                               |
 | C15 | SQLite                                             | JSON with atomic writes                  | JSON (D-17)                                                      |
 | C16 | Preserve the format                                | Old versions refuse newer schema         | All files use `schemaVersion` 2 (D-03, D-28)                     |
-| C17 | Recipient deletes inbox files                      | Files belong to the sender's account     | Cleanup rule (D-19, D-34)                                        |
+| C17 | Recipient deletes inbox files                      | Files belong to the sender's account     | Only the writer deletes a file (D-43, replaces part of D-19)     |
 | C18 | Several adapters, local-only mode                  | Manual exchange is the existing behavior | One folder transport (D-18)                                      |
 | C19 | Menu "Chat → New chat"                             | Menu has File, Edit, Help                | File menu items (D-20)                                           |
 
@@ -180,7 +180,7 @@ The application refuses to load or save a file that breaks these rules:
 | D-16 | Background sync               | The app stays in the tray after the last window closes. Option to start with Windows                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | D-17 | Dependencies                  | Local state in JSON files with the existing atomic write. Chokidar for watching                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | D-18 | Transports                    | One transport: "shared folder". Google Drive for Desktop is covered by wizard text and tests only. No local-only sync mode                                                                                                                                                                                                                                                                                                                                                                                             |
-| D-19 | Drive setup and cleanup       | Support personal My Drive folders and shared drives. The owner of an inbox deletes processed files in it. If a delete fails, it records the file as processed; the sender deletes its own files after the delivery receipt                                                                                                                                                                                                                                                                                             |
+| D-19 | Drive setup and cleanup       | Support personal My Drive folders and shared drives. ~~The owner of an inbox deletes processed files in it.~~ Changed by D-43: the owner of an inbox records processed files and never deletes them; the sender deletes its own files after the delivery receipt                                                                                                                                                                                                                                                       |
 | D-20 | Menu                          | File > "Новое общее обсуждение…", File > "Присоединиться к обсуждению…", File > "Сделать обсуждение общим…" (open discussion)                                                                                                                                                                                                                                                                                                                                                                                          |
 | D-21 | Public-key bundle exchange    | Both: through the shared folder (`keys/`) and as a file or text that users copy                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | D-22 | Activation                    | Active for each member when that member has imported the invitation. Others can already write                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -204,6 +204,7 @@ The application refuses to load or save a file that breaks these rules:
 | D-40 | Message mark                  | Own messages in a synchronized discussion have one mark: one grey check written, two grey checks delivered to all, one green check read by at least one member, two green checks read by all (answer to Q-40)                                                                                                                                                                                                                                                                                                          |
 | D-41 | Mark of every message         | The mark of D-40 applies to all messages, own and of others. A grey clock: an own message is not written yet. One grey check: written to the shared folder. Two grey checks: all members except the author received it. One green check: at least one member except the author read it. Two green checks: all read it. Each member tells all members which messages it received (`delivery.added`, ZIP entry `delivery.json`). Normal discussions use the green checks too: no mark while nobody read (answer to Q-41) |
 | D-42 | Tray and notification details | No notification when the window of that discussion is active. More than 3 new messages in one discussion in one scan: one notification "Новых сообщений: N" that opens the first. A left click on the tray icon shows a window, or opens the most recently used synchronized discussion. Any request to quit (tray or File "Выход", Windows sign-out, an update) ends the app; closing a window (also Alt+F4) keeps it in the tray                                                                                     |
+| D-43 | Only the writer deletes       | No member deletes a file that another member wrote. The owner of an inbox records each processed file and does not read it again; the writer deletes its own events, parts, and conflict copies of them after the receipt, receipts after 7 days, and files without a receipt after 30 days. Reason: on a personal My Drive folder, a delete by a member who does not own the file moves it to the owner's My Drive root (found after release, 2026-11-24; sync-protocol.md 9.4)                                       |
 
 Settled from revision 1, still valid:
 
@@ -580,11 +581,11 @@ the person to move it first.
   (in the user data folder), then move it into the shared folder under its final name (D-39).
 - Ignore every file name that the protocol does not define, also `.tmp` files.
 
-Cleanup (D-19, D-34):
+Cleanup (D-19, D-34, D-43):
 
-- The owner of an inbox deletes each processed file in it (events, parts, receipts, invitations).
-- If a delete fails, the owner records the file as processed and ignores it on later scans.
-- The sender deletes its own event and part files after the delivery receipt for them.
+- Only the writer of a file deletes it (D-43). The owner of an inbox records each processed file (events, parts,
+  receipts, invitations) as processed and ignores it on later scans; it never deletes it.
+- The sender deletes its own event and part files, and the conflict copies of them, after the delivery receipt.
 - The writer of a receipt deletes it after 7 days if it is still there.
 - The sender deletes its own files that never got a receipt after 30 days.
 
@@ -790,7 +791,12 @@ The tests are done. All results are **confirmed** as first assumed.
 1. Test Google Drive for Desktop delete rights: in a personal My Drive folder shared with Editor rights, can account B
    delete a file that account A created? Same test in a shared drive with "Content manager" rights. (From Q-19.)  
    **Result (confirmed):** deletion is allowed in both setups. The fallback in D-19 ("record as processed") stays as a
-   safety rule.
+   safety rule.  
+   **Correction (2026-11-24):** in a personal My Drive folder, the delete is allowed, but it does not delete the file.
+   Google Drive moves the file to the root of the My Drive of its owner (the account that uploaded it). Users found
+   many `.bcmsg` and `.bcpart` files in their My Drive root. The test checked only that the delete succeeds, not where
+   the file goes. D-43 changes the cleanup: only the writer deletes a file. A future test of a sync product must check
+   the result of a delete from the side of the other account too.
 2. Test that a folder marked "Available offline" in streaming mode also makes new files available offline.  
    **Result (confirmed):** yes.
 3. Test how a folder shared from another person's My Drive appears in Drive for Desktop (shortcut needed or not).  
@@ -808,6 +814,12 @@ The tests are done. All results are **confirmed** as first assumed.
 - Never put private keys, plain text, or local state in the shared folder.
 - Never delete a file that another member wrote, except a processed file in the own inbox.
 - Never invent a cryptographic protocol. Use the libsodium constructions as documented.
+
+## Changes in revision 10
+
+- D-43 (2026-11-24, after release): only the writer of a file deletes it. Reason: in a personal My Drive folder, a
+  delete by another member moves the file to the root of the owner's My Drive (Section 23, correction). Changed:
+  C17, D-19, Section 13 cleanup; sync-protocol.md Section 9.4.
 
 ## Changes in revision 9
 

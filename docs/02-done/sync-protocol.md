@@ -452,10 +452,36 @@ pending queue. No receipt is sent for it until it is applied.
 
 ### 9.4 Cleanup
 
-- The owner of an inbox deletes each processed file in it. If the delete fails, it records the file as processed.
-- The sender deletes its own event and part files after the receipt for them.
+Only the writer of a file deletes it (D-43, changed on 2026-11-24).
+
+- The owner of an inbox never deletes a file in it. It records each processed file as processed and does not read it
+  again. It forgets the name when the file is gone.
+- The sender deletes its own event and part files after the receipt for them. It also deletes the conflict copies that
+  the sync product made of them (`<id> (1).<ext>`). A second receipt for the same file (a delayed copy came back)
+  deletes the file again.
 - The writer of a receipt deletes it after 7 days if it is still there.
 - Own files without a receipt are deleted after 30 days.
+- Never delete or move a file outside the shared root.
+
+**Why (2026-11-24):** before, the owner of an inbox deleted each processed file in it. In a shared folder in a
+personal My Drive, Google Drive gives each file the account that uploaded it as its owner, and only the owner can
+delete a file. When another member removes the file, Google Drive takes it out of the shared folder and moves it to the
+root of the owner's My Drive. It is not deleted. The sender's own delete after the receipt then finds nothing. So the
+`.bcmsg`, `.bcpart`, and `.bcrcpt` files of each member collected in the root of their My Drive. The files are
+encrypted, but they use the storage of the owner, and nothing removed them. The test of Section 23 of the design
+(revision 9) only checked that a member *can* delete a file of another member; the move to the owner's root was not
+seen then. A shared drive does not have this problem (the drive owns the files), but personal My Drive folders are a
+supported setup (D-19).
+
+**Cost of the rule:**
+
+- Receipts stay in the inbox until their writer deletes them (7 days), and each file of a member who stops using the
+  app stays. The local list of processed files holds these names.
+- A file that is deleted and comes back (a delayed copy of the sync product) before the inbox owner scans again stays
+  recorded as processed and is not confirmed again, so nobody deletes it. This is rare; the file is encrypted and
+  small.
+- Files that Google Drive already moved to the root of a My Drive stay there. The app does not touch anything outside
+  the shared root; the person deletes them (search for `.bcmsg`, `.bcpart`, `.bcrcpt` in Google Drive).
 
 ### 9.5 Limits
 
@@ -472,7 +498,7 @@ it.
   scan.
 - Quarantine the file only when it still fails and its size and modification time have not changed for 10 minutes
   (`INCOMPLETE_FILE_GRACE_MINUTES`).
-- Never delete a file because it failed to open; only the inbox owner's normal cleanup deletes files (Section 9.4).
+- Never delete a file because it failed to open; only its writer deletes a file (Section 9.4).
 
 ---
 
@@ -486,3 +512,7 @@ it.
 - Release 2.4 adds `reaction.set`, `member.limits.set`, `message.attachments`, and `attachment.part`. A member with an
   older release keeps them waiting and shows "Обновите приложение"; it loses nothing, and it gets all other events.
   After the update it reads them at the next scan.
+- The cleanup rule of Section 9.4 changed on 2026-11-24 (D-43) without a new protocol version: no file, envelope, or
+  event changed, and the sender deleted its own files after the receipt also before. A member with an older release
+  still deletes the files in its inbox; on a My Drive folder those files still go to the root of their writer's My
+  Drive until all members update.

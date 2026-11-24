@@ -300,18 +300,21 @@ export class SyncSender {
                 fromB64(m.encryptionPublicKey)
             ])
         )
+        const tooOld = s.outbox.filter(
+            (item) =>
+                item.writtenAt &&
+                !item.deliveredAt &&
+                !item.abandonedAt &&
+                nowMs - Date.parse(item.writtenAt) >= UNCONFIRMED_MAX_AGE_MS
+        )
+        const abandoned = await this.deleteOwn(tooOld.map((i) => [i.recipientId, i.fileName]))
+        for (const item of tooOld) {
+            if (abandoned.get(item.fileName) === 'failed') continue // try again at the next maintenance
+            item.abandonedAt = this.deps.now()
+            report.abandoned++
+        }
         for (const item of s.outbox) {
             if (!item.writtenAt || item.deliveredAt || item.abandonedAt) continue
-            if (nowMs - Date.parse(item.writtenAt) >= UNCONFIRMED_MAX_AGE_MS) {
-                const r = await this.deps.transport.delete(
-                    this.inbox(item.recipientId),
-                    item.fileName
-                )
-                if (r === 'failed') continue // try again at the next maintenance
-                item.abandonedAt = this.deps.now()
-                report.abandoned++
-                continue
-            }
             const activity = s.peers[item.memberId ?? item.recipientId]?.lastActivityAt
             const lastWrite = item.lastWriteAt ?? item.writtenAt
             if (!activity || Date.parse(activity) <= Date.parse(lastWrite)) continue
@@ -326,14 +329,14 @@ export class SyncSender {
         }
         await this.dropDeliveredParts()
 
+        const old = s.ownReceipts.filter(
+            (r) => nowMs - Date.parse(r.writtenAt) >= RECEIPT_MAX_AGE_MS
+        )
+        const removed = await this.deleteOwn(old.map((r) => [r.recipientId, r.fileName]))
         const keep: typeof s.ownReceipts = []
         for (const r of s.ownReceipts) {
-            if (nowMs - Date.parse(r.writtenAt) < RECEIPT_MAX_AGE_MS) {
-                keep.push(r)
-                continue
-            }
-            const result = await this.deps.transport.delete(this.inbox(r.recipientId), r.fileName)
-            if (result === 'failed') keep.push(r)
+            if (!old.includes(r)) keep.push(r)
+            else if (removed.get(r.fileName) === 'failed') keep.push(r)
             else report.receiptsDeleted++
         }
         this.state.setOwnReceipts(keep)
@@ -361,19 +364,45 @@ export class SyncSender {
     async applyReceipt(env: Envelope<'receipt.delivered'>): Promise<void> {
         const ids = new Set(env.payload.ids)
         const now = this.deps.now()
+        const done: Array<[string, string]> = []
         for (const item of this.state.data.outbox) {
-            if (
-                (item.memberId ?? item.recipientId) !== env.senderId ||
-                !ids.has(item.id) ||
-                item.deliveredAt
-            )
-                continue
-            this.state.delivered(item, now)
-            // D-19: the sender deletes its own files after the receipt
-            await this.deps.transport.delete(this.inbox(item.recipientId), item.fileName)
+            if ((item.memberId ?? item.recipientId) !== env.senderId || !ids.has(item.id)) continue
+            if (!item.deliveredAt) this.state.delivered(item, now)
+            // also for a second receipt: the sync product brought back a delayed copy, which the recipient confirms
+            done.push([item.recipientId, item.fileName])
         }
+        // D-43: the writer deletes its own files after the receipt (the recipient never does)
+        await this.deleteOwn(done)
         await this.dropDeliveredParts()
         this.deps.onChange?.()
+    }
+
+    /**
+     * D-43: deletes own files (recipient ID, file name) from the inboxes of others, with the conflict copies that the
+     * sync product made of them (`<id> (1).<ext>`). Only the writer deletes a file: on a My Drive folder, a member
+     * who does not own a file cannot delete it; Google Drive moves it to the owner's My Drive root instead.
+     */
+    async deleteOwn(
+        files: ReadonlyArray<readonly [recipientId: string, fileName: string]>
+    ): Promise<Map<string, 'deleted' | 'missing' | 'failed'>> {
+        const result = new Map<string, 'deleted' | 'missing' | 'failed'>()
+        const byInbox = new Map<string, string[]>()
+        for (const [recipientId, name] of files)
+            byInbox.set(recipientId, [...(byInbox.get(recipientId) ?? []), name])
+        for (const [recipientId, names] of byInbox) {
+            const folder = this.inbox(recipientId)
+            for (const name of names)
+                result.set(name, await this.deps.transport.delete(folder, name))
+            const own = new Set(names)
+            // a folder that cannot be listed (a link, no permission): the copies stay until a later run
+            const entries = await this.deps.transport.list(folder).catch(() => [])
+            for (const entry of entries) {
+                const original = `${entry.id}.${entry.extension}`
+                if (entry.name !== original && own.has(original))
+                    await this.deps.transport.delete(folder, entry.name)
+            }
+        }
+        return result
     }
 
     async dropDeliveredParts(): Promise<void> {

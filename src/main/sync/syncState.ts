@@ -70,7 +70,10 @@ export interface StateData {
     processed: string[]
     /** Used `senderSeq` values per sender (replay check, section 9.1). */
     seqs: Record<string, Record<string, string>>
-    /** File names in the own inbox that are processed but could not be deleted (D-19). */
+    /**
+     * File names in the own inbox that are processed (D-43: the writer deletes them, this member never does). A name
+     * is forgotten when the file is gone.
+     */
     keptFiles: string[]
     pending: VerifiedEvent[]
     /**
@@ -319,7 +322,7 @@ export class SyncState {
         this.data.failures = {}
     }
 
-    /** A file that this member keeps and does not try again (D-32, or a delete that failed). */
+    /** A file that this member does not read again: processed (D-43), or not for its key (D-32). */
     keepFile(name: string): void {
         if (!this.data.keptFiles.includes(name)) this.data.keptFiles.push(name)
     }

@@ -18,7 +18,11 @@ import { b64, fingerprintOf, fromB64 } from '../../src/main/crypto/identity'
 import { sealEvent, sha256Hex } from '../../src/main/crypto/envelope'
 import { ConversationSync, type DocumentPort } from '../../src/main/sync/conversationSync'
 import { SyncState } from '../../src/main/sync/syncState'
-import { FolderTransport, type FileOps } from '../../src/main/transport/folderTransport'
+import {
+    FolderTransport,
+    type FileOps,
+    type SharedFolder
+} from '../../src/main/transport/folderTransport'
 import { anna, boris, clara, makeCtx, simple, withTempDir } from '../helpers/fixtures'
 import { makeKeys, sharedStart } from '../helpers/sync'
 
@@ -45,7 +49,44 @@ interface Member {
 let clockMs = Date.parse('2026-11-11T10:00:00Z')
 const now = (): string => new Date(clockMs).toISOString()
 
-class FailingDeletes extends FolderTransport {
+/** Who wrote each file (path in the shared root -> participant ID); a conflict copy has the writer of the original. */
+type Owners = Map<string, string>
+const ownerKey = (t: FolderTransport, folder: SharedFolder, name: string): string =>
+    join(t.folderPath(folder), name.replace(/ \(\d+\)(\.\w+)$/, '$1'))
+
+/**
+ * Like Google Drive on a shared My Drive folder (D-43): every file has the member who wrote it as its owner, and only
+ * the owner can delete it. A delete by another member is refused and recorded.
+ */
+class OwnedFiles extends FolderTransport {
+    constructor(
+        root: string,
+        staging: string,
+        ops: FileOps | undefined,
+        private readonly who: string,
+        private readonly owners: Owners,
+        private readonly violations: string[]
+    ) {
+        super(root, staging, ops)
+    }
+    override async publish(folder: SharedFolder, name: string, data: Uint8Array): Promise<void> {
+        await super.publish(folder, name, data)
+        this.owners.set(ownerKey(this, folder, name), this.who)
+    }
+    override async delete(
+        folder: SharedFolder,
+        name: string
+    ): Promise<'deleted' | 'missing' | 'failed'> {
+        const owner = this.owners.get(ownerKey(this, folder, name))
+        if (owner !== undefined && owner !== this.who) {
+            this.violations.push(`${this.who} deleted ${name} of ${owner}`)
+            return 'failed'
+        }
+        return super.delete(folder, name)
+    }
+}
+
+class FailingDeletes extends OwnedFiles {
     override async delete(): Promise<'deleted' | 'missing' | 'failed'> {
         return 'failed'
     }
@@ -54,7 +95,9 @@ class FailingDeletes extends FolderTransport {
 async function group(
     dir: string,
     options: { exdev?: boolean; failingDeletes?: Author[] } = {}
-): Promise<{ members: Member[]; root: string }> {
+): Promise<{ members: Member[]; root: string; owners: Owners; violations: string[] }> {
+    const owners: Owners = new Map()
+    const violations: string[] = []
     const root = join(dir, 'shared')
     await fs.mkdir(root, { recursive: true })
     const people = [anna, boris, clara]
@@ -69,13 +112,14 @@ async function group(
     const members: Member[] = []
     for (const [i, author] of people.entries()) {
         const stateDir = join(dir, 'local', author.participantId)
-        const Transport = options.failingDeletes?.includes(author)
-            ? FailingDeletes
-            : FolderTransport
+        const Transport = options.failingDeletes?.includes(author) ? FailingDeletes : OwnedFiles
         const transport = new Transport(
             root,
             join(stateDir, 'staging'),
-            options.exdev ? exdev : undefined
+            options.exdev ? exdev : undefined,
+            author.participantId,
+            owners,
+            violations
         )
         const m = {
             author,
@@ -91,7 +135,7 @@ async function group(
         members.push(m)
     }
     for (const m of members) await m.sync.start()
-    return { members, root }
+    return { members, root, owners, violations }
 }
 
 async function connect(m: Member): Promise<void> {
@@ -214,7 +258,7 @@ function imageMessage(assetId: string, text: string): RichDoc {
 describe('sync service with three members (design 13 to 18)', () => {
     it('delivers messages, branches, and status in both directions and cleans up the shared folder', async () => {
         await withTempDir(async (dir) => {
-            const { members, root } = await group(dir)
+            const { members, root, violations } = await group(dir)
             const [a, b, c] = members as [Member, Member, Member]
             await say(a, 'Привет всем')
             await b.sync.scan() // Boris sees Anna's message before he answers it
@@ -254,10 +298,18 @@ describe('sync service with three members (design 13 to 18)', () => {
                     .messageId
             )
 
-            // every file was confirmed and deleted; only the marker and empty folders remain
-            expect(await filesIn(root)).toEqual(['branchchat-sync.json'])
+            // D-43: each writer deleted its own events after the receipts, nobody deleted a file of another member;
+            // only the receipts wait for their writers (7 days)
+            expect(violations).toEqual([])
+            expect((await filesIn(root)).filter((n) => !n.endsWith('.bcrcpt'))).toEqual([
+                'branchchat-sync.json'
+            ])
             for (const m of members)
                 expect(m.state.data.outbox.every((i) => i.deliveredAt !== null)).toBe(true)
+            clockMs += 8 * 24 * 60 * 60_000
+            for (const m of members) await m.sync.maintain()
+            expect(await filesIn(root)).toEqual(['branchchat-sync.json'])
+            expect(violations).toEqual([])
         })
     })
 
@@ -321,7 +373,9 @@ describe('sync service with three members (design 13 to 18)', () => {
             expect(sha256Hex(b.images.get(id)!)).toBe(id)
             // after the receipts, the parts are gone from the shared folder and from the local stores
             await scanAll(members)
-            expect((await filesIn(root)).filter((n) => n.includes('p-boris'))).toEqual([])
+            expect(
+                (await filesIn(root)).filter((n) => n.includes('p-boris') && !n.endsWith('.bcrcpt'))
+            ).toEqual([])
         })
     })
 
@@ -339,7 +393,12 @@ describe('sync service with three members (design 13 to 18)', () => {
             await b.sync.scan()
             await b.sync.scan()
             expect(texts(b.contents)).toEqual(['один'])
-            expect(await filesIn(inbox)).toEqual([])
+            // Boris does not delete Anna's file (D-43); after the receipt, Anna deletes it with the conflict copy
+            const events = async (): Promise<string[]> =>
+                (await filesIn(inbox)).filter((n) => !n.endsWith('.bcrcpt'))
+            expect(await events()).toHaveLength(2)
+            await a.sync.scan()
+            expect(await events()).toEqual([])
 
             // a part first, then its header
             const img = pngOf(5 * 1024 * 1024)
@@ -395,8 +454,9 @@ describe('sync service with three members (design 13 to 18)', () => {
             await b.sync.scan()
             expect(texts(b.contents)).toEqual(['длинный путь'])
 
+            const before = new Set(await filesIn(inbox))
             await say(a, 'оборвалось')
-            const [second] = await filesIn(inbox)
+            const second = (await filesIn(inbox)).find((n) => !before.has(n))
             const bytes = await fs.readFile(join(inbox, second!))
             await fs.writeFile(join(inbox, second!), bytes.subarray(0, 40))
             await b.sync.scan()
@@ -406,8 +466,36 @@ describe('sync service with three members (design 13 to 18)', () => {
             clockMs += 2 * 60_000
             await b.sync.scan()
             expect(b.state.data.quarantine.map((q) => q.name)).toEqual([second])
-            // the file stays: only the owner's normal cleanup deletes files
-            expect(await filesIn(inbox)).toEqual([second])
+            // the file stays: a file that does not open is never deleted (only its writer deletes it, D-43)
+            expect(await filesIn(inbox)).toContain(second)
+        })
+    })
+
+    it('only the writer deletes a file; a delayed copy that comes back is deleted after the next receipt (D-43)', async () => {
+        await withTempDir(async (dir) => {
+            const { members, root, violations } = await group(dir)
+            const [a, b] = members as [Member, Member, Member]
+            await say(a, 'привет')
+            const inbox = join(root, 'inbox', 'p-boris')
+            const [file] = (await filesIn(inbox)).filter((n) => n.endsWith('.bcmsg'))
+            const delayed = await fs.readFile(join(inbox, file!))
+            await b.sync.scan()
+            // Boris keeps the file as processed and does not delete it
+            expect(await filesIn(inbox)).toContain(file)
+            expect(b.state.data.keptFiles).toContain(file)
+            await a.sync.scan()
+            expect(await filesIn(inbox)).not.toContain(file)
+            await b.sync.scan()
+            expect(b.state.data.keptFiles).not.toContain(file) // gone: the name is forgotten
+            // the sync product brings back an old copy: Boris confirms it again, Anna deletes it again
+            await fs.writeFile(join(inbox, file!), delayed)
+            await b.sync.scan() // a new file is read when it is stable (2 seconds, protocol 9.6)
+            clockMs += 3000
+            await b.sync.scan()
+            expect(texts(b.contents)).toEqual(['привет'])
+            await a.sync.scan()
+            expect(await filesIn(inbox)).not.toContain(file)
+            expect(violations).toEqual([])
         })
     })
 
@@ -648,7 +736,7 @@ describe('sync service under random faults', () => {
         it(`seed ${seed}: delays, duplicates, hidden files, failing deletes, and crashes still converge`, async () => {
             await withTempDir(async (dir) => {
                 const rand = rng(seed)
-                const { members, root } = await group(dir, {
+                const { members, root, owners, violations } = await group(dir, {
                     failingDeletes: [clara],
                     exdev: seed % 2 === 0
                 })
@@ -714,12 +802,17 @@ describe('sync service under random faults', () => {
                         const before = await fs.readFile(stateFile).catch(() => null)
                         await m.sync.scan()
                         // the state is saved before each write, so a crash never gives back a used senderSeq
+                        // and never forgets a written file (its writer deletes it later, D-43)
                         if (before) {
                             const after = JSON.parse(await fs.readFile(stateFile, 'utf8'))
                             const old = JSON.parse(before.toString('utf8'))
                             await fs.writeFile(
                                 stateFile,
-                                JSON.stringify({ ...old, senderSeq: after.senderSeq })
+                                JSON.stringify({
+                                    ...old,
+                                    senderSeq: after.senderSeq,
+                                    outbox: after.outbox
+                                })
                             )
                         }
                         await connect(m)
@@ -740,9 +833,15 @@ describe('sync service under random faults', () => {
                     expect(new Set(ids).size).toBe(ids.length)
                     expect(view(m.contents)).toEqual(view(members[0]!.contents))
                 }
-                // only files that Clara could not delete are left in her inbox; the other inboxes are empty
+                // D-43: nobody deleted a file of another member. The events of Anna and Boris are gone; Clara's
+                // own files stay, because her deletes fail; receipts wait for their writers (7 days)
+                expect(violations).toEqual([])
                 const left = await filesIn(join(root, 'inbox'))
-                expect(left.filter((n) => !n.startsWith('p-clara'))).toEqual([])
+                const ownerOf = (n: string): string | undefined =>
+                    owners.get(join(root, 'inbox', n.replace(/ \(\d+\)(\.\w+)$/, '$1')))
+                expect(
+                    left.filter((n) => !n.endsWith('.bcrcpt') && ownerOf(n) !== 'p-clara')
+                ).toEqual([])
                 expect(left.filter((n) => /\.(tmp|staging)$/.test(n))).toEqual([])
             })
         }, 60_000)
